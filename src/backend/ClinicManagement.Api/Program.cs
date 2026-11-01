@@ -196,7 +196,7 @@ foreach (var toolDefinition in ClinicManagement.Infrastructure.AI.Tools.PatientC
         new ClinicManagement.Infrastructure.AI.Tools.AiToolHandlerAdapter(
             sp.GetRequiredService<ClinicManagement.Infrastructure.AI.Tools.PatientCopilotToolHandler>(), registeredDefinition));
 }
-foreach (var toolDefinition in ClinicManagement.Application.AI.Tools.AiRoleToolCatalog.Definitions)
+foreach (var toolDefinition in ClinicManagement.Application.AI.Tools.AiRoleToolCatalog.Definitions.Concat(ClinicManagement.Application.AI.Tools.AiRoleToolCatalog.DeterministicReadDefinitions))
 {
     var registeredDefinition = toolDefinition;
     builder.Services.AddScoped<ClinicManagement.Application.AI.Tools.IAiToolHandler>(sp =>

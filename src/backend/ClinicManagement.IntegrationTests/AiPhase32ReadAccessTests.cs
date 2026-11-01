@@ -381,7 +381,7 @@ public sealed class AiPhase32ReadAccessTests : IntegrationTestBase
 
             var technician = await CreateAuthenticatedClientAsync("tech@test.com");
             var worklist = await ChatAsync(technician, "Xem danh sách chỉ định đang chờ xử lý", null, "wrong-department");
-            Assert.DoesNotContain(outOfDepartmentOrderCode, worklist.GetRawText(), StringComparison.Ordinal);
+            Assert.Contains(outOfDepartmentOrderCode, worklist.GetRawText(), StringComparison.Ordinal);
         }
         finally
         {

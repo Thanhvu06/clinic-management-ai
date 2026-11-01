@@ -10,6 +10,9 @@ public static class AiPlannerPolicy
 {
     public static IReadOnlySet<string> AllowedToolNames { get; } = new[]
     {
+        "reception.get_pending_change_requests", "reception.get_unpaid_invoices", "technician.get_service_guidance",
+        "pharmacist.get_medicine_stock", "pharmacist.get_medicine_batches", "admin.get_revenue_report",
+        "admin.get_active_doctors", "admin.get_pending_leave_requests",
         "clinic.search_knowledge",
         "admin.get_revenue_summary",
         "reception.get_pending_payments",

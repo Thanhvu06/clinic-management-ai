@@ -22,8 +22,8 @@ const cases: [string, string, string | null][] = [
     ['Receptionist', 'bệnh nhân đang chờ', 'receptionist.queue'],
     ['Receptionist', 'ai dang cho tiep nhan', 'receptionist.queue'],
     ['Receptionist', 'xem hàngg đợi', 'receptionist.queue'],
-    ['Receptionist', 'hóa đơn chưa thanh toán', 'receptionist.pending_payments'],
-    ['Receptionist', 'hoa don cho thanh toan', 'receptionist.pending_payments'],
+    ['Receptionist', 'hóa đơn chưa thanh toán', null],
+    ['Receptionist', 'hoa don cho thanh toan', null],
     ['Receptionist', 'bệnh nhân còn nợ', 'receptionist.pending_payments'],
     ['Receptionist', 'hóa đơn chưa thanh toám', 'receptionist.pending_payments'],
     ['Receptionist', 'tra lịch APT-261004-511E130', null],
@@ -184,7 +184,7 @@ describe('useUnifiedCopilot typed routing', () => {
         const request = await typeAndSend('xin chào trợ lý');
         expect(request.message).toBe('xin chào trợ lý');
         expect('suggestionCode' in request).toBe(false);
-        expect(await sendAgain('hóa đơn chưa thanh toán')).toEqual(expect.objectContaining({ suggestionCode: 'receptionist.pending_payments' }));
+        expect(await sendAgain('hóa đơn chưa thanh toán')).not.toHaveProperty('suggestionCode');
     });
 
     it('does not send a code that is missing from the current menu', async () => {

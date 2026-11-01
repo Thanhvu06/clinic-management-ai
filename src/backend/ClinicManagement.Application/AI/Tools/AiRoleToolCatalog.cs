@@ -19,6 +19,22 @@ public static class AiRoleToolCatalog
         RequiresCurrentResource = true
     };
 
+    public static IReadOnlyList<AiToolDefinition> DeterministicReadDefinitions { get; } = new[]
+    {
+        RoleTool("reception.get_pending_change_requests", "Đọc yêu cầu đổi/hủy lịch Pending theo phạm vi của màn hình xử lý yêu cầu", AiActorRole.Receptionist, AiActorCapability.ReadReceptionWorkspace),
+        RoleTool("reception.get_unpaid_invoices", "Đọc hóa đơn chưa thanh toán theo phạm vi BillingService", AiActorRole.Receptionist, AiActorCapability.ReadReceptionWorkspace),
+        RoleToolWithSchema("technician.get_service_guidance", "Đọc hướng dẫn chuẩn bị và loại bệnh phẩm đã cấu hình của dịch vụ", AiActorRole.DiagnosticTechnician, AiActorCapability.ReadDiagnosticWorkspace,
+            new[] { Arg("query", AiToolArgumentType.String, required: true) }),
+        RoleToolWithSchema("pharmacist.get_medicine_stock", "Tra tồn khả dụng của thuốc theo tên/mã, không tính lô hết hạn", AiActorRole.Pharmacist, AiActorCapability.ReadPharmacyWorkspace,
+            new[] { Arg("query", AiToolArgumentType.String, required: true) }),
+        RoleToolWithSchema("pharmacist.get_medicine_batches", "Đọc lô sắp hết hạn hoặc hết hạn từ service lô thuốc", AiActorRole.Pharmacist, AiActorCapability.ReadPharmacyWorkspace,
+            new[] { Arg("status", AiToolArgumentType.String, required: true) }),
+        RoleToolWithSchema("admin.get_revenue_report", "Đọc báo cáo doanh thu từ BillingService", AiActorRole.Admin, AiActorCapability.ReadAdminMetrics,
+            new[] { Arg("period", AiToolArgumentType.String, required: true) }),
+        RoleTool("admin.get_active_doctors", "Đếm và liệt kê bác sĩ IsActive", AiActorRole.Admin, AiActorCapability.ReadAdminMetrics),
+        RoleTool("admin.get_pending_leave_requests", "Đọc danh sách nghỉ phép Pending từ service quản trị nghỉ phép", AiActorRole.Admin, AiActorCapability.ReadAdminMetrics),
+    };
+
     public static IReadOnlyList<AiToolDefinition> Definitions { get; } = new[]
     {
         RoleToolWithSchema("admin.get_revenue_summary", "Tổng doanh thu hóa đơn Paid trong cơ sở được phân quyền; period: today, yesterday, last_7_days, this_month, last_month", AiActorRole.Admin, AiActorCapability.ReadAdminMetrics,

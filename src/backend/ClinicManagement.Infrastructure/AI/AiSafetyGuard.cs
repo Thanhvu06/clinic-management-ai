@@ -14,7 +14,7 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
         "dấu hiệu đột quỵ", "méo miệng", "yếu liệt nửa người", "co giật", "chảy máu không cầm",
         "chảy máu nhiều", "sốc phản vệ", "dị ứng nặng", "tự tử", "muốn tự sát", "cấp cứu thai", "thai kỳ khẩn cấp",
         "trẻ tím tái", "trẻ khó thở", "tím tái", "trẻ co giật", "uống quá liều thuốc", "quá liều thuốc",
-        "có ý định tự làm hại bản thân", "muốn tự làm hại bản thân"
+        "có ý định tự làm hại bản thân", "muốn tự làm hại bản thân", "uống quá liều", "uống cả vỉ", "uống nhầm thuốc"
     };
 
     private static readonly string[] InjectionPhrases =
@@ -57,18 +57,21 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
 
         var tokens = Tokenize(normalized);
         var chestPainMatches = FindChestPainMatches(normalized, tokens);
+        var medicationMatches = FindMedicationMisuseMatches(normalized, tokens);
         foreach (var phrase in EmergencyPhrases)
         {
             foreach (var match in FindPhraseMatches(tokens, phrase))
             {
-                var chestStart = chestPainMatches.FirstOrDefault(chest => chest.StartTokenIndex <= match.StartTokenIndex && chest.EndTokenIndex >= match.EndTokenIndex);
-                if (!IsNegated(normalized, tokens, chestStart?.StartTokenIndex ?? match.StartTokenIndex))
+                var fullMatch = chestPainMatches.Concat(medicationMatches).FirstOrDefault(span => span.StartTokenIndex <= match.StartTokenIndex && span.EndTokenIndex >= match.EndTokenIndex);
+                if (!IsNegated(normalized, tokens, fullMatch?.StartTokenIndex ?? match.StartTokenIndex))
                     return new AiSafetyGuardResult { IsEmergency = true, MatchedCategory = phrase };
             }
         }
 
         if (chestPainMatches.Any(match => !IsNegated(normalized, tokens, match.StartTokenIndex)))
             return new AiSafetyGuardResult { IsEmergency = true, MatchedCategory = "đau ngực" };
+        if (medicationMatches.Any(match => !IsNegated(normalized, tokens, match.StartTokenIndex)))
+            return new AiSafetyGuardResult { IsEmergency = true, MatchedCategory = "uống nhiều thuốc một lúc" };
 
         if (ContainsPromptInjectionNormalized(normalized))
             return new AiSafetyGuardResult { IsPromptInjection = true, MatchedCategory = "prompt_injection" };
@@ -208,6 +211,26 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
                     break;
                 }
                 if (!ChestPainFillers.Contains(tokens[end].Comparison)) break;
+            }
+        }
+        return matches;
+    }
+
+    private static List<PhraseMatch> FindMedicationMisuseMatches(string text, IReadOnlyList<TextToken> tokens)
+    {
+        var matches = new[] { "uống quá liều thuốc", "uống quá liều", "uống cả vỉ", "uống nhầm thuốc" }
+            .SelectMany(phrase => FindPhraseMatches(tokens, phrase)).ToList();
+        for (var start = 0; start < tokens.Count; start++)
+        {
+            if (!MatchesSyllable(tokens[start], Tokenize("uống")[0])) continue;
+            for (var dose = start + 1; dose + 3 < tokens.Count && dose <= start + 5; dose++)
+            {
+                if (HasClauseBoundaryBetween(text, tokens[start].EndIndex, tokens[dose + 3].StartIndex)) break;
+                var multiple = int.TryParse(tokens[dose].Comparison, out var count) ? count > 1
+                    : tokens[dose].Comparison is "nhieu" or "hai" or "ba" or "bon" or "nam" or "sau" or "bay" or "tam" or "chin" or "muoi";
+                if (multiple && tokens[dose + 1].Comparison == "vien" &&
+                    tokens[dose + 2].Comparison is "mot" or "cung" && tokens[dose + 3].Comparison == "luc")
+                    matches.Add(new PhraseMatch(start, dose + 3));
             }
         }
         return matches;

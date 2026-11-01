@@ -93,7 +93,11 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
         IPharmacyService pharmacy,
         IAiProviderHealth? providerHealth = null,
         IAiProviderConfigurationInspector? providerConfiguration = null,
-        ClinicManagement.Application.Appointments.Interfaces.IDoctorAppointmentService? doctorAppointments = null)
+        ClinicManagement.Application.Appointments.Interfaces.IDoctorAppointmentService? doctorAppointments = null,
+        ClinicManagement.Application.Billing.Interfaces.IBillingService? billing = null,
+        ClinicManagement.Application.Appointments.Interfaces.IChangeRequestService? changeRequests = null,
+        ClinicManagement.Application.Leaves.Interfaces.IAdminLeaveService? leaves = null,
+        ClinicManagement.Infrastructure.Pharmacy.MedicineBatchService? batches = null)
     {
         _db = db;
         _currentUser = currentUser;
@@ -102,6 +106,7 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
         _providerHealth = providerHealth;
         _providerConfiguration = providerConfiguration;
         _doctorAppointments = doctorAppointments;
+        _billing = billing; _changeRequests = changeRequests; _leaves = leaves; _batches = batches;
     }
 
     public AiToolDefinition Definition { get; } = new() { Name = "role.copilot.dispatch", Version = "1.0" };
@@ -115,6 +120,7 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
             using var document = JsonDocument.Parse(invocation.ArgumentsJson);
             if (document.RootElement.ValueKind != JsonValueKind.Object)
                 return AiToolArgumentValidationResult.Invalid("INVALID_TOOL_ARGUMENTS", "Tham số phải là JSON object.");
+            if (ValidateAccuracyArguments(invocation.ToolName, document.RootElement) is { } accuracyValidation) return accuracyValidation;
             foreach (var property in document.RootElement.EnumerateObject())
             {
                 if (IsAuthorityProperty(property.Name))
@@ -164,6 +170,14 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
     public Task<AiToolExecutionResult> ExecuteAsync(AiToolInvocation invocation, AiToolExecutionContext context, CancellationToken cancellationToken = default) =>
         invocation.ToolName.Trim().ToLowerInvariant() switch
         {
+            "reception.get_pending_change_requests" => GetPendingChangeRequestsAsync(context, cancellationToken),
+            "reception.get_unpaid_invoices" => GetUnpaidInvoicesAsync(context, cancellationToken),
+            "technician.get_service_guidance" => GetServiceGuidanceAsync(context, invocation.ArgumentsJson, cancellationToken),
+            "pharmacist.get_medicine_stock" => GetMedicineStockAsync(context, invocation.ArgumentsJson, cancellationToken),
+            "pharmacist.get_medicine_batches" => GetMedicineBatchesAsync(context, invocation.ArgumentsJson, cancellationToken),
+            "admin.get_revenue_report" => GetRevenueReportAsync(context, invocation.ArgumentsJson, cancellationToken),
+            "admin.get_active_doctors" => GetActiveDoctorsAsync(context, cancellationToken),
+            "admin.get_pending_leave_requests" => GetPendingLeaveRequestsAsync(context, cancellationToken),
             "admin.get_revenue_summary" => GetRevenueSummaryAsync(context, invocation.ArgumentsJson, cancellationToken),
             "reception.get_pending_payments" => GetPendingPaymentsAsync(context, cancellationToken),
             "doctor.get_my_appointments_today" => GetDoctorAppointmentsTodayAsync(context, cancellationToken),
@@ -911,22 +925,6 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
         return Completed(items, "doctor_prescription_status", items.Count == 0 ? "Ca khám chưa có đơn thuốc." : $"Có {items.Count} đơn thuốc của ca khám.");
     }
 
-    private async Task<AiToolExecutionResult> GetTechnicianWorklistAsync(AiToolExecutionContext context, CancellationToken cancellationToken)
-    {
-        if (!context.ActorId.HasValue || context.ActorId == Guid.Empty) return ScopeDenied();
-        var items = await TechnicianOrdersInScope(context)
-            .Where(o => o.Status == DiagnosticOrderStatus.Ordered || o.Status == DiagnosticOrderStatus.InProgress)
-            .OrderBy(o => o.OrderedAtUtc).Take(100)
-            .Select(o => new
-            {
-                o.Id, o.OrderCode, status = o.Status.ToString(), o.ClinicalIndication, o.OrderedAtUtc, o.PerformingDepartmentId,
-                items = o.Items.OrderBy(i => i.Id).Select(i => new { service = i.DiagnosticService.Name, status = i.Status.ToString() }).ToList()
-            })
-            .ToListAsync(cancellationToken);
-        return Completed(items, "technician_worklist", $"Có {items.Count} chỉ định đang chờ xử lý.");
-    }
-
-
     private async Task<AiToolExecutionResult> GetPrescriptionPaymentStatusAsync(AiToolExecutionContext context, string json, CancellationToken cancellationToken)
     {
         if (!TryGetLong(json, "prescriptionId", out var prescriptionId))
@@ -1029,18 +1027,6 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
             .Select(a => new { a.AppointmentCode, a.StartTime, a.EndTime, status = a.Status.ToString(), patientName = a.Patient.FullName, a.Reason })
             .ToListAsync(cancellationToken);
         return Completed(items, "doctor_appointments_today", $"Có {items.Count} lịch hẹn hôm nay của bạn chưa hủy hoặc hoàn tất.");
-    }
-
-    private async Task<AiToolExecutionResult> GetLowStockAsync(AiToolExecutionContext context, CancellationToken cancellationToken)
-    {
-        var facilities = await ResolveFacilityScopeAsync(context, nameof(AiActorRole.Pharmacist), cancellationToken);
-        if (facilities.Count == 0) return ScopeDenied();
-        var items = await _db.Medicines.AsNoTracking()
-            .Where(m => m.IsActive && m.StockQuantity <= m.ReorderLevel)
-            .OrderBy(m => m.StockQuantity).ThenBy(m => m.Id).Take(100)
-            .Select(m => new { m.Code, m.Name, m.Unit, m.StockQuantity, m.ReorderLevel })
-            .ToListAsync(cancellationToken);
-        return Completed(items, "pharmacy_low_stock", "Tồn kho toàn hệ thống được lấy từ danh mục thuốc hiện tại; mô hình dữ liệu chưa phân tách tồn kho theo cơ sở.");
     }
 
     private async Task<AiToolExecutionResult> GetRevenueSummaryAsync(AiToolExecutionContext context, string json, CancellationToken cancellationToken)
