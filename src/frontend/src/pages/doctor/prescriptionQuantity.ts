@@ -21,6 +21,7 @@ export function calculatePrescriptionQuantity(item: PrescriptionQuantity): numbe
         const match = text.match(/\d+(?:[.,]\d+)?/);
         return match ? Number(match[0].replace(',', '.')) : NaN;
     };
+    const periods = [...item.frequency.toLowerCase().normalize('NFC').matchAll(/(?<![\p{L}\p{M}\p{N}_])(sáng|trưa|chiều|tối)(?![\p{L}\p{M}\p{N}_])(?:\s+(\d+(?:[.,]\d+)?))?/gu)];
     const parseFrequency = (text: string) => {
         const normalized = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         const interval = normalized.match(/\bcach\s+(\d+(?:[.,]\d+)?)\s*(?:gio|tieng)\b/);
@@ -30,12 +31,14 @@ export function calculatePrescriptionQuantity(item: PrescriptionQuantity): numbe
         }
         const occurrences = normalized.match(/\b(\d+(?:[.,]\d+)?)\s*lan\b/);
         if (occurrences) return parseFirst(occurrences[1]);
-        const periods = text.toLowerCase().normalize('NFC').match(/\b(?:sáng|trưa|chiều|tối)\b/g);
-        if (periods) return new Set(periods).size;
+        if (periods.length) return new Set(periods.map(period => period[1])).size;
         const numbers = normalized.match(/\d+(?:[.,]\d+)?/g);
         return numbers?.length === 1 ? parseFirst(numbers[0]) : NaN;
     };
-    const quantity = Math.ceil(parseFirst(item.dosage) * parseFrequency(item.frequency) * item.durationDays);
+    const dailyDose = periods.length > 0 && periods.every(period => period[2] !== undefined)
+        ? periods.reduce((sum, period) => sum + parseFirst(period[2]), 0)
+        : parseFirst(item.dosage) * parseFrequency(item.frequency);
+    const quantity = Math.ceil(dailyDose * item.durationDays);
     return Number.isFinite(quantity) && quantity > 0 ? quantity : item.quantity;
 }
 
