@@ -110,6 +110,48 @@ describe('UnifiedCopilotPanel', () => {
         mockIdentityVersion = 1;
     });
 
+    it.each(['ConfigurationDisabled', 'WRITE_NOT_SUPPORTED'])('keeps %s debug metadata out of the visible reply', async errorCode => {
+        sendMock.mockResolvedValueOnce(response({ message: 'Vui lòng mở trang quản lý.', errorCode, cards: [], sources: [] }));
+        render(<MemoryRouter><UnifiedCopilotPanel /></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: 'Mở Copilot Bác sĩ' }));
+        fireEvent.change(screen.getByRole('textbox', { name: 'Nội dung Copilot' }), { target: { value: 'Yêu cầu kiểm thử' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu Copilot' }));
+        await screen.findByText('Vui lòng mở trang quản lý.');
+        expect(screen.queryByText(/Mã xử lý/)).not.toBeInTheDocument();
+        expect(screen.queryByText(new RegExp(errorCode))).not.toBeInTheDocument();
+    });
+
+    it('offers the examination action for the single next patient', async () => {
+        sendMock.mockResolvedValueOnce(response({ message: 'Người tiếp theo đã được xác định.', cards: [{ type: 'doctor_next_patient', title: 'Bệnh nhân tiếp theo', data: { items: [{ patientName: 'Người tiếp theo', visitCode: 'V-1', startTime: '09:30', reason: 'Đau đầu' }] } }], navigationRoute: '/doctor/visits/42/examination', sources: [] }));
+        render(<MemoryRouter><UnifiedCopilotPanel /></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: 'Mở Copilot Bác sĩ' }));
+        fireEvent.change(screen.getByRole('textbox', { name: 'Nội dung Copilot' }), { target: { value: 'Bệnh nhân tiếp theo là ai' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu Copilot' }));
+        expect(await screen.findByRole('link', { name: 'Mở ca khám' })).toHaveAttribute('href', '/doctor/visits/42/examination');
+        expect(screen.getByText('V-1')).toBeInTheDocument();
+        expect(screen.queryByText('Chưa có bệnh nhân tiếp theo.')).not.toBeInTheDocument();
+    });
+
+    it('localizes enum states and entity field names in staff action previews', async () => {
+        mockUser = { userId: 'tech-1', fullName: 'Kỹ thuật viên', role: 'DiagnosticTechnician' };
+        const tool = { name: 'technician.prepare_start_diagnostic_order', version: '1.0', description: 'Tiếp nhận phiếu', accessMode: 'RoleRestricted', riskLevel: 'High', confirmation: 'ExplicitUserConfirmation' };
+        catalogMock.mockResolvedValue({ tools: [], actionTools: [tool] });
+        prepareActionMock.mockResolvedValue({ status: 'pending_confirmation', actionId: 'preview-localization', data: { confirmationToken: 'test-token' }, preview: {
+            toolName: tool.name, status: 'pending_confirmation', resourceType: 'DiagnosticOrder', resourceId: '42',
+            resource: { identity: 'Phiếu kiểm thử', currentStatus: 'Completed', encounter: 'DiagnosticOrder #42' },
+            changes: [{ kind: 'start', summary: 'Tiếp nhận', items: [{ label: 'Trạng thái hiện tại', value: 'Ordered' }] }],
+            consequence: 'Sẽ tiếp nhận phiếu.', confirmationSummary: 'Đã kiểm tra.', validatedAtUtc: '2030-01-01T00:00:00Z', expiresAtUtc: '2030-01-01T00:00:10Z', sources: [{ name: 'diagnostic_orders', kind: 'database' }]
+        } });
+        render(<MemoryRouter initialEntries={['/diagnostics/orders/42']}><UnifiedCopilotPanel /></MemoryRouter>);
+        fireEvent.click(screen.getByRole('button', { name: 'Mở Copilot Kỹ thuật viên' }));
+        fireEvent.click(await screen.findByText('Thao tác có xác nhận (1)'));
+        fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
+        const preview = await screen.findByLabelText('Xem trước thao tác');
+        expect(preview.textContent).toContain('Phiếu chỉ định #42');
+        expect(preview.textContent).toContain('Đã chỉ định');
+        expect(preview.textContent).not.toMatch(/Completed|Ordered|DiagnosticOrder|diagnostic_orders|database/);
+    });
+
     it('collapses confirmed actions by default, translates their names and opens for pending preview', async () => {
         mockUser = { userId: 'tech-1', fullName: 'Synthetic', role: 'DiagnosticTechnician' };
         const tool = { name: 'technician.prepare_start_diagnostic_order', version: '1.0', description: 'Tiếp nhận phiếu', accessMode: 'RoleRestricted', riskLevel: 'High', confirmation: 'ExplicitUserConfirmation' };
@@ -146,7 +188,7 @@ describe('UnifiedCopilotPanel', () => {
 
         await waitFor(() => expect(screen.getByText('Trực tuyến')).toBeInTheDocument());
         expect(screen.getByText('Doctor 1')).toBeInTheDocument();
-        expect(screen.getAllByText(/appointments · database/)).toHaveLength(1);
+        expect(screen.getAllByText('Dữ liệu phòng khám')).toHaveLength(1);
         expect(screen.queryByText('must-not-render')).not.toBeInTheDocument();
         expect(screen.queryByText('42')).not.toBeInTheDocument();
         expect(screen.getByText(/Dữ liệu đọc lúc:/)).toBeInTheDocument();
@@ -176,7 +218,7 @@ describe('UnifiedCopilotPanel', () => {
 
         await waitFor(() => expect(screen.getByText('Đang dùng chế độ nội bộ')).toBeInTheDocument());
         expect(screen.getByText('Dịch vụ AI phản hồi quá lâu; dữ liệu chưa được xác định.')).toBeInTheDocument();
-        expect(screen.getByText('Mã xử lý: PROVIDER_TIMEOUT')).toBeInTheDocument();
+        expect(screen.queryByText('Mã xử lý: PROVIDER_TIMEOUT')).not.toBeInTheDocument();
         expect(screen.queryByText('Dữ liệu đã kiểm chứng.')).not.toBeInTheDocument();
     });
 
@@ -212,7 +254,7 @@ describe('UnifiedCopilotPanel', () => {
         await waitFor(() => expect(screen.getByText('Tim mạch')).toBeInTheDocument());
         expect(screen.getByText('250.000 ₫')).toBeInTheDocument();
         expect(screen.getByText('SP06')).toBeInTheDocument();
-        expect(screen.getByText('clinic_public_catalog · approved_database')).toBeInTheDocument();
+        expect(screen.getByText('Danh mục phòng khám')).toBeInTheDocument();
         expect(screen.queryByText(/items:/i)).not.toBeInTheDocument();
     });
 

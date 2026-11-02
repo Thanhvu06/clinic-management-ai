@@ -21,7 +21,10 @@ public static class AiRoleToolCatalog
 
     public static IReadOnlyList<AiToolDefinition> DeterministicReadDefinitions { get; } = new[]
     {
-        RoleTool("reception.get_pending_change_requests", "Đọc yêu cầu đổi/hủy lịch Pending theo phạm vi của màn hình xử lý yêu cầu", AiActorRole.Receptionist, AiActorCapability.ReadReceptionWorkspace),
+        RoleToolWithSchema("reception.search_patients", "Tìm bệnh nhân theo tên, số điện thoại hoặc mã bệnh án trong cơ sở được phân quyền", AiActorRole.Receptionist, AiActorCapability.ReadReceptionWorkspace,
+            new[] { Arg("query", AiToolArgumentType.String, required: true) }),
+        RoleTool("doctor.get_next_patient", "Xem đúng bệnh nhân tiếp theo trên bàn làm việc bác sĩ", AiActorRole.Doctor, AiActorCapability.ReadDoctorWorkspace),
+        RoleTool("reception.get_pending_change_requests", "Đọc yêu cầu đổi/hủy lịch đang chờ theo phạm vi của màn hình xử lý yêu cầu", AiActorRole.Receptionist, AiActorCapability.ReadReceptionWorkspace),
         RoleTool("reception.get_unpaid_invoices", "Đọc hóa đơn chưa thanh toán theo phạm vi BillingService", AiActorRole.Receptionist, AiActorCapability.ReadReceptionWorkspace),
         RoleToolWithSchema("technician.get_service_guidance", "Đọc hướng dẫn chuẩn bị và loại bệnh phẩm đã cấu hình của dịch vụ", AiActorRole.DiagnosticTechnician, AiActorCapability.ReadDiagnosticWorkspace,
             new[] { Arg("query", AiToolArgumentType.String, required: true) }),
@@ -31,17 +34,17 @@ public static class AiRoleToolCatalog
             new[] { Arg("status", AiToolArgumentType.String, required: true) }),
         RoleToolWithSchema("admin.get_revenue_report", "Đọc báo cáo doanh thu từ BillingService", AiActorRole.Admin, AiActorCapability.ReadAdminMetrics,
             new[] { Arg("period", AiToolArgumentType.String, required: true) }),
-        RoleTool("admin.get_active_doctors", "Đếm và liệt kê bác sĩ IsActive", AiActorRole.Admin, AiActorCapability.ReadAdminMetrics),
-        RoleTool("admin.get_pending_leave_requests", "Đọc danh sách nghỉ phép Pending từ service quản trị nghỉ phép", AiActorRole.Admin, AiActorCapability.ReadAdminMetrics),
+        RoleTool("admin.get_active_doctors", "Đếm và liệt kê bác sĩ đang hoạt động", AiActorRole.Admin, AiActorCapability.ReadAdminMetrics),
+        RoleTool("admin.get_pending_leave_requests", "Đọc danh sách nghỉ phép đang chờ từ service quản trị nghỉ phép", AiActorRole.Admin, AiActorCapability.ReadAdminMetrics),
     };
 
     public static IReadOnlyList<AiToolDefinition> Definitions { get; } = new[]
     {
-        RoleToolWithSchema("admin.get_revenue_summary", "Tổng doanh thu hóa đơn Paid trong cơ sở được phân quyền; period: today, yesterday, last_7_days, this_month, last_month", AiActorRole.Admin, AiActorCapability.ReadAdminMetrics,
+        RoleToolWithSchema("admin.get_revenue_summary", "Tổng doanh thu hóa đơn đã thanh toán trong cơ sở được phân quyền; period: today, yesterday, last_7_days, this_month, last_month", AiActorRole.Admin, AiActorCapability.ReadAdminMetrics,
             new[] { Arg("period", AiToolArgumentType.String, required: true) }),
         RoleTool("reception.get_pending_payments", "Xem tối đa 50 hóa đơn chưa thanh toán của cơ sở được phân quyền", AiActorRole.Receptionist, AiActorCapability.ReadReceptionWorkspace),
         RoleTool("doctor.get_my_appointments_today", "Xem lịch hẹn hôm nay chưa hủy/hoàn tất của chính bác sĩ tại cơ sở được phân quyền", AiActorRole.Doctor, AiActorCapability.ReadDoctorWorkspace),
-        RoleTool("technician.get_completed_today", "Xem chỉ định hoàn tất hôm nay trong khoa và cơ sở được phân công", AiActorRole.DiagnosticTechnician, AiActorCapability.ReadDiagnosticWorkspace),
+        RoleTool("technician.get_completed_today", "Xem chỉ định hoàn tất hôm nay trong phạm vi cơ sở của màn hình cận lâm sàng", AiActorRole.DiagnosticTechnician, AiActorCapability.ReadDiagnosticWorkspace),
         RoleTool("pharmacist.get_low_stock", "Xem tối đa 100 thuốc hoạt động có tồn kho không vượt mức đặt lại; tồn kho toàn hệ thống, chưa tách theo cơ sở", AiActorRole.Pharmacist, AiActorCapability.ReadPharmacyWorkspace),
         RoleTool("reception.get_today_appointments", "Xem lịch hẹn trong ngày của cơ sở được phân quyền", AiActorRole.Receptionist, AiActorCapability.ReadReceptionWorkspace),
         RoleTool("reception.get_upcoming_appointments", "Xem tối đa 100 lịch hẹn còn giữ chỗ từ ngày mai đến hết 7 ngày tới của cơ sở được phân quyền", AiActorRole.Receptionist, AiActorCapability.ReadReceptionWorkspace),

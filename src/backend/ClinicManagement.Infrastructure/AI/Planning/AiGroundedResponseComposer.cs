@@ -1,3 +1,4 @@
+using ClinicManagement.Infrastructure.AI.Tools;
 using ClinicManagement.Application.AI.DTOs;
 using ClinicManagement.Application.AI.Planning;
 using ClinicManagement.Application.AI.Tools;
@@ -12,7 +13,7 @@ public sealed class AiGroundedResponseComposer : IAiGroundedResponseComposer
         if (results.Count == 0)
             return new AiGroundedResponse
             {
-                Message = decision.Message ?? decision.Clarification ?? "Vui lòng mô tả rõ dữ liệu cần tra cứu.",
+                Message = CopilotDisplayText.Localize(decision.Message ?? decision.Clarification) ?? "Vui lòng mô tả rõ dữ liệu cần tra cứu.",
                 NavigationRoute = decision.NavigationRoute
             };
 
@@ -20,7 +21,7 @@ public sealed class AiGroundedResponseComposer : IAiGroundedResponseComposer
         {
             Type = result.ResultType ?? "workspace_result",
             Title = result.Status == "completed" ? "Dữ liệu đã kiểm chứng" : "Không thể truy cập dữ liệu",
-            Description = ArgumentErrorMessage(result) ?? result.DisplayText ?? result.Error?.Message,
+            Description = CopilotDisplayText.Localize(ArgumentErrorMessage(result) ?? result.DisplayText ?? result.Error?.Message),
             Data = result.Status == "completed" ? result.Data : null,
             Sources = result.DataSources,
             RetrievedAtUtc = result.RetrievedAtUtc
@@ -28,8 +29,8 @@ public sealed class AiGroundedResponseComposer : IAiGroundedResponseComposer
         var failed = results.FirstOrDefault(x => x.Status != "completed");
         return new AiGroundedResponse
         {
-            Message = (failed is null ? null : ArgumentErrorMessage(failed)) ?? failed?.Error?.Message ?? string.Join(" ", results.Select(x => x.DisplayText).Where(x => !string.IsNullOrWhiteSpace(x))),
-            NavigationRoute = decision.NavigationRoute,
+            Message = CopilotDisplayText.Localize((failed is null ? null : ArgumentErrorMessage(failed)) ?? failed?.Error?.Message ?? string.Join(" ", results.Select(x => x.DisplayText).Where(x => !string.IsNullOrWhiteSpace(x)))) ?? "Chưa có dữ liệu phù hợp.",
+            NavigationRoute = results.Select(r => r.Data).OfType<CopilotNextPatientData>().FirstOrDefault()?.NavigationRoute ?? decision.NavigationRoute,
             Cards = cards,
             Sources = results.SelectMany(x => x.DataSources).Distinct().ToArray()
         };
