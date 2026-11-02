@@ -30,6 +30,8 @@ internal static class TwentyFourSevenDemoSeed
             .Where(d => userIds.Contains(d.UserId)).ToListAsync();
         doctors = emails.Select(email => doctors.Single(d => d.UserId == users.Single(u => u.Email == email).Id)).ToList();
         var patients = await db.Patients.OrderByDescending(p => p.Email == "patient@cliniccare.local").ThenBy(p => p.Id).ToListAsync();
+        var demoPatient = patients.Single(p => p.Email == "patient@cliniccare.local");
+        var demoPatientBooked = false;
         var used = (await db.Appointments.Select(a => new { a.PatientId, a.AppointmentDate }).ToListAsync())
             .Select(a => (a.PatientId, a.AppointmentDate)).ToHashSet();
         var earliest = clock.VietnamNow.AddMinutes(30);
@@ -43,7 +45,11 @@ internal static class TwentyFourSevenDemoSeed
             var time = TimeOnly.FromDateTime(at);
             var doctor = doctors[index % doctors.Count];
             var specialty = doctor.DoctorSpecialties.Single(ds => ds.IsPrimary).Specialty;
-            var patient = patients.First(p => !used.Contains((p.Id, date)) && DemoPatientDevelopmentSeed.Allows(p, specialty.SpecialtyCode, date));
+            var selectDemoPatient = !demoPatientBooked && at >= clock.VietnamNow.AddHours(1) && at <= clock.VietnamNow.AddHours(6)
+                && !used.Contains((demoPatient.Id, date)) && DemoPatientDevelopmentSeed.Allows(demoPatient, specialty.SpecialtyCode, date);
+            var patient = selectDemoPatient ? demoPatient : patients.First(p => p.Id != demoPatient.Id
+                && !used.Contains((p.Id, date)) && DemoPatientDevelopmentSeed.Allows(p, specialty.SpecialtyCode, date));
+            demoPatientBooked |= selectDemoPatient;
             used.Add((patient.Id, date));
             var slot = await db.AppointmentSlots.SingleAsync(s => s.DoctorId == doctor.Id && s.SlotDate == date && s.StartTime == time && !s.IsBooked);
             var facility = await db.StaffFacilityAssignments.Where(a => a.UserId == doctor.UserId && a.IsActive && a.Role == "Doctor")

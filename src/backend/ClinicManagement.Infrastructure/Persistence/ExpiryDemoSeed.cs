@@ -61,13 +61,26 @@ internal static class ExpiryDemoSeed
 
         await AppointmentAsync(AppointmentStatus.Pending, 0);
         for (var i = 1; i <= 3; i++) await AppointmentAsync(AppointmentStatus.Confirmed, i);
-        var change = await AppointmentAsync(AppointmentStatus.PendingCancellation, 4);
+        var pendingDate = db.OperatingHours.IsTwentyFourSeven ? clock.VietnamToday.AddDays(2) : (DateOnly?)null;
+        var change = await AppointmentAsync(AppointmentStatus.PendingCancellation, 4, pendingDate);
         db.AppointmentChangeRequests.Add(new AppointmentChangeRequest
         {
             AppointmentId = change.Id, RequestType = AppointmentChangeRequestType.Cancellation,
             OriginalAppointmentStatus = AppointmentStatus.Confirmed, RequestedByUserId = change.Patient!.UserId!.Value,
-            CreatedAt = change.Histories.Single().CreatedAt.AddMinutes(30), Reason = "Xin hủy lịch khám đã đăng ký"
+            CreatedAt = db.OperatingHours.IsTwentyFourSeven ? clock.UtcNow : change.Histories.Single().CreatedAt.AddMinutes(30), Reason = "Xin hủy lịch khám đã đăng ký"
         });
+        if (db.OperatingHours.IsTwentyFourSeven)
+        {
+            var reschedule = await AppointmentAsync(AppointmentStatus.PendingReschedule, 5, clock.VietnamToday.AddDays(3));
+            var requestedSlot = await db.AppointmentSlots.Where(s => s.DoctorId == doctor.Id && !s.IsBooked && s.SlotDate == clock.VietnamToday.AddDays(4))
+                .OrderBy(s => s.StartTime).FirstAsync();
+            db.AppointmentChangeRequests.Add(new AppointmentChangeRequest
+            {
+                AppointmentId = reschedule.Id, RequestType = AppointmentChangeRequestType.Reschedule, RequestedSlotId = requestedSlot.Id,
+                OriginalAppointmentStatus = AppointmentStatus.Confirmed, RequestedByUserId = reschedule.Patient!.UserId!.Value,
+                CreatedAt = clock.UtcNow, Reason = "Xin đổi lịch khám để sắp xếp công việc"
+            });
+        }
         var completed = await AppointmentAsync(AppointmentStatus.Completed, -2);
         completed.Reason = "Đau đầu từng cơn";
         var completedAt = clock.ConvertVietnamToUtc(completed.AppointmentDate.ToDateTime(completed.EndTime));
@@ -196,10 +209,11 @@ internal static class ExpiryDemoSeed
             RegistrationCode = BusinessDisplay.RandomCode("REG", date, 8), HealthPackageId = package.Id, PatientId = patient.Id,
             PreferredDate = date, ContactPhone = patient.PhoneNumber ?? "0900000000", CreatedAt = at
         });
+        var leaveDate = db.OperatingHours.IsTwentyFourSeven ? clock.VietnamToday.AddDays(2) : date;
         db.DoctorLeaveRequests.Add(new DoctorLeaveRequest
         {
-            DoctorId = doctor.Id, StartDateTime = date.ToDateTime(new TimeOnly(8, 0)),
-            EndDateTime = date.ToDateTime(new TimeOnly(17, 0)), Reason = "Nghỉ giải quyết việc gia đình"
+            DoctorId = doctor.Id, StartDateTime = leaveDate.ToDateTime(new TimeOnly(8, 0)),
+            EndDateTime = leaveDate.ToDateTime(new TimeOnly(17, 0)), Reason = "Nghỉ giải quyết việc gia đình"
         });
         db.SystemAuditLogs.Add(new SystemAuditLog
         {

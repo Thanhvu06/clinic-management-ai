@@ -5,6 +5,7 @@ export const auditActionLabels: Readonly<Record<string, string>> = {
     ConfirmAppointment: 'Xác nhận lịch hẹn',
     CompleteConsultation: 'Hoàn tất khám',
     InitializeClinicalDemo: 'Khởi tạo dữ liệu lâm sàng',
+    Initialize24SevenPatientHistory: 'Khởi tạo lịch sử khám mẫu (24/7)',
     CheckInPatient: 'Tiếp nhận bệnh nhân',
     CreateDiagnosticOrder: 'Chỉ định cận lâm sàng',
     SubmitDiagnosticResults: 'Gửi kết quả duyệt',
