@@ -73,10 +73,8 @@ internal static class AiCopilotAccuracyRouting
                     Has(@"\b(?:co so|phong ban)\b") ? "/admin/facilities" : "/admin/users", "WRITE_NOT_SUPPORTED");
             if (Has(@"\bdoanh thu\b"))
             {
-                var days = Regex.Match(text, @"\b(\d+)\s+ngay\b");
-                if (days.Success && (!int.TryParse(days.Groups[1].Value, out var count) || count is < 1 or > 366))
+                if (!AdminRevenuePeriod.TryParseQuestion(text, out var period))
                     return Navigate(AiChatIntentTypes.ClarificationRequired, "RevenueReport", "Vui lòng chọn khoảng doanh thu từ 1 đến 366 ngày.", "/admin/billing");
-                var period = days.Success ? $"last_{int.Parse(days.Groups[1].Value)}_days" : Has(@"\bhom qua\b") ? "yesterday" : Has(@"\bthang truoc\b") ? "last_month" : Has(@"\bthang nay\b") ? "this_month" : "today";
                 return Read(AiChatIntentTypes.AdminMetrics, "RevenueReport", "admin.get_revenue_report", new { period }, "/admin/billing");
             }
             if (Has(@"\bbac si\b") && Has(@"\b(?:hoat dong|dang lam viec)\b") && Has(@"\b(?:bao nhieu|so luong|dem|danh sach)\b"))

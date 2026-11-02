@@ -23,7 +23,7 @@ public static class AiTypedSuggestionPlanner
             ["doctor.get_my_appointments_today"] = (AiChatIntentTypes.ViewAppointments, "DoctorAppointmentsToday", "/doctor/appointments"),
             ["technician.get_completed_today"] = (AiChatIntentTypes.DiagnosticLookup, "TechnicianCompletedToday", "/diagnostics"),
             ["pharmacist.get_low_stock"] = (AiChatIntentTypes.PharmacyInventory, "LowStock", "/pharmacy/inventory"),
-            ["admin.get_revenue_summary"] = (AiChatIntentTypes.AdminMetrics, "RevenueSummary", "/admin")
+            ["admin.get_revenue_summary"] = (AiChatIntentTypes.AdminMetrics, "RevenueSummary", "/admin/billing")
         };
 
     public static AiPlannerDecision Plan(AiSuggestionDefinition suggestion)

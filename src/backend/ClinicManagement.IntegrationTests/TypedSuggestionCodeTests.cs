@@ -55,7 +55,7 @@ public sealed class TypedSuggestionCodeTests : IntegrationTestBase
         Assert.Equal(JsonValueKind.Null, data.GetProperty("errorCode").ValueKind);
         Assert.Equal(new[] { item.Tool }, data.GetProperty("executedToolNames").EnumerateArray().Select(x => x.GetString()));
         var card = Assert.Single(data.GetProperty("cards").EnumerateArray());
-        Assert.Equal(item.Card, card.GetProperty("type").GetString());
+        Assert.Equal(item.Tool == "admin.get_revenue_summary" ? "admin_revenue_report" : item.Card, card.GetProperty("type").GetString());
         Assert.Equal("Dữ liệu đã kiểm chứng", card.GetProperty("title").GetString());
         if (item.Period is not null)
             Assert.Equal(item.Period, card.GetProperty("data").GetProperty("period").GetString());

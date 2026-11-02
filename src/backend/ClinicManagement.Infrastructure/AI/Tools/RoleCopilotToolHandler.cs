@@ -180,7 +180,7 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
             "admin.get_revenue_report" => GetRevenueReportAsync(context, invocation.ArgumentsJson, cancellationToken),
             "admin.get_active_doctors" => GetActiveDoctorsAsync(context, cancellationToken),
             "admin.get_pending_leave_requests" => GetPendingLeaveRequestsAsync(context, cancellationToken),
-            "admin.get_revenue_summary" => GetRevenueSummaryAsync(context, invocation.ArgumentsJson, cancellationToken),
+            "admin.get_revenue_summary" => GetRevenueReportAsync(context, invocation.ArgumentsJson, cancellationToken),
             "reception.get_pending_payments" => GetPendingPaymentsAsync(context, cancellationToken),
             "doctor.get_my_appointments_today" => GetDoctorAppointmentsTodayAsync(context, cancellationToken),
             "technician.get_completed_today" => GetTechnicianCompletedTodayAsync(context, cancellationToken),
@@ -1001,56 +1001,6 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
             .Select(a => new { a.AppointmentCode, a.StartTime, a.EndTime, status = a.Status.ToString(), patientName = a.Patient.FullName, a.Reason })
             .ToListAsync(cancellationToken);
         return Completed(items, "doctor_appointments_today", $"Có {items.Count} lịch hẹn hôm nay của bạn chưa hủy hoặc hoàn tất.");
-    }
-
-    private async Task<AiToolExecutionResult> GetRevenueSummaryAsync(AiToolExecutionContext context, string json, CancellationToken cancellationToken)
-    {
-        var facilities = await ResolveFacilityScopeAsync(context, nameof(AiActorRole.Admin), cancellationToken);
-        if (facilities.Count == 0) return ScopeDenied();
-        using var document = JsonDocument.Parse(json);
-        var period = document.RootElement.GetProperty("period").GetString()!;
-        var today = _clock.VietnamToday;
-        var monthStart = new DateOnly(today.Year, today.Month, 1);
-        var (from, until) = period switch
-        {
-            "today" => (today, today.AddDays(1)),
-            "yesterday" => (today.AddDays(-1), today),
-            "last_7_days" => (today.AddDays(-6), today.AddDays(1)),
-            "this_month" => (monthStart, monthStart.AddMonths(1)),
-            "last_month" => (monthStart.AddMonths(-1), monthStart),
-            _ => throw new InvalidOperationException("Revenue period must be validated before execution.")
-        };
-        var start = _clock.ConvertVietnamToUtc(from.ToDateTime(TimeOnly.MinValue));
-        var end = _clock.ConvertVietnamToUtc(until.ToDateTime(TimeOnly.MinValue));
-        var query = _db.Invoices.AsNoTracking()
-            .Where(i => i.Status == InvoiceStatus.Paid && i.PaidAtUtc >= start && i.PaidAtUtc < end &&
-                        ((i.PatientVisit != null && facilities.Contains(i.PatientVisit.FacilityId)) ||
-                         (i.PatientVisit == null && i.Appointment != null && i.Appointment.FacilityId.HasValue && facilities.Contains(i.Appointment.FacilityId.Value))));
-        var totals = new Dictionary<long, (decimal Revenue, int Count)>();
-        long lastId = 0;
-        // Bounded pages keep decimal arithmetic exact on SQL Server and SQLite,
-        // without truncating the aggregate to the first page of invoices.
-        while (true)
-        {
-            var page = await query.Where(i => i.Id > lastId).OrderBy(i => i.Id).Take(500)
-                .Select(i => new { i.Id, i.TotalAmount, facilityId = i.PatientVisit != null ? i.PatientVisit.FacilityId : i.Appointment!.FacilityId!.Value })
-                .ToListAsync(cancellationToken);
-            if (page.Count == 0) break;
-            foreach (var invoice in page)
-            {
-                var total = totals.GetValueOrDefault(invoice.facilityId);
-                totals[invoice.facilityId] = (total.Revenue + invoice.TotalAmount, total.Count + 1);
-            }
-            lastId = page[^1].Id;
-        }
-        var result = new
-        {
-            period,
-            totalRevenue = totals.Values.Sum(t => t.Revenue),
-            invoiceCount = totals.Values.Sum(t => t.Count),
-            byFacility = totals.OrderBy(t => t.Key).Select(t => new { facilityId = t.Key, totalRevenue = t.Value.Revenue, invoiceCount = t.Value.Count }).ToArray()
-        };
-        return Completed(result, "admin_revenue_summary", "Doanh thu hóa đơn đã thanh toán theo thời điểm thanh toán trong kỳ giờ Việt Nam, chỉ trong cơ sở được phân quyền.");
     }
 
     private async Task<AiToolExecutionResult> GetAdminMetricsAsync(AiToolExecutionContext context, CancellationToken cancellationToken)
