@@ -16,7 +16,7 @@ internal static class ExpiryDemoSeed
         var doctor = await db.Doctors.Include(d => d.DoctorSpecialties).Where(d => d.IsActive).OrderBy(d => d.Id).FirstAsync();
         var specialty = doctor.DoctorSpecialties.First().SpecialtyId;
         var department = await db.Departments.Where(d => d.SpecialtyId == specialty && d.IsActive).OrderBy(d => d.Id).FirstAsync();
-        var date = DemoSeedCalendar.PreviousOpen(clock.VietnamToday.AddDays(-10));
+        var date = DemoSeedCalendar.PreviousOpen(clock.VietnamToday.AddDays(-10), db.OperatingHours);
         var at = clock.ConvertVietnamToUtc(date.ToDateTime(new TimeOnly(9, 0)));
 
         DateOnly OpenDate(int offset)
@@ -25,7 +25,7 @@ internal static class ExpiryDemoSeed
             for (var i = 0; i < Math.Abs(offset); i++)
             {
                 result = result.AddDays(Math.Sign(offset));
-                if (DemoSeedCalendar.IsClosed(result)) result = result.AddDays(Math.Sign(offset));
+                if (DemoSeedCalendar.IsClosed(result, db.OperatingHours)) result = result.AddDays(Math.Sign(offset));
             }
             return result;
         }
@@ -91,7 +91,7 @@ internal static class ExpiryDemoSeed
         var visits = new List<PatientVisit>();
         foreach (var status in new[] { VisitStatus.NoShow, VisitStatus.Completed })
         {
-            var visitDate = DemoSeedCalendar.PreviousOpen(clock.VietnamToday.AddDays(-1));
+            var visitDate = DemoSeedCalendar.PreviousOpen(clock.VietnamToday.AddDays(-1), db.OperatingHours);
             var appointment = await AppointmentAsync(status == VisitStatus.NoShow ? AppointmentStatus.NoShow : AppointmentStatus.Completed, visits.Count, visitDate);
             var checkedInAt = clock.ConvertVietnamToUtc(visitDate.ToDateTime(appointment.StartTime));
             var floor = await db.PatientVisits.Where(v => v.FacilityId == department.FacilityId && v.DepartmentId == department.Id && v.VisitDate == visitDate)

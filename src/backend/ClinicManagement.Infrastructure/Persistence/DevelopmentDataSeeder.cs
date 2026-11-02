@@ -86,7 +86,7 @@ public static class DevelopmentDataSeeder
         var dateTimeProvider = serviceProvider.GetService<ClinicManagement.Application.Common.Interfaces.IDateTimeProvider>()
             ?? new ClinicManagement.Infrastructure.Services.DateTimeProvider();
 
-        var seedTime = DemoSeedTimeline.BeforeNow(dateTimeProvider, DemoSeedTimeline.ActivityDate(dateTimeProvider), 9);
+        var seedTime = DemoSeedTimeline.BeforeNow(dateTimeProvider, DemoSeedTimeline.ActivityDate(dateTimeProvider, db.OperatingHours), 9, policy: db.OperatingHours);
         var config = serviceProvider.GetService<IConfiguration>();
         var seedSchedules = options?.SeedDoctorSchedulesAndSlots
             ?? config?.GetValue<bool>("DemoSeed:GenerateSlots", false)
@@ -521,7 +521,7 @@ public static class DevelopmentDataSeeder
                     RegistrationCode = ClinicManagement.Infrastructure.Common.BusinessDisplay.RandomCode("REG", today.AddDays(-2), 8),
                     PatientId = patients[0].Id,
                     HealthPackageId = packages[0].Id,
-                    PreferredDate = DemoSeedCalendar.NextOpen(today.AddDays(3)),
+                    PreferredDate = DemoSeedCalendar.NextOpen(today.AddDays(3), db.OperatingHours),
                     ContactPhone = patients[0].PhoneNumber!,
                     Note = "Ưu tiên khám buổi sáng sớm trước 9h",
                     Status = HealthPackageRegistrationStatus.Pending,
@@ -532,7 +532,7 @@ public static class DevelopmentDataSeeder
                     RegistrationCode = ClinicManagement.Infrastructure.Common.BusinessDisplay.RandomCode("REG", today.AddDays(-3), 8),
                     PatientId = patients[1 % patients.Count].Id,
                     HealthPackageId = packages[1 % packages.Count].Id,
-                    PreferredDate = DemoSeedCalendar.NextOpen(today.AddDays(5)),
+                    PreferredDate = DemoSeedCalendar.NextOpen(today.AddDays(5), db.OperatingHours),
                     ContactPhone = patients[1 % patients.Count].PhoneNumber!,
                     Note = "Có tiền sử tăng huyết áp gia đình",
                     AdminNotes = "Đã liên hệ xác nhận hẹn lịch vào 8h30 ngày hẹn",
@@ -545,7 +545,7 @@ public static class DevelopmentDataSeeder
                     RegistrationCode = ClinicManagement.Infrastructure.Common.BusinessDisplay.RandomCode("REG", today.AddDays(-4), 8),
                     PatientId = patients.First(p => p.Gender == Gender.Female).Id,
                     HealthPackageId = packages[3 % packages.Count].Id,
-                    PreferredDate = DemoSeedCalendar.NextOpen(today.AddDays(2)),
+                    PreferredDate = DemoSeedCalendar.NextOpen(today.AddDays(2), db.OperatingHours),
                     ContactPhone = patients.First(p => p.Gender == Gender.Female).PhoneNumber!,
                     Note = "Khám tư vấn định kỳ",
                     CancellationReason = "Khách hàng bận lịch công tác không đến được",

@@ -38,20 +38,9 @@ export function formatDoctorName(academicTitle?: string | null, fullName?: strin
     return `${formattedTitle} ${cleanName}`.trim();
 }
 
-/**
- * Calculates the next working day (Monday - Saturday) in YYYY-MM-DD string format.
- * If base date or base date + 1 day is a Sunday, rolls forward to Monday.
- */
 export function getNextWorkingDateString(baseDate: Date = new Date()): string {
     const target = new Date(baseDate);
-    // Start by advancing 1 day
     target.setDate(target.getDate() + 1);
-
-    // If target is Sunday (0), roll forward to Monday (+1 day)
-    if (target.getDay() === 0) {
-        target.setDate(target.getDate() + 1);
-    }
-
     const year = target.getFullYear();
     const month = String(target.getMonth() + 1).padStart(2, '0');
     const day = String(target.getDate()).padStart(2, '0');

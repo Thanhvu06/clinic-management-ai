@@ -159,7 +159,7 @@ public class ChangeRequestService : IChangeRequestService
                 if (targetSlot.DoctorId != appointment.DoctorId)
                     throw new BusinessException("DOCTOR_MISMATCH", "Slot yêu cầu phải thuộc cùng bác sĩ với lịch hẹn ban đầu.");
 
-                if (targetSlot.SlotDate.DayOfWeek == DayOfWeek.Sunday)
+                if (!_dbContext.OperatingHours.IsOpen(targetSlot.SlotDate))
                     throw new BusinessException("INVALID_SCHEDULE", "Phòng khám không làm việc vào Chủ nhật.");
 
                 var slotStart = targetSlot.SlotDate.ToDateTime(targetSlot.StartTime);
@@ -681,7 +681,7 @@ public class ChangeRequestService : IChangeRequestService
             if (targetSlot.DoctorId != appointment.DoctorId)
                 throw new BusinessException("DOCTOR_MISMATCH", "Slot yêu cầu không thuộc bác sĩ của lịch hẹn.");
 
-            if (targetSlot.SlotDate.DayOfWeek == DayOfWeek.Sunday)
+            if (!_dbContext.OperatingHours.IsOpen(targetSlot.SlotDate))
                 throw new BusinessException("INVALID_SCHEDULE", "Phòng khám không làm việc vào Chủ nhật.");
 
             var slotStart = targetSlot.SlotDate.ToDateTime(targetSlot.StartTime);

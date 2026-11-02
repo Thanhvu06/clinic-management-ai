@@ -24,7 +24,7 @@ internal static class ClinicBrandDevelopmentSeed
         location.City = City;
         location.Phone = Phone;
         location.Description = Description;
-        location.OpeningHours = "Thứ 2 – Thứ 6: 08:00–17:00 · Thứ 7: 08:00–11:30 · Chủ nhật nghỉ";
+        location.OpeningHours = db.OperatingHours.DisplayText;
         location.ServicesJson = "[\"Khám tổng quát\",\"Xét nghiệm\",\"Siêu âm\",\"X-quang\",\"Nhà thuốc\"]";
         location.IsActive = true;
         var retired = await db.ClinicLocations.Where(l => l.Code == "CS02" || l.Code == "CS03").ToListAsync();

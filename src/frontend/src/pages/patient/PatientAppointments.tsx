@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useDialog } from "../../contexts/DialogContext";
 import { Breadcrumb } from "../../components/Breadcrumb";
-import { getNextWorkingDateString, isSundayDateString } from "../../utils/doctorNameHelper";
+import { getNextWorkingDateString } from "../../utils/doctorNameHelper";
 import styles from './PatientAppointments.module.css';
 import { PageHeader } from '../../components/common/PageHeader';
 import { StatusBadge } from '../../components/common/StatusBadge';
@@ -227,18 +227,6 @@ export const PatientAppointments: React.FC = () => {
 
     const handleTargetDateChange = (newDate: string) => {
         ++slotsRequest.current;
-        if (isSundayDateString(newDate)) {
-            setRescheduleModal(p => ({
-                ...p,
-                targetDate: newDate,
-                availableSlots: [],
-                selectedSlotId: null,
-                loadingSlots: false,
-                inlineError: "Phòng khám không làm việc vào Chủ nhật. Vui lòng chọn ngày khác (Thứ 2 - Thứ 7)."
-            }));
-            return;
-        }
-
         if (!newDate || newDate < tomorrowStr) {
             setRescheduleModal(p => ({ ...p, targetDate: newDate, availableSlots: [], selectedSlotId: null, loadingSlots: false, inlineError: "Vui lòng chọn ngày từ ngày mai trở đi." }));
             return;

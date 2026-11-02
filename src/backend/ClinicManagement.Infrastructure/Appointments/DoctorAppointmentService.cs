@@ -645,7 +645,7 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
             if (request.SuggestedDate <= _dateTimeProvider.VietnamToday)
                 throw new BusinessException("INVALID_DATE", "Ngày hẹn tái khám phải sau ngày hôm nay.");
 
-            if (request.SuggestedDate.DayOfWeek == DayOfWeek.Sunday)
+            if (!_dbContext.OperatingHours.IsOpen(request.SuggestedDate))
                 throw new BusinessException("INVALID_DATE", "Không thể đề xuất tái khám vào Chủ nhật vì phòng khám không làm việc.");
 
             var existingPending = await _dbContext.RevisitRequests

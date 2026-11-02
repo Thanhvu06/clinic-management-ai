@@ -94,8 +94,8 @@ internal static class DemoActivityDevelopmentSeed
         var random = new Random(261024);
         for (var day = 0; day < 30; day++)
         {
-            var date = DemoSeedTimeline.ActivityDate(clock).AddDays(-day);
-            if (DemoSeedCalendar.IsClosed(date)) continue;
+            var date = DemoSeedTimeline.ActivityDate(clock, db.OperatingHours).AddDays(-day);
+            if (DemoSeedCalendar.IsClosed(date, db.OperatingHours)) continue;
             var start = RealisticDevelopmentSeed.At(clock, date, 0);
             var end = start.AddDays(1);
             var paid = await db.Payments.CountAsync(p => p.Status == PaymentStatus.Succeeded && p.ReceivedAtUtc >= start && p.ReceivedAtUtc < end);
@@ -108,7 +108,7 @@ internal static class DemoActivityDevelopmentSeed
                 var choice = choices[random.Next(choices.Count)];
                 var package = choice.Package;
                 var patient = choice.Patient!;
-                var time = DemoSeedTimeline.BeforeNow(clock, date, 8 + n / 2, n % 2 * 25).AddMinutes(-n * 2);
+                var time = DemoSeedTimeline.BeforeNow(clock, date, 8 + n / 2, n % 2 * 25, policy: db.OperatingHours).AddMinutes(-n * 2);
                 var invoice = new Invoice
                 {
                     InvoiceCode = BusinessDisplay.RandomCode("INV", date, 8), PatientId = patient.Id,

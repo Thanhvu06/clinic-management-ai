@@ -27,89 +27,30 @@ internal static class DevelopmentScheduleSeed
             for (int i = 0; i < days; i++)
             {
                 var date = today.AddDays(i);
-                if (DemoSeedCalendar.IsClosed(date)) continue;
-                var morningStart = new TimeOnly(8, 0);
-
-                var morningKey = (doc.Id, date, morningStart, new TimeOnly(11, 30));
-                if (!scheduleLookup.TryGetValue(morningKey, out var morningSchedule))
+                foreach (var (start, end) in db.OperatingHours.GetSeedShifts(date))
                 {
-                    morningSchedule = new DoctorWorkSchedule
+                    var key = (doc.Id, date, start, end);
+                    if (!scheduleLookup.TryGetValue(key, out var schedule))
                     {
-                        DoctorId = doc.Id,
-                        WorkDate = date,
-                        StartTime = morningStart,
-                        EndTime = new TimeOnly(11, 30),
-                        IsActive = true
-                    };
-                    db.DoctorWorkSchedules.Add(morningSchedule);
-                    scheduleLookup[morningKey] = morningSchedule;
-                }
-                else if (!morningSchedule.IsActive)
-                {
-                    morningSchedule.IsActive = true;
-                }
-
-                var hasAfternoonShift = date.DayOfWeek != DayOfWeek.Saturday;
-                var afternoonKey = (doc.Id, date, new TimeOnly(13, 30), new TimeOnly(17, 0));
-                if (hasAfternoonShift)
-                {
-                    if (!scheduleLookup.TryGetValue(afternoonKey, out var afternoonSchedule))
-                    {
-                        afternoonSchedule = new DoctorWorkSchedule
-                        {
-                            DoctorId = doc.Id,
-                            WorkDate = date,
-                            StartTime = new TimeOnly(13, 30),
-                            EndTime = new TimeOnly(17, 0),
-                            IsActive = true
-                        };
-                        db.DoctorWorkSchedules.Add(afternoonSchedule);
-                        scheduleLookup[afternoonKey] = afternoonSchedule;
+                        schedule = new DoctorWorkSchedule { DoctorId = doc.Id, WorkDate = date, StartTime = start, EndTime = end };
+                        db.DoctorWorkSchedules.Add(schedule);
+                        scheduleLookup[key] = schedule;
                     }
-                    else if (!afternoonSchedule.IsActive)
+                    schedule.IsActive = true;
+                    var close = end.ToTimeSpan();
+                    for (var minute = start.ToTimeSpan(); minute < close; minute += TimeSpan.FromMinutes(30))
                     {
-                        afternoonSchedule.IsActive = true;
-                    }
-                }
-
-                var mStart = morningStart;
-                for (int s = 0; s < 7; s++)
-                {
-                    var slotKey = (doc.Id, date, mStart);
-                    if (!slotLookup.TryGetValue(slotKey, out var slot))
-                    {
-                        slot = new AppointmentSlot
+                        var slotStart = TimeOnly.FromTimeSpan(minute);
+                        var slotKey = (doc.Id, date, slotStart);
+                        if (slotLookup.ContainsKey(slotKey)) continue;
+                        var slot = new AppointmentSlot
                         {
-                            DoctorId = doc.Id,
-                            SlotDate = date,
-                            StartTime = mStart,
-                            EndTime = mStart.AddMinutes(30),
-                            IsBooked = false
+                            DoctorId = doc.Id, SlotDate = date, StartTime = slotStart,
+                            EndTime = slotStart.AddMinutes(30), IsBooked = false
                         };
                         db.AppointmentSlots.Add(slot);
                         slotLookup[slotKey] = slot;
                     }
-                    mStart = mStart.AddMinutes(30);
-                }
-
-                var aStart = new TimeOnly(13, 30);
-                for (int s = 0; hasAfternoonShift && s < 7; s++)
-                {
-                    var slotKey = (doc.Id, date, aStart);
-                    if (!slotLookup.TryGetValue(slotKey, out var slot))
-                    {
-                        slot = new AppointmentSlot
-                        {
-                            DoctorId = doc.Id,
-                            SlotDate = date,
-                            StartTime = aStart,
-                            EndTime = aStart.AddMinutes(30),
-                            IsBooked = false
-                        };
-                        db.AppointmentSlots.Add(slot);
-                        slotLookup[slotKey] = slot;
-                    }
-                    aStart = aStart.AddMinutes(30);
                 }
             }
         }

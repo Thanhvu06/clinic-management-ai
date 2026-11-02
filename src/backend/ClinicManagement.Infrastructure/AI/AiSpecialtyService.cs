@@ -1385,7 +1385,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
         // Sunday Rule: Detect if user selected Sunday
         bool requestedSunday = false;
         DateOnly sundayDate = default;
-        if (targetDate.HasValue && targetDate.Value.DayOfWeek == DayOfWeek.Sunday)
+        if (targetDate.HasValue && !_dbContext.OperatingHours.IsOpen(targetDate.Value))
         {
             requestedSunday = true;
             sundayDate = targetDate.Value;
@@ -1395,7 +1395,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
         // Default to next working date if looking for earliest slot
         if (!targetDate.HasValue && !requestedSunday && (aiResult.WantsEarliest || lowerMsg.Contains("sớm nhất")))
         {
-            targetDate = vnToday.DayOfWeek == DayOfWeek.Sunday ? vnToday.AddDays(1) : vnToday;
+            targetDate = DemoSeedCalendar.NextOpen(vnToday, _dbContext.OperatingHours);
         }
 
         // C. Resolve Doctor
