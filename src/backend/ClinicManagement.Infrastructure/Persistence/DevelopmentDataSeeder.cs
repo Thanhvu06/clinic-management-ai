@@ -692,6 +692,7 @@ public static class DevelopmentDataSeeder
         if (seedAppointments)
         {
             var freshEvents = !await db.SystemAuditLogs.AnyAsync(l => l.Action == "InitializeClinicalDemo");
+            await TwentyFourSevenPatientHistorySeed.SeedAsync(db, dateTimeProvider, rec1.Id, technician.Id, labSupervisor.Id, pharmacist.Id);
             await RealisticDevelopmentSeed.SeedAsync(db, dateTimeProvider, rec1.Id, technician.Id, labSupervisor.Id, pharmacist.Id);
             await DemoClinicalDevelopmentSeed.SeedAsync(db, dateTimeProvider, rec1.Id, technician.Id, labSupervisor.Id, pharmacist.Id);
             await ExpiryDemoSeed.SeedAsync(db, dateTimeProvider, rec1.Id);

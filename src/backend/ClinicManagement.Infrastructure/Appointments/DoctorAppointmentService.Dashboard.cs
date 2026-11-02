@@ -229,7 +229,7 @@ public partial class DoctorAppointmentService
             .OrderBy(ws => ws.StartTime)
             .ToListAsync();
 
-        var currentShift = DoctorDashboardShifts.DescribeCurrent(activeSchedules, currentTime);
+        var currentShift = DoctorDashboardShifts.DescribeCurrent(activeSchedules, currentTime, _dbContext.OperatingHours.IsTwentyFourSeven);
 
         var nextPatient = queue.FirstOrDefault(q => DoctorQueueStatus.IsConsultationInProgress(q.Status))
                        ?? queue.FirstOrDefault(q => q.Status == nameof(AppointmentStatus.CheckedIn))
@@ -286,7 +286,7 @@ public partial class DoctorAppointmentService
             CompletedTodayCount = completed,
             NoShowTodayCount = noShow,
             CurrentShift = currentShift,
-            TodayShifts = DoctorDashboardShifts.ToDtos(activeSchedules),
+            TodayShifts = DoctorDashboardShifts.ToDtos(activeSchedules, _dbContext.OperatingHours.IsTwentyFourSeven),
             NextPatient = nextPatient,
             Queue = queue,
             UpcomingAppointments = upcomingList
