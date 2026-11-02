@@ -1,4 +1,5 @@
 import React from 'react';
+import { CopilotWorkspaceReadCard } from './CopilotWorkspaceReadCards';
 import type { AiCopilotCard } from '../../api/aiCopilotApi';
 import { formatDateOnly } from '../../utils/formatters';
 import { getAppointmentStatusLabel } from '../../utils/appointmentStatusLabels';
@@ -63,7 +64,7 @@ const formatClock = (value: unknown): string | null => {
 
 const paymentLabels: Record<string, string> = { unpaid: 'Chưa thanh toán', paid_in_full: 'Đã thanh toán', partially_paid: 'Thanh toán một phần', unverifiable: 'Chưa xác minh', unknown: 'Chưa xác minh' };
 
-const revenuePeriodLabels: Record<string, string> = { today: 'Hôm nay', this_month: 'Tháng này' };
+const revenuePeriodLabels: Record<string, string> = { today: 'Hôm nay', yesterday: 'Hôm qua', last_7_days: '7 ngày gần đây', this_month: 'Tháng này', last_month: 'Tháng trước' };
 
 const valueLabel = (value: unknown): string | null => {
     if (typeof value === 'number' && Number.isFinite(value)) return String(value);
@@ -101,6 +102,8 @@ export const copilotCardEmptyMessage = (card: AiCopilotCard): string | null => {
         case 'patient_diagnostic_results': return noRows ? 'Bạn chưa có kết quả cận lâm sàng được công bố.' : null;
         case 'patient_prescriptions': return noRows ? 'Bạn chưa có đơn thuốc đã phát hành.' : null;
         case 'patient_bills': return noRows ? 'Bạn chưa có hóa đơn nào.' : null;
+        case 'reception_patient_lookup': return noRows ? 'Không có bệnh nhân phù hợp.' : null;
+        case 'doctor_next_patient': return !rowsFrom(card.data).length ? 'Chưa có bệnh nhân tiếp theo.' : null;
         case 'reception_appointments': return noRows ? 'Không có lịch hẹn phù hợp.' : null;
         case 'reception_queue': return noRows ? 'Hàng đợi hiện không có lượt phù hợp.' : null;
         case 'appointment_lookup': return !record || text(record.status)?.toLowerCase() === 'not_found' || !text(record.appointmentCode) ? 'Không tìm thấy lịch hẹn phù hợp.' : null;
@@ -339,7 +342,7 @@ const DoctorSummaryCard: React.FC<{ data: unknown }> = ({ data }) => {
 const DoctorQueueCard: React.FC<{ data: unknown }> = ({ data }) => {
     const items = asRecords(data);
     if (!items.length) return <EmptyData message="Hàng đợi bác sĩ hiện không có dữ liệu phù hợp." />;
-    return <List>{items.slice(0, 20).map((item, index) => <article className={styles.typedItem} key={index}><strong>{text(item.visitCode) ?? text(item.appointmentCode) ?? 'Lượt khám'}</strong><StatusLine label="Tiếp nhận" value={item.intakeStatus} /><StatusLine label="Ngày" value={item.appointmentDate} date /><StatusLine label="Giờ" value={formatClock(item.startTime)} /><StatusLine label="Số thứ tự" value={item.queueNumber} /><StatusLine label="Người bệnh" value={item.patientName} /><StatusLine label="Trạng thái" value={item.status} /><StatusLine label="Lý do khám" value={item.chiefComplaint} /></article>)}</List>;
+    return <List>{items.slice(0, 20).map((item, index) => <article className={styles.typedItem} key={index}><strong>{text(item.visitCode) ?? text(item.appointmentCode) ?? 'Lượt khám'}</strong><StatusLine label="Tiếp nhận" value={item.intakeStatus} /><StatusLine label="Ngày" value={item.appointmentDate} date /><StatusLine label="Giờ" value={formatClock(item.startTime)} /><StatusLine label="Số thứ tự" value={item.queueNumber} /><StatusLine label="Người bệnh" value={item.patientName} /><StatusLine label="Trạng thái" value={item.status === 'Completed' ? 'Đã khám xong' : item.status === 'Confirmed' ? 'Chờ tiếp nhận' : item.status} /><StatusLine label="Lý do khám" value={item.chiefComplaint} /></article>)}</List>;
 };
 
 const LegacyDoctorSummaryCard: React.FC<{ data: unknown }> = ({ data }) => {
@@ -397,7 +400,7 @@ const AdminMetricsCard: React.FC<{ data: unknown }> = ({ data }) => {
 const AdminHealthCard: React.FC<{ data: unknown }> = ({ data }) => {
     const item = asRecord(data);
     if (!item) return <EmptyData message="Chưa có chỉ số sức khỏe AI được hỗ trợ." />;
-    return <List><article className={styles.typedItem}><strong>Sức khỏe AI</strong><StatusLine label="Thao tác chờ xác nhận" value={item.pendingActions} /><StatusLine label="Sự kiện audit" value={item.auditEvents} /></article></List>;
+    return <List><article className={styles.typedItem}><strong>Sức khỏe AI</strong><StatusLine label="Thao tác chờ xác nhận" value={item.pendingActions} /><StatusLine label="Sự kiện kiểm tra" value={item.auditEvents} /></article></List>;
 };
 
 const PendingPaymentsCard: React.FC<{ data: unknown }> = ({ data }) => {
@@ -495,6 +498,8 @@ const ActionResultCard: React.FC<{ type: string; data: unknown }> = ({ type, dat
 export const renderCopilotCardData = (card: AiCopilotCard): React.ReactNode => {
     if (isAccuracyCard(card.type)) return <CopilotAccuracyCard card={card} />;
     switch (card.type) {
+        case 'reception_patient_lookup':
+        case 'doctor_next_patient': return <CopilotWorkspaceReadCard type={card.type} data={card.data} />;
         case 'clinic_knowledge': return <PublicCatalogCard data={card.data} />;
         case 'specialties': return <SpecialtyCard data={card.data} />;
         case 'doctors': return <DoctorCatalogCard data={card.data} />;

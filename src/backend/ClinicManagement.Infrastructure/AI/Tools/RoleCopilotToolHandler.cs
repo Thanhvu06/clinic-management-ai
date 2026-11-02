@@ -97,7 +97,7 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
         ClinicManagement.Application.Billing.Interfaces.IBillingService? billing = null,
         ClinicManagement.Application.Appointments.Interfaces.IChangeRequestService? changeRequests = null,
         ClinicManagement.Application.Leaves.Interfaces.IAdminLeaveService? leaves = null,
-        ClinicManagement.Infrastructure.Pharmacy.MedicineBatchService? batches = null)
+        ClinicManagement.Infrastructure.Pharmacy.MedicineBatchService? batches = null, ClinicManagement.Application.Mpi.Interfaces.IMpiPatientService? patients = null)
     {
         _db = db;
         _currentUser = currentUser;
@@ -106,7 +106,7 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
         _providerHealth = providerHealth;
         _providerConfiguration = providerConfiguration;
         _doctorAppointments = doctorAppointments;
-        _billing = billing; _changeRequests = changeRequests; _leaves = leaves; _batches = batches;
+        _billing = billing; _changeRequests = changeRequests; _leaves = leaves; _batches = batches; _patients = patients;
     }
 
     public AiToolDefinition Definition { get; } = new() { Name = "role.copilot.dispatch", Version = "1.0" };
@@ -170,6 +170,8 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
     public Task<AiToolExecutionResult> ExecuteAsync(AiToolInvocation invocation, AiToolExecutionContext context, CancellationToken cancellationToken = default) =>
         invocation.ToolName.Trim().ToLowerInvariant() switch
         {
+            "reception.search_patients" => SearchReceptionPatientsAsync(context, invocation.ArgumentsJson, cancellationToken),
+            "doctor.get_next_patient" => GetNextDoctorPatientAsync(context, cancellationToken),
             "reception.get_pending_change_requests" => GetPendingChangeRequestsAsync(context, cancellationToken),
             "reception.get_unpaid_invoices" => GetUnpaidInvoicesAsync(context, cancellationToken),
             "technician.get_service_guidance" => GetServiceGuidanceAsync(context, invocation.ArgumentsJson, cancellationToken),
@@ -974,34 +976,6 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
         return Completed(medicines, "pharmacy_inventory", "Tồn kho toàn hệ thống được lấy từ danh mục thuốc hiện tại; mô hình dữ liệu chưa phân tách tồn kho theo cơ sở.");
     }
 
-    private IQueryable<ClinicManagement.Domain.Entities.DiagnosticOrder> TechnicianOrdersInScope(AiToolExecutionContext context) =>
-        _db.DiagnosticOrders.AsNoTracking()
-            .Where(o => o.FacilityId.HasValue && o.PerformingDepartmentId.HasValue &&
-                        _db.StaffFacilityAssignments.Any(a => a.UserId == context.ActorId!.Value && a.IsActive && a.Role == nameof(AiActorRole.DiagnosticTechnician) &&
-                            a.FacilityId == o.FacilityId.Value && a.DepartmentId == o.PerformingDepartmentId.Value) &&
-                        (!context.FacilityId.HasValue || o.FacilityId == context.FacilityId.Value));
-
-    private async Task<AiToolExecutionResult> GetTechnicianCompletedTodayAsync(AiToolExecutionContext context, CancellationToken cancellationToken)
-    {
-        if (!context.ActorId.HasValue || context.ActorId == Guid.Empty) return ScopeDenied();
-        var facilities = await ResolveFacilityScopeAsync(context, nameof(AiActorRole.DiagnosticTechnician), cancellationToken);
-        if (facilities.Count == 0 || !await _db.StaffFacilityAssignments.AsNoTracking().AnyAsync(a =>
-                a.UserId == context.ActorId.Value && a.IsActive && a.Role == nameof(AiActorRole.DiagnosticTechnician) &&
-                facilities.Contains(a.FacilityId) && a.DepartmentId.HasValue, cancellationToken))
-            return ScopeDenied();
-        var start = _clock.ConvertVietnamToUtc(_clock.VietnamToday.ToDateTime(TimeOnly.MinValue));
-        var end = _clock.ConvertVietnamToUtc(_clock.VietnamToday.AddDays(1).ToDateTime(TimeOnly.MinValue));
-        var items = await TechnicianOrdersInScope(context)
-            .Where(o => o.Status == DiagnosticOrderStatus.Completed && o.CompletedAtUtc >= start && o.CompletedAtUtc < end)
-            .OrderByDescending(o => o.CompletedAtUtc).ThenByDescending(o => o.Id).Take(100)
-            .Select(o => new
-            {
-                o.OrderCode, status = o.Status.ToString(), o.CompletedAtUtc,
-                services = o.Items.OrderBy(i => i.Id).Select(i => i.DiagnosticService.Name).ToList()
-            }).ToListAsync(cancellationToken);
-        return Completed(items, "technician_completed_today", $"Có {items.Count} chỉ định hoàn tất hôm nay trong khoa được phân công.");
-    }
-
     private async Task<AiToolExecutionResult> GetPendingPaymentsAsync(AiToolExecutionContext context, CancellationToken cancellationToken)
     {
         var facilities = await ResolveFacilityScopeAsync(context, nameof(AiActorRole.Receptionist), cancellationToken);
@@ -1076,7 +1050,7 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
             invoiceCount = totals.Values.Sum(t => t.Count),
             byFacility = totals.OrderBy(t => t.Key).Select(t => new { facilityId = t.Key, totalRevenue = t.Value.Revenue, invoiceCount = t.Value.Count }).ToArray()
         };
-        return Completed(result, "admin_revenue_summary", "Doanh thu hóa đơn Paid theo thời điểm thanh toán trong kỳ giờ Việt Nam, chỉ trong cơ sở được phân quyền.");
+        return Completed(result, "admin_revenue_summary", "Doanh thu hóa đơn đã thanh toán theo thời điểm thanh toán trong kỳ giờ Việt Nam, chỉ trong cơ sở được phân quyền.");
     }
 
     private async Task<AiToolExecutionResult> GetAdminMetricsAsync(AiToolExecutionContext context, CancellationToken cancellationToken)
@@ -1123,7 +1097,7 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
             configurationSources = configuration?.ConfigurationSources,
             retrievedAtUtc = configuration?.RetrievedAtUtc
         };
-        return Completed(metrics, "admin_ai_health", "Chỉ số AI đã được tổng hợp, không trả secret hay nội dung prompt thô.");
+        return Completed(metrics, "admin_ai_health", "Chỉ số AI đã được tổng hợp, không trả thông tin bảo mật hay nội dung yêu cầu thô.");
     }
 
     private static bool TryGetLong(string json, string name, out long value)
@@ -1179,7 +1153,7 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
     private static AiToolExecutionResult ScopeDenied() => AiToolExecutionResult.Failed("FACILITY_SCOPE_REQUIRED", "Không xác định được phạm vi cơ sở được phân quyền; dữ liệu không được trả về.");
     private static AiToolExecutionResult Completed(object data, string type, string displayText) => new()
     {
-        Status = "completed", ResultType = type, Data = data, DisplayText = displayText,
+        Status = "completed", ResultType = type, Data = data, DisplayText = CopilotDisplayText.Localize(displayText),
         DataSources = new[] { new AiToolDataSource("ClinicCare domain database", "database") }
     };
 }

@@ -158,7 +158,7 @@ public class CopilotAccuracyDataTests(CustomWebApplicationFactory factory) : Int
         var rows = Card(response, "doctor_queue").EnumerateArray().ToArray();
         Assert.Equal(dashboard.GetProperty("queue").GetArrayLength(), rows.Length);
         foreach (var group in rows.GroupBy(r => r.GetProperty("status").GetString()))
-            Assert.Contains($"{group.Key}: {group.Count()}", response.GetProperty("message").GetString());
+            Assert.Contains($"{group.Key switch { "Confirmed" => "Chờ tiếp nhận", "CheckedIn" => "Đã tiếp nhận", "InConsultation" => "Đang khám", "InDiagnostics" => "Chờ CLS", "ResultsReady" => "Có kết quả CLS", "Completed" => "Đã khám xong", "NoShow" => "Vắng mặt", _ => "Không xác định" }}: {group.Count()}", response.GetProperty("message").GetString());
     }
 
     [Theory]

@@ -11,6 +11,7 @@ internal static class AiCopilotAccuracyRouting
 {
     private static readonly HashSet<string> SubIntents =
     [
+        "PatientSearch", "NextPatient", "TechnicianCompletedToday",
         "PendingChangeRequests", "UnpaidInvoices", "ServiceGuidance", "MedicineStock", "MedicineBatches", "LowStock",
         "DoctorQueueCount", "DoctorScheduleNavigation", "DoctorLeaveNavigation", "RevenueReport", "ActiveDoctors",
         "PendingLeaveRequests", "AdminWriteNotSupported", "TechnicianPendingWorklist"
@@ -23,6 +24,9 @@ internal static class AiCopilotAccuracyRouting
         bool Has(string pattern) => Regex.IsMatch(text, pattern, RegexOptions.CultureInvariant);
         if (role == AiActorRole.Receptionist)
         {
+            var patientSearch = Regex.Match(text, @"\b(?:tim|tra cuu)\s+(?:benh nhan|nguoi benh|ho so)(?:\s+(?:theo|co))?\s+(?<query>.+)$");
+            if (patientSearch.Success)
+                return Read(AiChatIntentTypes.PatientSummary, "PatientSearch", "reception.search_patients", new { query = patientSearch.Groups["query"].Value }, "/reception");
             if (Has(@"\b(?:yeu cau|de nghi)\b") && Has(@"\b(?:doi|huy)\b.*\blich\b") && Has(@"\b(?:cho|pending|chua xu ly)\b"))
                 return Read(AiChatIntentTypes.QueueLookup, "PendingChangeRequests", "reception.get_pending_change_requests", new { }, "/reception/change-requests");
             if (Has(@"\b(?:hoa don|bien lai)\b") && Has(@"\b(?:chua thanh toan|cho thanh toan|chua tra|con no|unpaid)\b"))
@@ -30,7 +34,10 @@ internal static class AiCopilotAccuracyRouting
         }
         if (role == AiActorRole.DiagnosticTechnician)
         {
-            if (Has(@"\b(?:cach|huong dan|quy trinh|chuan bi|lay mau|benh pham)\b") && Has(@"\b(?:xet nghiem|lay mau|benh pham)\b"))
+            if (Has(@"\b(?:phieu|chi dinh)\b") && Has(@"\b(?:hoan tat|hoan thanh|da xong)\b") && Has(@"\bhom nay\b"))
+                return Read(AiChatIntentTypes.DiagnosticLookup, "TechnicianCompletedToday", "technician.get_completed_today", new { }, "/diagnostics");
+            if (Has(@"\b(?:cach|huong dan|quy trinh|chuan bi|lay mau|benh pham)\b") &&
+                (Has(@"\b(?:xet nghiem|lay mau|benh pham)\b") || Tools.DiagnosticServiceAliases.Resolve(text).Count > 0))
                 return Read(AiChatIntentTypes.FacilityInquiry, "ServiceGuidance", "technician.get_service_guidance", new { query = text }, "/diagnostics");
             if (Has(@"\b(?:phieu|chi dinh)\b") && Has(@"\b(?:cho|chua|can lam|worklist)\b"))
                 return Read(AiChatIntentTypes.DiagnosticLookup, "TechnicianPendingWorklist", "technician.get_worklist", new { }, "/diagnostics");
@@ -47,6 +54,8 @@ internal static class AiCopilotAccuracyRouting
         }
         if (role == AiActorRole.Doctor)
         {
+            if (Has(@"\b(?:benh nhan|nguoi benh|luot)\b") && Has(@"\b(?:tiep theo|ke tiep)\b"))
+                return Read(AiChatIntentTypes.QueueLookup, "NextPatient", "doctor.get_next_patient", new { }, "/doctor/queue");
             if (Has(@"\b(?:xin nghi phep|dang ky nghi|don nghi phep)\b"))
                 return Navigate(AiChatIntentTypes.Help, "DoctorLeaveNavigation", "Bạn có thể mở trang Xin nghỉ phép để chọn ngày và gửi yêu cầu. Tôi không tự tạo đơn qua trò chuyện.", "/doctor/leave-requests");
             if (Has(@"\b(?:lich lam viec|lich truc|ca truc)\b"))

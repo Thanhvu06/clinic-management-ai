@@ -30,12 +30,10 @@ public sealed partial class RoleCopilotToolHandler
                 id = q.PatientVisitId ?? q.AppointmentId, q.VisitCode, q.AppointmentCode, q.AppointmentId,
                 q.QueueNumber, q.Status, q.PatientName, q.ChiefComplaint, q.AppointmentDate,
                 startTime = q.StartTime.ToString("HH:mm"), endTime = q.EndTime.ToString("HH:mm"),
-                intakeStatus = q.PatientVisitId.HasValue ? "Đã tiếp nhận" : "Chưa tiếp nhận"
+                intakeStatus = q.Status is "Completed" or "NoShow" or "Cancelled" ? CopilotDisplayText.DoctorStatus(q.Status) : q.PatientVisitId.HasValue ? "Đã tiếp nhận" : "Chưa tiếp nhận"
             }).ToList();
-        var received = items.Count(q => q.intakeStatus == "Đã tiếp nhận");
-        var statuses = string.Join(", ", items.GroupBy(q => q.Status).Select(group => $"{group.Key}: {group.Count()}"));
-        return Completed(items, "doctor_queue", $"Bàn làm việc của bạn có {items.Count} lượt: {received} đã tiếp nhận, {items.Count - received} chưa tiếp nhận." +
-            (items.Count > 0 ? $" {statuses}." : ""));
+        var statuses = string.Join(", ", items.GroupBy(q => CopilotDisplayText.DoctorStatus(q.Status)).Select(group => $"{group.Key}: {group.Count()}"));
+        return Completed(items, "doctor_queue", $"Bàn làm việc của bạn có {items.Count} lượt." + (items.Count > 0 ? $" {statuses}." : ""));
     }
 
     private async Task<AiToolExecutionResult> GetPharmacyQueueAsync(AiToolExecutionContext context, CancellationToken cancellationToken)

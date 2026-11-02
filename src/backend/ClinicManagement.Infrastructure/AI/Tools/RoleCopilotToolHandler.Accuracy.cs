@@ -21,6 +21,7 @@ public sealed partial class RoleCopilotToolHandler
     private readonly MedicineBatchService? _batches;
     private static readonly IReadOnlyDictionary<string, string[]> AccuracyArguments = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
     {
+        ["reception.search_patients"] = ["query"], ["doctor.get_next_patient"] = [],
         ["reception.get_pending_change_requests"] = [], ["reception.get_unpaid_invoices"] = [],
         ["technician.get_service_guidance"] = ["query"], ["pharmacist.get_medicine_stock"] = ["query"],
         ["pharmacist.get_medicine_batches"] = ["status"], ["admin.get_revenue_report"] = ["period"],
@@ -95,12 +96,19 @@ public sealed partial class RoleCopilotToolHandler
         var key = Regex.Replace(AiTextNormalizer.NormalizeForComparison(query), @"\b(?:cach|huong dan|quy trinh|chuan bi|lay mau|xet nghiem|benh pham|cho toi|xem|giup|voi)\b", " ");
         var terms = key.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var services = await _db.DiagnosticServices.AsNoTracking().Where(s => s.IsActive).ToListAsync(ct);
-        var items = services.Where(s => terms.Length > 0 && terms.All(term => (AiTextNormalizer.NormalizeForComparison(s.Name + " " + s.Code)).Contains(term, StringComparison.Ordinal)))
+        var aliases = DiagnosticServiceAliases.Resolve(query);
+        var items = services.Where(s => aliases.Count > 0 ? aliases.Contains(s.Code) : terms.Length > 0 && terms.All(term => (AiTextNormalizer.NormalizeForComparison(s.Name + " " + s.Code)).Contains(term, StringComparison.Ordinal)))
             .Take(10).Select(s => new { s.Code, s.Name, s.PreparationInstructions, s.SpecimenType }).ToList();
         var guidance = items.Where(s => !string.IsNullOrWhiteSpace(s.PreparationInstructions) || !string.IsNullOrWhiteSpace(s.SpecimenType)).ToList();
         return Completed(items, "technician_service_guidance", guidance.Count == 0
             ? "Dịch vụ chưa có hướng dẫn chuẩn bị/lấy mẫu phù hợp trong dữ liệu đã cấu hình. Vui lòng kiểm tra quy trình được cơ sở phê duyệt; tôi không tự suy diễn hướng dẫn lấy mẫu."
-            : string.Join("; ", guidance.Select(s => $"{s.Code} — {s.Name}: {s.PreparationInstructions ?? "Chưa cấu hình hướng dẫn chuẩn bị"}; loại bệnh phẩm: {s.SpecimenType ?? "chưa cấu hình"}.")));
+            : string.Join("\n", guidance.Select(s => $"{s.Code} — {s.Name}: {GuidanceSentence(s.PreparationInstructions, "Chưa cấu hình hướng dẫn chuẩn bị")} Loại bệnh phẩm: {GuidanceSentence(s.SpecimenType, "chưa cấu hình")}")));
+    }
+
+    private static string GuidanceSentence(string? value, string fallback)
+    {
+        var text = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim().TrimEnd(';').TrimEnd();
+        return text.EndsWith('.') || text.EndsWith('!') || text.EndsWith('?') ? text : text + ".";
     }
 
     private async Task<AiToolExecutionResult> GetLowStockAsync(AiToolExecutionContext context, CancellationToken ct)
@@ -162,7 +170,7 @@ public sealed partial class RoleCopilotToolHandler
         if (context.FacilityId.HasValue) query = query.Where(d => _db.StaffFacilityAssignments.Any(a => a.UserId == d.UserId && a.Role == "Doctor" && a.IsActive && a.FacilityId == context.FacilityId.Value));
         var count = await query.CountAsync(ct);
         var items = await (from d in query join u in _db.Users on d.UserId equals u.Id orderby u.FullName select new { d.Id, u.FullName }).Take(100).ToListAsync(ct);
-        return Completed(new { totalItems = count, items }, "admin_active_doctors", $"Có {count} bác sĩ đang hoạt động (IsActive)." + LimitNotice(count, items.Count));
+        return Completed(new { totalItems = count, items }, "admin_active_doctors", $"Có {count} bác sĩ đang hoạt động." + LimitNotice(count, items.Count));
     }
 
     private async Task<AiToolExecutionResult> GetPendingLeaveRequestsAsync(AiToolExecutionContext context, CancellationToken ct)

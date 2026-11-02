@@ -67,7 +67,7 @@ describe('typed-suggestion staff cards', () => {
         const single = renderCard(card('admin_revenue_summary', { period: 'today', totalRevenue: 50000, invoiceCount: 1, byFacility: [{ facilityId: 1, totalRevenue: 50000, invoiceCount: 1 }] }));
         expect(single.textContent).toContain('Hôm nay');
         expect(single.textContent).not.toContain('Cơ sở #');
-        expect(renderCard(card('admin_revenue_summary', { period: 'last_month', totalRevenue: 1, invoiceCount: 1 })).textContent).toContain('last_month');
+        expect(renderCard(card('admin_revenue_summary', { period: 'last_month', totalRevenue: 1, invoiceCount: 1 })).textContent).toContain('Tháng trước');
     });
 
     it('drops missing fields without breaking the card', () => {

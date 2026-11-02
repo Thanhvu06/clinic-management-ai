@@ -8,11 +8,14 @@ import { toolDisplayName } from './copilotConfig';
 import { copilotCardEmptyMessage, renderCopilotCardData } from './copilotDataRenderers';
 import { SuggestionChips } from './SuggestionChips';
 import { sanitizeSuggestions } from './useSuggestionMenu';
+import { statusLabels } from '../../utils/visitStatusLabels';
 import styles from './UnifiedCopilotPanel.module.css';
 
 const safeRoute = (route?: string | null): route is string => Boolean(route && route.startsWith('/') && !route.startsWith('//') && !route.includes('://') && !route.includes('..') && !route.includes('\\'));
 
 const normalizeText = (value?: string | null) => value?.trim().replace(/\s+/g, ' ').toLocaleLowerCase('vi-VN');
+const displayStatus = (value: string) => statusLabels[value] ?? (/[^\x00-\x7F]/.test(value) ? value : 'Không xác định');
+const displayEncounter = (value: string) => value.replace(/^PatientVisit\s+#/, 'Lượt khám #').replace(/^Appointment\s+#/, 'Lịch hẹn #').replace(/^DiagnosticOrder\s+#/, 'Phiếu chỉ định #').replace(/^DiagnosticOrderItem\s+#/, 'Dịch vụ chỉ định #');
 
 const MessageBubble: React.FC<{
     item: UnifiedCopilotMessage;
@@ -25,7 +28,6 @@ const MessageBubble: React.FC<{
         <div className={styles.messageRow} data-role={item.role} id={latest ? "copilot-latest-reply" : undefined}>
             <div data-chat-bubble className={`${styles.bubble} ${item.role === 'user' ? styles.user : styles.assistant} ${item.error ? /quá nhiều|giới hạn|phản hồi quá lâu/i.test(item.content) ? styles.clarification : styles.error : ''}`}>
                 <div>{item.content}</div>
-                {import.meta.env.DEV && response?.errorCode && <div className={styles.clarification}>Mã xử lý: {response.errorCode}</div>}
                 {response?.clarification && normalizeText(response.clarification) !== normalizeText(item.content) && <div className={styles.clarification}>{response.clarification}</div>}
                 {response?.safetyNotice && normalizeText(response.safetyNotice) !== normalizeText(item.content) && normalizeText(response.safetyNotice) !== normalizeText(response.clarification) && <div className={styles.clarification}>{response.safetyNotice}</div>}
                 {cards.map((card, index) => {
@@ -50,7 +52,7 @@ const MessageBubble: React.FC<{
                             {card.retrievedAtUtc && <p className={styles.cardDescription}>Dữ liệu đọc lúc: {formatCopilotDateTime(card.retrievedAtUtc)}</p>}
                             {renderCopilotCardData(card)}
                             {sources.length > 0 && <div className={styles.sources} aria-label="Nguồn dữ liệu">
-                                {sources.slice(0, 5).map((source, sourceIndex) => <span className={styles.source} title={`${source.name} · ${source.kind ?? ''} · ${source.status ?? ''}`} key={`${source.name}-${sourceIndex}`}>{import.meta.env.DEV ? `${source.name}${source.kind ? ` · ${source.kind}` : ''}${source.status ? ` · ${source.status}` : ''}` : source.kind === 'database' ? 'Dữ liệu phòng khám' : 'Danh mục phòng khám'}</span>)}
+                                {sources.slice(0, 5).map((source, sourceIndex) => <span className={styles.source} key={`${source.name}-${sourceIndex}`}>{source.kind === 'database' ? 'Dữ liệu phòng khám' : 'Danh mục phòng khám'}</span>)}
                             </div>}
                         </article>
                     );
@@ -150,14 +152,14 @@ export const UnifiedCopilotPanel: React.FC = () => {
                         {copilot.pendingAction.preview.resource.facility && <div className={styles.previewLine}><strong>Cơ sở:</strong> {copilot.pendingAction.preview.resource.facility}</div>}
                         {copilot.pendingAction.preview.resource.department && <div className={styles.previewLine}><strong>Khoa:</strong> {copilot.pendingAction.preview.resource.department}</div>}
                         {copilot.pendingAction.preview.resource.subject && <div className={styles.previewLine}><strong>Đối tượng:</strong> {copilot.pendingAction.preview.resource.subject}</div>}
-                        {copilot.pendingAction.preview.resource.encounter && <div className={styles.previewLine}><strong>Ca khám:</strong> {copilot.pendingAction.preview.resource.encounter}</div>}
-                        {copilot.pendingAction.preview.resource.currentStatus && <div className={styles.previewLine}><strong>Trạng thái hiện tại:</strong> {copilot.pendingAction.preview.resource.currentStatus}</div>}
+                        {copilot.pendingAction.preview.resource.encounter && <div className={styles.previewLine}><strong>Ca khám:</strong> {displayEncounter(copilot.pendingAction.preview.resource.encounter)}</div>}
+                        {copilot.pendingAction.preview.resource.currentStatus && <div className={styles.previewLine}><strong>Trạng thái hiện tại:</strong> {displayStatus(copilot.pendingAction.preview.resource.currentStatus)}</div>}
                         <div className={styles.previewLine}><strong>Thay đổi sau xác nhận:</strong></div>
-                        {copilot.pendingAction.preview.changes.map(change => <div className={styles.previewLine} key={change.kind}><strong>{change.summary}</strong>{change.items.map(item => <div key={`${change.kind}-${item.label}-${item.value}`}>&nbsp;{item.label}: {item.value}{item.quantity !== null && item.quantity !== undefined ? ` · SL ${item.quantity}${item.unit ? ` ${item.unit}` : ''}` : ''}</div>)}</div>)}
+                        {copilot.pendingAction.preview.changes.map(change => <div className={styles.previewLine} key={change.kind}><strong>{change.summary}</strong>{change.items.map(item => <div key={`${change.kind}-${item.label}-${item.value}`}>&nbsp;{item.label}: {/trạng thái/i.test(item.label) ? displayStatus(item.value) : item.value}{item.quantity !== null && item.quantity !== undefined ? ` · SL ${item.quantity}${item.unit ? ` ${item.unit}` : ''}` : ''}</div>)}</div>)}
                         <div className={styles.previewLine}><strong>Hậu quả:</strong> {copilot.pendingAction.preview.consequence}</div>
                         <div className={styles.previewLine}><strong>Kiểm tra hệ thống:</strong> {copilot.pendingAction.preview.confirmationSummary}</div>
                         <div className={styles.previewLine}><strong>Dữ liệu kiểm tra lúc:</strong> {formatCopilotDateTime(copilot.pendingAction.preview.validatedAtUtc)}</div>
-                        <div className={styles.previewLine}><strong>Nguồn kiểm tra:</strong> {copilot.pendingAction.preview.sources.map(source => `${source.name} · ${source.kind}${source.status ? ` · ${source.status}` : ''}`).join('; ')}</div>
+                        <div className={styles.previewLine}><strong>Nguồn kiểm tra:</strong> Dữ liệu phòng khám</div>
                         <div className={styles.previewLine}><strong>Hết hạn:</strong> {formatCopilotDateTime(copilot.pendingAction.preview.expiresAtUtc)}</div>
                         {copilot.pendingActionExpired && <p className={styles.actionError} role="alert">Thông tin xem trước đã hết hạn. Hãy chuẩn bị lại để nhận dữ liệu kiểm tra mới.</p>}
                         <button type="button" className={styles.confirmButton} disabled={Boolean(copilot.actionLoading) || copilot.pendingActionExpired} onClick={() => void copilot.confirmAction()}><CheckCircle2 size={14} /> Xác nhận thao tác</button>
@@ -177,7 +179,7 @@ export const UnifiedCopilotPanel: React.FC = () => {
                     <textarea ref={inputRef} className={styles.input} value={copilot.input} onChange={event => copilot.setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void copilot.send(); } }} maxLength={500} rows={2} placeholder="Hỏi về công việc hoặc thông tin phòng khám…" aria-label="Nội dung Copilot" />
                     <button type="submit" className={styles.sendButton} disabled={copilot.loading || !copilot.input.trim()} aria-label="Gửi yêu cầu Copilot"><Send size={17} /></button>
                 </form>
-                {safeRoute(latestResponse?.navigationRoute) && <a className={styles.route} href={latestResponse!.navigationRoute!}><ExternalLink size={13} /> {copilot.config.navigationLabel}</a>}
+                {safeRoute(latestResponse?.navigationRoute) && <a className={styles.route} href={latestResponse!.navigationRoute!}><ExternalLink size={13} /> {latestResponse?.cards?.some(card => card.type === 'doctor_next_patient') && /\/examination$/.test(latestResponse.navigationRoute ?? '') ? 'Mở ca khám' : copilot.config.navigationLabel}</a>}
                 </div>
             </section>
         </div>

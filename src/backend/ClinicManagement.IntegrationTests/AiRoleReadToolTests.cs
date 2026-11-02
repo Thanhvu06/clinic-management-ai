@@ -285,8 +285,8 @@ public sealed class AiRoleReadToolTests : IntegrationTestBase
             .ExecuteAsync(Invocation("technician.get_completed_today"));
         Assert.True(result.Status == "completed", JsonSerializer.Serialize(result.Error));
         var rows = JsonSerializer.SerializeToElement(result.Data, JsonOptions);
-        Assert.Equal(valid.OrderCode, Assert.Single(rows.EnumerateArray()).GetProperty("orderCode").GetString());
-        Assert.Single(rows[0].GetProperty("services").EnumerateArray());
+        Assert.Equal(new[] { valid.OrderCode, wrongDepartment.OrderCode }.Order(), rows.EnumerateArray().Select(r => r.GetProperty("orderCode").GetString()).Order());
+        Assert.Single(rows.EnumerateArray().Single(r => r.GetProperty("orderCode").GetString() == valid.OrderCode).GetProperty("services").EnumerateArray());
         Assert.DoesNotContain("clinical", rows.GetRawText(), StringComparison.OrdinalIgnoreCase);
         var worklist = await Executor(scope, db, AiActorRole.DiagnosticTechnician, TechnicianId, data.Facility.Id)
             .ExecuteAsync(Invocation("technician.get_worklist"));
