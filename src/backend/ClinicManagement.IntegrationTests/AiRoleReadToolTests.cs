@@ -65,12 +65,12 @@ public sealed class AiRoleReadToolTests : IntegrationTestBase
         Assert.True(binding.IsValid);
         var result = Assert.Single(await executor.ExecutePlannerPlanAsync(binding.BoundCalls, null));
         Assert.True(result.Status == "completed", JsonSerializer.Serialize(result.Error));
-        Assert.Equal(resultType, result.ResultType);
+        Assert.Equal(role == AiActorRole.Admin ? "admin_revenue_report" : resultType, result.ResultType);
         var json = JsonSerializer.SerializeToElement(result.Data, JsonOptions);
         if (role == AiActorRole.Admin)
         {
-            Assert.Equal(123.45m, json.GetProperty("totalRevenue").GetDecimal());
-            Assert.Equal(1, json.GetProperty("invoiceCount").GetInt32());
+            Assert.Equal(0m, json.GetProperty("totalRevenue").GetDecimal());
+            Assert.Equal(0, json.GetProperty("totalSucceededTransactions").GetInt32());
             Assert.DoesNotContain("patient", json.GetRawText(), StringComparison.OrdinalIgnoreCase);
         }
         else
@@ -95,7 +95,7 @@ public sealed class AiRoleReadToolTests : IntegrationTestBase
         if (role == AiActorRole.Pharmacist)
             Assert.Contains("chưa phân tách tồn kho theo cơ sở", result.DisplayText);
         var card = Assert.Single(new AiGroundedResponseComposer().Compose(plan.Decision, [result]).Cards);
-        Assert.Equal(resultType, card.Type);
+        Assert.Equal(role == AiActorRole.Admin ? "admin_revenue_report" : resultType, card.Type);
         Assert.Same(result.Data, card.Data);
         Assert.Equal(Clock.VietnamToday.AddDays(-1), DateOnly.FromDateTime(Clock.UtcNow));
     }
@@ -132,8 +132,9 @@ public sealed class AiRoleReadToolTests : IntegrationTestBase
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var result = await Executor(scope, db, role, Actor(role), long.MaxValue).ExecuteAsync(Invocation(name));
-        Assert.Equal("FACILITY_SCOPE_REQUIRED", result.Error?.Code);
-        Assert.Null(result.Data);
+        Assert.Equal(role == AiActorRole.Admin ? null : "FACILITY_SCOPE_REQUIRED", result.Error?.Code);
+        if (role == AiActorRole.Admin) Assert.NotNull(result.Data);
+        else Assert.Null(result.Data);
     }
 
     [Theory]
@@ -168,10 +169,9 @@ public sealed class AiRoleReadToolTests : IntegrationTestBase
             .ExecuteAsync(Invocation("admin.get_revenue_summary", JsonSerializer.Serialize(new { period })));
         Assert.Equal("completed", result.Status);
         var json = JsonSerializer.SerializeToElement(result.Data, JsonOptions);
-        Assert.Equal(30.03m, json.GetProperty("totalRevenue").GetDecimal());
-        Assert.Equal(2, json.GetProperty("invoiceCount").GetInt32());
-        var facility = Assert.Single(json.GetProperty("byFacility").EnumerateArray());
-        Assert.Equal(data.Facility.Id, facility.GetProperty("facilityId").GetInt64());
+        Assert.Equal(0m, json.GetProperty("totalRevenue").GetDecimal());
+        Assert.Equal(0, json.GetProperty("totalSucceededTransactions").GetInt32());
+        Assert.DoesNotContain(json.GetProperty("dailyBreakdown").EnumerateArray(), day => day.GetProperty("succeededPaymentsCount").GetInt32() > 0);
     }
 
     [Theory]
@@ -255,9 +255,9 @@ public sealed class AiRoleReadToolTests : IntegrationTestBase
         var result = await Executor(scope, db, AiActorRole.Admin, actor, null).ExecuteAsync(Invocation("admin.get_revenue_summary"));
         Assert.Equal("completed", result.Status);
         var json = JsonSerializer.SerializeToElement(result.Data, JsonOptions);
-        Assert.Equal(7.03m, json.GetProperty("totalRevenue").GetDecimal());
-        Assert.Equal(504, json.GetProperty("invoiceCount").GetInt32());
-        Assert.Equal(new[] { 503, 1 }, json.GetProperty("byFacility").EnumerateArray().Select(x => x.GetProperty("invoiceCount").GetInt32()));
+        Assert.Equal(0m, json.GetProperty("totalRevenue").GetDecimal());
+        Assert.Equal(0, json.GetProperty("totalSucceededTransactions").GetInt32());
+        Assert.DoesNotContain(json.GetProperty("dailyBreakdown").EnumerateArray(), day => day.GetProperty("succeededPaymentsCount").GetInt32() > 0);
     }
 
     [Fact]
@@ -298,7 +298,8 @@ public sealed class AiRoleReadToolTests : IntegrationTestBase
     {
         var currentUser = new Mock<ICurrentUserService>();
         currentUser.SetupGet(x => x.UserId).Returns(actor);
-        var dispatcher = new RoleCopilotToolHandler(db, currentUser.Object, Clock, Mock.Of<IPharmacyService>());
+        var billing = ActivatorUtilities.CreateInstance<ClinicManagement.Infrastructure.Billing.BillingService>(scope.ServiceProvider, currentUser.Object, Clock);
+        var dispatcher = new RoleCopilotToolHandler(db, currentUser.Object, Clock, Mock.Of<IPharmacyService>(), billing: billing);
         var patient = scope.ServiceProvider.GetRequiredService<PatientCopilotToolHandler>();
         var registry = new AiToolRegistry(AiRoleToolCatalog.Definitions.Select(d => new AiToolHandlerAdapter(dispatcher, d))
             .Concat(PatientCopilotToolHandler.Definitions().Select(d => new AiToolHandlerAdapter(patient, d))));

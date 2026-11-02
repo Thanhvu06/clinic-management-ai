@@ -28,7 +28,7 @@ public sealed partial class RoleCopilotToolHandler
         ["admin.get_active_doctors"] = [], ["admin.get_pending_leave_requests"] = []
     };
 
-    private static AiToolArgumentValidationResult? ValidateAccuracyArguments(string tool, JsonElement root)
+    private AiToolArgumentValidationResult? ValidateAccuracyArguments(string tool, JsonElement root)
     {
         if (!AccuracyArguments.TryGetValue(tool, out var allowed)) return null;
         foreach (var property in root.EnumerateObject())
@@ -46,12 +46,8 @@ public sealed partial class RoleCopilotToolHandler
         return AiToolArgumentValidationResult.Valid();
     }
 
-    private static bool IsAccuracyRevenuePeriod(string period)
-    {
-        if (RevenuePeriods.Contains(period)) return true;
-        var days = Regex.Match(period, @"^last_(\d+)_days$");
-        return days.Success && int.TryParse(days.Groups[1].Value, out var count) && count is >= 1 and <= 366;
-    }
+    private bool IsAccuracyRevenuePeriod(string period) =>
+        Planning.AdminRevenuePeriod.TryResolve(period, _clock.VietnamToday, out _, out _);
 
     private async Task<AiToolExecutionResult> GetTechnicianWorklistAsync(AiToolExecutionContext context, CancellationToken ct)
     {
@@ -143,24 +139,6 @@ public sealed partial class RoleCopilotToolHandler
         var page = await _batches.ListAsync(status, null, 1, 100);
         return Completed(new { page.TotalItems, items = page.Items }, "pharmacy_medicine_batches", $"Có {page.TotalItems} lô thuốc {(status == "expired" ? "đã hết hạn" : "sắp hết hạn trong 90 ngày")}." + LimitNotice(page.TotalItems, page.Items.Count) + " " +
             string.Join("; ", page.Items.Select(b => $"{b.BatchNumber} — {b.MedicineName}: {b.QuantityRemaining} {b.Unit}, hạn {b.ExpiryDate:dd/MM/yyyy}")));
-    }
-
-    private async Task<AiToolExecutionResult> GetRevenueReportAsync(AiToolExecutionContext context, string json, CancellationToken ct)
-    {
-        if (!context.Roles.Contains(AiActorRole.Admin)) return ScopeDenied();
-        if (_billing is null) return DataUnavailable();
-        using var document = JsonDocument.Parse(json);
-        var period = document.RootElement.GetProperty("period").GetString()!;
-        var today = _clock.VietnamToday;
-        var first = new DateOnly(today.Year, today.Month, 1);
-        var days = Regex.Match(period, @"^last_(\d+)_days$");
-        var (from, to) = days.Success ? (today.AddDays(1 - int.Parse(days.Groups[1].Value)), today) : period switch
-        {
-            "last_7_days" => (today.AddDays(-6), today), "yesterday" => (today.AddDays(-1), today.AddDays(-1)),
-            "this_month" => (first, first.AddMonths(1).AddDays(-1)), "last_month" => (first.AddMonths(-1), first.AddDays(-1)), _ => (today, today)
-        };
-        var report = await _billing.GetRevenueReportAsync(from, to, ct);
-        return Completed(report, "admin_revenue_report", $"Doanh thu từ {from:dd/MM/yyyy} đến {to:dd/MM/yyyy}: {report.TotalRevenue.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"))} đồng, {report.TotalSucceededTransactions} giao dịch thành công.");
     }
 
     private async Task<AiToolExecutionResult> GetActiveDoctorsAsync(AiToolExecutionContext context, CancellationToken ct)
