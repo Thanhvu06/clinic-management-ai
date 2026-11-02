@@ -117,7 +117,7 @@ public class AppointmentAvailabilityPolicy : IAppointmentAvailabilityPolicy
         }
 
         // 5. Sunday and past time guards
-        if (slot.SlotDate.DayOfWeek == DayOfWeek.Sunday)
+        if (!_dbContext.OperatingHours.IsOpen(slot.SlotDate))
         {
             return SlotAvailabilityResult.Failure("SUNDAY_CLOSED", "Phòng khám không mở lịch khám vào Chủ nhật.");
         }
@@ -410,7 +410,7 @@ public class AppointmentAvailabilityPolicy : IAppointmentAvailabilityPolicy
         foreach (var s in slots)
         {
             // Sunday check
-            if (s.SlotDate.DayOfWeek == DayOfWeek.Sunday) continue;
+            if (!_dbContext.OperatingHours.IsOpen(s.SlotDate)) continue;
 
             // Holding appointment check
             if (holdingSlotSet.Contains(s.Id)) continue;

@@ -85,6 +85,14 @@ internal static class DevelopmentAppointmentSeed
             return;
         }
 
+        if (db.OperatingHours.IsTwentyFourSeven)
+        {
+            await TwentyFourSevenDemoSeed.SeedAsync(db, dateTimeProvider, adminId1.Id);
+            MarkInitialized(db, dateTimeProvider, adminId1.Id);
+            await db.SaveChangesAsync();
+            return;
+        }
+
         var today = dateTimeProvider.VietnamToday;
         var earliest = dateTimeProvider.VietnamNow.AddMinutes(30);
         var slots = (await db.AppointmentSlots.ToListAsync())
@@ -102,7 +110,7 @@ internal static class DevelopmentAppointmentSeed
         var initialized = false;
         var reasonVariants = new Dictionary<long, int>();
         var bookedPatients = new HashSet<(long DoctorId, DateOnly Date, long PatientId)>();
-        var approvedLeaveDate = DemoSeedCalendar.NextOpen(today.AddDays(5));
+        var approvedLeaveDate = DemoSeedCalendar.NextOpen(today.AddDays(5), db.OperatingHours);
 
         async Task CreateApt(Patient p, Doctor d, AppointmentSlot s, AppointmentStatus status)
         {
@@ -238,7 +246,7 @@ internal static class DevelopmentAppointmentSeed
 
         var futureSlots = slots.Where(x => x.SlotDate > today).ToList();
 
-        var pastDate = DemoSeedCalendar.PreviousOpen(today.AddDays(-5));
+        var pastDate = DemoSeedCalendar.PreviousOpen(today.AddDays(-5), db.OperatingHours);
         var pastSchedule = await db.DoctorWorkSchedules.FirstOrDefaultAsync(s => s.DoctorId == mainDoc.Id && s.WorkDate == pastDate);
         if (pastSchedule == null)
         {
@@ -289,7 +297,7 @@ internal static class DevelopmentAppointmentSeed
             await CreateApt(patients[i % patients.Count], mainDoc, pastSlots[i % pastSlots.Count], AppointmentStatus.NoShow);
         }
 
-        var pastDate2 = DemoSeedCalendar.NextOpen(today.AddDays(-4));
+        var pastDate2 = DemoSeedCalendar.NextOpen(today.AddDays(-4), db.OperatingHours);
         var pastSchedule2 = await db.DoctorWorkSchedules.FirstOrDefaultAsync(s => s.DoctorId == mainDoc.Id && s.WorkDate == pastDate2);
         if (pastSchedule2 == null)
         {
@@ -446,8 +454,8 @@ internal static class DevelopmentAppointmentSeed
             db.DoctorLeaveRequests.Add(new DoctorLeaveRequest
             {
                 DoctorId = mainDoc.Id,
-                StartDateTime = DemoSeedCalendar.NextOpen(today.AddDays(2)).ToDateTime(new TimeOnly(8, 0)),
-                EndDateTime = DemoSeedCalendar.NextOpen(today.AddDays(2)).ToDateTime(new TimeOnly(17, 0)),
+                StartDateTime = DemoSeedCalendar.NextOpen(today.AddDays(2), db.OperatingHours).ToDateTime(new TimeOnly(8, 0)),
+                EndDateTime = DemoSeedCalendar.NextOpen(today.AddDays(2), db.OperatingHours).ToDateTime(new TimeOnly(17, 0)),
                 Reason = "Nghỉ phép cá nhân giải quyết việc gia đình",
                 Status = DoctorLeaveRequestStatus.Pending
             });

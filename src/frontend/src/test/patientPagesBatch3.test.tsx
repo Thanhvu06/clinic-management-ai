@@ -150,10 +150,10 @@ describe('BookAppointment batch 3', () => {
         expect(await screen.findByRole('status')).toHaveTextContent('đề xuất tái khám');
         await selectDoctor(); const calls = mocks.get.mock.calls.length;
         fireEvent.change(screen.getByLabelText('Chọn ngày khám'), { target: { value: '2030-01-06' } });
-        expect(screen.getByRole('alert')).toHaveTextContent('Phòng khám không mở lịch bác sĩ vào Chủ nhật.');
+        expect(screen.queryByText('Phòng khám không mở lịch bác sĩ vào Chủ nhật.')).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: '08:00' })).not.toBeInTheDocument();
         await act(async () => {});
-        expect(mocks.get.mock.calls.slice(calls).some(([url]) => url.includes('/available-slots'))).toBe(false);
+        expect(mocks.get.mock.calls.slice(calls).some(([url]) => url.includes('/available-slots'))).toBe(true);
     });
     it('B7 uncertain attempt preserves status/actions and hides the technical term', async () => {
         mocks.post.mockRejectedValue(new Error('Gián đoạn kết nối')); mount(); await review();

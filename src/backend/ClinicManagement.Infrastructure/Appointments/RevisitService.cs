@@ -154,7 +154,7 @@ public class RevisitService : IRevisitService
                  targetSlot.SlotDate.ToDateTime(targetSlot.StartTime)).TotalMinutes != 30)
                 throw new BusinessException("INVALID_TARGET", "Khung giờ tái khám phải có thời lượng đúng 30 phút.");
 
-            if (targetSlot.SlotDate.DayOfWeek == DayOfWeek.Sunday)
+            if (!_dbContext.OperatingHours.IsOpen(targetSlot.SlotDate))
                 throw new BusinessException("DOCTOR_NOT_AVAILABLE", "Phòng khám không mở lịch khám vào Chủ nhật.");
 
             var vietnamToday = _dateTimeProvider.VietnamToday;

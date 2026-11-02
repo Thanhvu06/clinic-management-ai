@@ -121,7 +121,7 @@ internal static class RealisticDevelopmentSeed
         var packages = await db.HealthPackages.OrderBy(p => p.Code).ToListAsync();
         var packageIndex = 0;
         var packagePurchases = await db.HealthPackageRegistrations.ToListAsync();
-        var today = DemoSeedTimeline.ActivityDate(clock);
+        var today = DemoSeedTimeline.ActivityDate(clock, db.OperatingHours);
         var taken = (await db.Appointments.Where(a => a.AppointmentDate >= today.AddDays(-30) && a.AppointmentDate <= today)
                 .Select(a => new { a.DoctorId, a.AppointmentDate, a.PatientId }).ToListAsync())
             .Select(a => (a.DoctorId, a.AppointmentDate, a.PatientId)).ToHashSet();
@@ -131,9 +131,9 @@ internal static class RealisticDevelopmentSeed
         for (var i = 0; i < 30; i++)
         {
             var date = today.AddDays(-i);
-            if (DemoSeedCalendar.IsClosed(date) && i != 0) continue;
-            date = DemoSeedCalendar.PreviousOpen(date);
-            var time = DemoSeedTimeline.BeforeNow(clock, date, 9, (i % 4) * 10);
+            if (DemoSeedCalendar.IsClosed(date, db.OperatingHours) && i != 0) continue;
+            date = DemoSeedCalendar.PreviousOpen(date, db.OperatingHours);
+            var time = DemoSeedTimeline.BeforeNow(clock, date, 9, (i % 4) * 10, policy: db.OperatingHours);
             var status = i is 1 or 7 or 13 ? InvoiceStatus.Unpaid : i is 3 or 8 ? InvoiceStatus.Cancelled : InvoiceStatus.Paid;
             var invoice = new Invoice
             {
@@ -233,7 +233,7 @@ internal static class RealisticDevelopmentSeed
             await db.SaveChangesAsync();
         }
 
-        var now = DemoSeedTimeline.ActivityNow(clock);
+        var now = DemoSeedTimeline.ActivityNow(clock, db.OperatingHours);
         var specimen = 0;
         for (var i = 0; i < TodayOrders.Length; i++)
         {

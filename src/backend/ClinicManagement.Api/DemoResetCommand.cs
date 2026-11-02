@@ -24,7 +24,7 @@ public static class DemoResetCommand
         using var scope = app.Services.CreateScope();
         var services = scope.ServiceProvider;
         var db = services.GetRequiredService<AppDbContext>();
-        if (DemoSeedCalendar.ClosedDayNotice(services.GetRequiredService<IDateTimeProvider>()) is { } notice)
+        if (DemoSeedCalendar.ClosedDayNotice(services.GetRequiredService<IDateTimeProvider>(), db.OperatingHours) is { } notice)
             Console.WriteLine($"CẢNH BÁO: {notice}");
         await db.Database.EnsureDeletedAsync();
         await db.Database.MigrateAsync();

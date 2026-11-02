@@ -53,7 +53,7 @@ public class ScheduleService : IScheduleService
 
     public async Task<WorkScheduleDto> CreateWorkScheduleAsync(long doctorId, CreateWorkScheduleRequest request)
     {
-        if (request.WorkDate.DayOfWeek == DayOfWeek.Sunday)
+        if (!_dbContext.OperatingHours.IsOpen(request.WorkDate))
             throw new BusinessException("SUNDAY_CLOSED", "Phòng khám không làm việc vào Chủ nhật.");
 
         var doctor = await _dbContext.Doctors
@@ -129,7 +129,7 @@ public class ScheduleService : IScheduleService
         if (schedule == null)
             throw new NotFoundException("Lịch làm việc không tồn tại.");
 
-        if (request.WorkDate.DayOfWeek == DayOfWeek.Sunday)
+        if (!_dbContext.OperatingHours.IsOpen(request.WorkDate))
             throw new BusinessException("SUNDAY_CLOSED", "Phòng khám không làm việc vào Chủ nhật.");
 
         if (request.StartTime >= request.EndTime)

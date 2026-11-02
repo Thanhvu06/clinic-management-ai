@@ -24,7 +24,7 @@ import {
 import { useDialog } from "../../contexts/DialogContext";
 import { useAuth } from "../../auth/AuthContext";
 import { Breadcrumb } from "../../components/Breadcrumb";
-import { formatDoctorName, getNextWorkingDateString, isSundayDateString } from "../../utils/doctorNameHelper";
+import { formatDoctorName, getNextWorkingDateString } from "../../utils/doctorNameHelper";
 import { isValidBookingReason, normalizeBookingReason } from "../../hooks/useAiBookingFlow";
 interface Specialty {
     id: number;
@@ -282,12 +282,7 @@ export const BookAppointment: React.FC = () => {
             }
             const queryDate = params.get("date");
             if (queryDate) {
-                if (isSundayDateString(queryDate)) {
-                    showAlert("Phòng khám không mở lịch khám vào Chủ nhật. Hệ thống đã tự động chuyển sang ngày làm việc gần nhất.", "Lưu ý", "info");
-                    targetSlotDate = getNextWorkingDateString(new Date(queryDate));
-                } else {
-                    targetSlotDate = queryDate;
-                }
+                targetSlotDate = queryDate;
                 setPageSlotDate(targetSlotDate);
             }
         }
@@ -391,12 +386,6 @@ export const BookAppointment: React.FC = () => {
     // 4. Fetch Slots when doctorId and slotDate are set
     useEffect(() => {
         if (!doctorId || !slotDate) {
-            setSlots([]);
-            setPageSlotId("");
-            return;
-        }
-
-        if (isSundayDateString(slotDate)) {
             setSlots([]);
             setPageSlotId("");
             return;
@@ -937,8 +926,7 @@ export const BookAppointment: React.FC = () => {
                                 <Input type="date" id="slotDate" min={toLocalDateString()} value={slotDate} onChange={e => handleSlotDateChange(e.target.value)} />
                             </Form.Item>
                             <Form.Item label="Khung giờ khám còn trống" required>
-                                {isSundayDateString(slotDate) ? <Alert type="warning" showIcon title={<><strong>Lưu ý:</strong> Phòng khám không mở lịch bác sĩ vào Chủ nhật. Vui lòng chọn ngày từ Thứ Hai đến Thứ Bảy.</>} />
-                                    : loadingSlots ? <div className={styles.loadingPanel}><Spin /><span>Đang kiểm tra lịch trống của bác sĩ...</span></div>
+                                {loadingSlots ? <div className={styles.loadingPanel}><Spin /><span>Đang kiểm tra lịch trống của bác sĩ...</span></div>
                                     : slotsError ? <Alert type="error" showIcon title="Không tải được khung giờ khám." action={<Button onClick={() => setSlotsReloadKey(key => key + 1)}>Thử lại</Button>} />
                                     : slots.length === 0 ? <Empty description={`Bác sĩ chưa có lịch trống ngày ${formatDateOnly(slotDate)}. Bạn chọn ngày khác nhé.`} />
                                     : <div className={styles.slotGrid}>{slots.map(s => <Button key={s.slotId} className={`${styles.slotBtn} ${slotId === s.slotId ? styles.slotBtnActive : ""}`} type={slotId === s.slotId ? 'primary' : 'default'} aria-pressed={slotId === s.slotId} onClick={() => handleSelectSlot(s)}><Clock size={14} />{s.startTime.substring(0, 5)}</Button>)}</div>}

@@ -7,17 +7,17 @@ namespace ClinicManagement.Infrastructure.Persistence;
 
 internal static class DemoSeedTimeline
 {
-    internal static DateOnly ActivityDate(IDateTimeProvider clock) =>
-        DemoSeedCalendar.IsClosed(clock.VietnamToday) || clock.VietnamTime < new TimeOnly(7, 0)
-            ? DemoSeedCalendar.PreviousOpen(clock.VietnamToday.AddDays(-1)) : clock.VietnamToday;
+    internal static DateOnly ActivityDate(IDateTimeProvider clock, IClinicOperatingHoursPolicy? policy = null) =>
+        policy?.IsTwentyFourSeven != true && (DemoSeedCalendar.IsClosed(clock.VietnamToday, policy) || clock.VietnamTime < new TimeOnly(7, 0))
+            ? DemoSeedCalendar.PreviousOpen(clock.VietnamToday.AddDays(-1), policy) : clock.VietnamToday;
 
-    internal static DateTime ActivityNow(IDateTimeProvider clock) => ActivityDate(clock) == clock.VietnamToday
-        ? clock.UtcNow : RealisticDevelopmentSeed.At(clock, ActivityDate(clock), 17);
+    internal static DateTime ActivityNow(IDateTimeProvider clock, IClinicOperatingHoursPolicy? policy = null) => ActivityDate(clock, policy) == clock.VietnamToday
+        ? clock.UtcNow : RealisticDevelopmentSeed.At(clock, ActivityDate(clock, policy), 17);
 
-    internal static DateTime BeforeNow(IDateTimeProvider clock, DateOnly date, int hour, int minute = 0)
+    internal static DateTime BeforeNow(IDateTimeProvider clock, DateOnly date, int hour, int minute = 0, IClinicOperatingHoursPolicy? policy = null)
     {
         var time = RealisticDevelopmentSeed.At(clock, date, hour, minute);
-        var latest = ActivityNow(clock).AddHours(-1);
+        var latest = ActivityNow(clock, policy).AddHours(-1);
         return time < latest ? time : latest;
     }
 
@@ -33,9 +33,9 @@ internal static class DemoSeedTimeline
             typeof(ApplicationUser), typeof(Facility), typeof(ClinicLocation), typeof(HealthPackage),
             typeof(Medicine), typeof(MedicineCategory), typeof(StaffFacilityAssignment)
         };
-        var date = ActivityDate(clock);
-        var start = RealisticDevelopmentSeed.At(clock, date, 7);
-        var end = ActivityNow(clock);
+        var date = ActivityDate(clock, db.OperatingHours);
+        var start = RealisticDevelopmentSeed.At(clock, date, db.OperatingHours.IsTwentyFourSeven ? 0 : 7);
+        var end = ActivityNow(clock, db.OperatingHours);
         var duration = end - start;
         // Entity defaults use the system clock; a reset must also obey an injected clock.
         foreach (var entry in db.ChangeTracker.Entries().Where(e => eventTypes.Contains(e.Metadata.ClrType)).ToList())

@@ -263,7 +263,7 @@ describe('Appointment Change Request UI Workflows', () => {
             fireEvent.change(dateInput, { target: { value: '2026-09-13' } });
 
             await waitFor(() => {
-                expect(screen.getByText('Phòng khám không làm việc vào Chủ nhật. Vui lòng chọn ngày khác (Thứ 2 - Thứ 7).')).toBeInTheDocument();
+                expect(screen.queryByText('Phòng khám không làm việc vào Chủ nhật. Vui lòng chọn ngày khác (Thứ 2 - Thứ 7).')).not.toBeInTheDocument();
             });
         });
     });

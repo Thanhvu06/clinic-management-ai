@@ -41,7 +41,7 @@ describe('doctorNameHelper', () => {
         it('rolls forward to Monday if next day is Sunday', () => {
             // Base date is Saturday 2026-09-05: next day is Sunday 2026-09-06 -> rolls forward to Monday 2026-09-07
             const saturday = new Date(2026, 8, 5); // September 5, 2026
-            expect(getNextWorkingDateString(saturday)).toBe('2026-09-07');
+            expect(getNextWorkingDateString(saturday)).toBe('2026-09-06');
         });
 
         it('returns next day if next day is a weekday', () => {

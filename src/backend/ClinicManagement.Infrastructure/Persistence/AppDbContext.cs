@@ -10,9 +10,12 @@ namespace ClinicManagement.Infrastructure.Persistence;
 
 public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>
 {
-    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
+    public AppDbContext(DbContextOptions<AppDbContext> options, ClinicManagement.Application.Common.Interfaces.IClinicOperatingHoursPolicy? operatingHours = null) : base(options)
     {
+        OperatingHours = operatingHours ?? Schedules.ClinicOperatingHoursPolicy.Standard;
     }
+
+    public ClinicManagement.Application.Common.Interfaces.IClinicOperatingHoursPolicy OperatingHours { get; }
 
     public DbSet<Specialty> Specialties { get; set; } = null!;
     public DbSet<Icd10Code> Icd10Codes { get; set; } = null!;

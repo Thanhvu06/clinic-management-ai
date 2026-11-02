@@ -107,7 +107,7 @@ public class ClinicAiContextService : IClinicAiContextService
                 DiaChi = string.IsNullOrWhiteSpace(primaryFacility.City) ? primaryFacility.Address : $"{primaryFacility.Address}, {primaryFacility.City}",
                 HotlineTiepDon = string.IsNullOrWhiteSpace(primaryFacility.Phone) ? "Chưa cấu hình" : primaryFacility.Phone,
                 Email = primaryFacility.Email ?? "Chưa cấu hình",
-                GioLamViec = "Thứ 2 – Thứ 6: 08:00–17:00 · Thứ 7: 08:00–11:30 · Chủ nhật nghỉ"
+                GioLamViec = _dbContext.OperatingHours.DisplayText
             }
             : null;
 

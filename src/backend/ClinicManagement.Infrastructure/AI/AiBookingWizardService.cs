@@ -448,7 +448,7 @@ public sealed class AiBookingWizardService(
             SpecialtyId = state.SpecialtyId, DoctorId = state.DoctorId > 0 ? state.DoctorId : null,
             FromDate = today, ToDate = today.AddDays(13), PatientId = await PatientAsync(user, ct), CheckAiEnabledSpecialty = true
         }, ct);
-        return slots.Where(x => active.Contains(x.DoctorId) && x.SlotDate.DayOfWeek != DayOfWeek.Sunday &&
+        return slots.Where(x => active.Contains(x.DoctorId) && db.OperatingHours.IsOpen(x.SlotDate) &&
             x.SlotDate >= today && x.SlotDate <= today.AddDays(13)).OrderBy(x => x.SlotDate).ThenBy(x => x.StartTime).ThenBy(x => x.DoctorId).ThenBy(x => x.SlotId).ToList();
     }
 

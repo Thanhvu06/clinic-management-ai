@@ -145,6 +145,11 @@ builder.Services.AddScoped<ISpecialtyService, SpecialtyService>();
 builder.Services.AddSingleton<ClinicManagement.Application.Common.Interfaces.IDateTimeProvider, ClinicManagement.Infrastructure.Services.DateTimeProvider>();
 builder.Services.AddScoped<IDoctorService, DoctorService>();
 builder.Services.AddScoped<IScheduleService, ScheduleService>();
+builder.Services.AddOptions<ClinicManagement.Infrastructure.Schedules.ClinicOperatingHoursOptions>()
+    .Bind(builder.Configuration.GetSection("ClinicOperatingHours"))
+    .Validate(options => options.Mode is "Standard" or "TwentyFourSeven", "ClinicOperatingHours:Mode must be Standard or TwentyFourSeven.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<ClinicManagement.Application.Common.Interfaces.IClinicOperatingHoursPolicy, ClinicManagement.Infrastructure.Schedules.ClinicOperatingHoursPolicy>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 builder.Services.AddScoped<ClinicManagement.Application.Appointments.Interfaces.IAppointmentAvailabilityPolicy, ClinicManagement.Infrastructure.Appointments.AppointmentAvailabilityPolicy>();
 builder.Services.AddScoped<IChangeRequestService, ChangeRequestService>();
