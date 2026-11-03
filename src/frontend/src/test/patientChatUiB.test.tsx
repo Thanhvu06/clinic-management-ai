@@ -51,21 +51,18 @@ it('B3 hides all stale actions once while retaining old navigation', () => {
     expect(screen.getAllByText('Lựa chọn ở bước trước ✓')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'ViewMyAppointments' })).toBeInTheDocument();
 });
-it('B4 collapses older history and toggles it', () => {
+it('B4 keeps older history visible without a toggle', () => {
     mocks.flow.messages = Array.from({ length: 8 }, (_, i) => ({ role: i % 2 ? 'model' : 'user', content: `Tin ${i}` }));
     mount();
-    expect(screen.queryByText('Tin 0')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Xem 4 tin nhắn trước' }));
     expect(screen.getByText('Tin 0')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Thu gọn' }));
-    expect(screen.queryByText('Tin 0')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Xem \d+ tin nhắn trước|Thu gọn/ })).not.toBeInTheDocument();
 });
-it('B4 isolates the active wizard and puts back before its progress', () => {
+it('B4 keeps history visible with the active wizard and puts back before its progress', () => {
     mocks.flow.messages = [{ role: 'user', content: 'Tin trước wizard' }];
     mocks.flow.wizard = { step: 'slot', title: 'Chọn giờ', message: 'Chọn giờ khám', options: [], canGoBack: true, backToken: 'opaque', summary: { specialtyName: 'Nội khoa' } };
     mount();
-    expect(screen.queryByText('Tin trước wizard')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Xem 1 tin nhắn trước' })).toBeInTheDocument();
+    expect(screen.getByText('Tin trước wizard')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Xem \d+ tin nhắn trước/ })).not.toBeInTheDocument();
     const region = screen.getByRole('region', { name: 'Đặt lịch khám từng bước' });
     expect(region.firstElementChild).toBe(screen.getByRole('button', { name: 'Quay lại bước trước' }));
     expect(region.textContent).not.toContain('✓');
@@ -126,10 +123,10 @@ it('6 shows a single success card action with the upcoming highlight URL', () =>
     expect(screen.getByText(/03\/02\/2027/)).toBeInTheDocument();
     expect(screen.queryByText('Xem danh sách lịch hẹn của tôi')).not.toBeInTheDocument();
 });
-it('7 presents the new history and specialty controls as buttons without nested controls', () => {
+it('7 presents specialty controls as buttons without nested controls', () => {
     mocks.flow.messages = Array.from({ length: 7 }, () => ({ role: 'model', content: 'Khám', suggestions: [{ specialtyId: 1, specialtyName: 'Nội khoa', reason: 'Tham khảo' }] }));
     mount();
-    expect(screen.getByRole('button', { name: 'Xem 3 tin nhắn trước' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Xem \d+ tin nhắn trước/ })).not.toBeInTheDocument();
     screen.getAllByRole('button', { name: 'Xem lịch khám khoa Nội khoa' }).forEach(b => expect(b.querySelector('button')).toBeNull());
 });
 it('8 announces only 200 plain characters, not the whole message history', () => {
