@@ -76,17 +76,9 @@ public sealed class AiPatientCancelIntentTests : IntegrationTestBase
         await CreateAppointmentAsync(Patient2EntityId, 77, AppointmentStatus.Confirmed);
         var response = await ChatAsync(message, "sess_" + Guid.NewGuid().ToString("N"));
 
-        if (message == "huỷ lịch hẹn")
-        {
-            Assert.Equal("PatientReadResolved", response.DialogueOutcome);
-            Assert.Equal("Có 1 lịch hẹn sắp tới có thể hủy. Chọn lịch bạn muốn hủy.", response.Message);
-            Assert.Equal(own.Id, Assert.Single(response.Actions, a => a.Type == "RequestCancellation").Payload.AppointmentId);
-        }
-        else
-        {
-            Assert.Equal("NavigationInquiryResolved", response.DialogueOutcome);
-            Assert.Equal("Bạn có lịch hẹn sắp tới. Vui lòng mở Lịch hẹn của tôi, chọn lịch hẹn cần hủy và gửi yêu cầu hủy.", response.Message);
-        }
+        Assert.Equal("PatientReadResolved", response.DialogueOutcome);
+        Assert.Equal("Có 1 lịch hẹn sắp tới có thể hủy. Chọn lịch bạn muốn hủy.", response.Message);
+        Assert.Equal(own.Id, Assert.Single(response.Actions, a => a.Type == "RequestCancellation").Payload.AppointmentId);
         var action = Assert.Single(response.Actions, a => a.Type == AiActionTypes.ViewMyAppointments);
         Assert.Equal(AiActionTypes.ViewMyAppointments, action.Type);
         Assert.Equal(SafeRoutes.Appointments, action.Payload?.TargetUrl);
@@ -112,18 +104,9 @@ public sealed class AiPatientCancelIntentTests : IntegrationTestBase
         var other = await CreateDraftAsync(Patient2Id);
         var response = await ChatAsync(message, "sess_" + Guid.NewGuid().ToString("N"));
 
-        if (message == "huỷ lịch hẹn")
-        {
-            Assert.Equal("PatientReadResolved", response.DialogueOutcome);
-            Assert.Equal("Bạn không có lịch hẹn sắp tới nào có thể hủy/đổi.", response.Message);
-            Assert.Equal(AiActionTypes.ViewMyAppointments, Assert.Single(response.Actions).Type);
-        }
-        else
-        {
-            Assert.Equal("NothingToCancel", response.DialogueOutcome);
-            Assert.Equal("Hiện bạn chưa có lịch hẹn hay yêu cầu đặt lịch nào đang chờ để hủy.", response.Message);
-            Assert.Empty(response.Actions);
-        }
+        Assert.Equal("NothingToCancel", response.DialogueOutcome);
+        Assert.Equal("Bạn không có lịch hẹn sắp tới nào có thể hủy/đổi.", response.Message);
+        Assert.Equal(AiActionTypes.ViewMyAppointments, Assert.Single(response.Actions).Type);
         AssertPublicText(response);
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

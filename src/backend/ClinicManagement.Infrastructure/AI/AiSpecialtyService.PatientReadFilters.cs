@@ -14,12 +14,10 @@ public partial class AiSpecialtyService
 {
     private async Task<AiChatResponseDto?> ResolvePatientChatReadAsync(AiChatRequestDto request, string message, int version, CancellationToken ct)
     {
-        var text = AiTextNormalizer.NormalizeForComparison(message);
-        var change = AppointmentChange(text);
-        if (change == "reschedule" && !await HasOpenDraftForChangeAsync(request, ct))
-            return await ResolveAppointmentChangeAsync(request, text, change, version, ct);
-        if (change != null) return null;
+        if (AppointmentChange(message) is { } change)
+            return await ResolveCancellationAsync(request, message, version, ct, change);
 
+        var text = AiTextNormalizer.NormalizeForComparison(message);
         var read = ClassifyFilteredRead(text);
         if (read is null)
             return await TryResolveLocalPatientReadAsync(request, message, version, ct);
@@ -68,7 +66,7 @@ public partial class AiSpecialtyService
     }
 
     private async Task<AiChatResponseDto> ResolveCancellationAsync(
-        AiChatRequestDto request, string cleanMessage, int passiveDraftVersion, CancellationToken cancellationToken)
+        AiChatRequestDto request, string cleanMessage, int passiveDraftVersion, CancellationToken cancellationToken, string? appointmentChange = null)
     {
         var currentUserId = _currentUserService.UserId;
         var nowUtc = _dateTimeProvider.UtcNow;
@@ -97,9 +95,9 @@ public partial class AiSpecialtyService
             .Take(2)
             .ToListAsync(cancellationToken);
 
-        if (!hasLocalDraft && !scopeResult.HasResolved && activeDraftScopes.Count == 0 && !request.PendingSpecialtyId.HasValue &&
-            AppointmentChange(AiTextNormalizer.NormalizeForComparison(cleanMessage)) == "cancel" &&
-            await ResolveAppointmentChangeAsync(request, "", "cancel", passiveDraftVersion, cancellationToken) is { } change)
+        if (!scopeResult.HasResolved && activeDraftScopes.Count == 0 && !request.PendingSpecialtyId.HasValue &&
+            appointmentChange is not null && await ResolveAppointmentChangeAsync(request,
+                AiTextNormalizer.NormalizeForComparison(cleanMessage), appointmentChange, passiveDraftVersion, cancellationToken) is { } change)
             return change;
 
         if (!scopeResult.HasResolved && !hasLocalDraft && activeDraftScopes.Count == 1 &&
@@ -227,21 +225,17 @@ public partial class AiSpecialtyService
         return WithDraftVersionSync(statelessCancelResponse, passiveDraftVersion);
     }
 
-    private static string? AppointmentChange(string text)
+    private static string? AppointmentChange(string message)
     {
-        if (!Regex.IsMatch(text, @"\b(?:khong (?:muon )?|dung )?(?:huy|doi) (?:lich hen|lich kham|cuoc hen)\b") ||
-            Regex.IsMatch(text, @"\b(?:khong (?:muon )?|dung )(?:huy|doi)\b"))
+        var text = AiTextNormalizer.NormalizeForComparison(message);
+        var match = Regex.Match(text, @"\b(huy|doi) (?:lich(?: hen| kham)?(?! (?:truc|lam viec|cong tac)\b)|cuoc hen)\b");
+        if (!match.Success || Regex.IsMatch(text, @"\b(?:khong (?:muon )?|dung )(?:huy|doi)\b"))
             return null;
-        return Regex.IsMatch(text, @"\bhuy (?:lich hen|lich kham|cuoc hen)\b") ? "cancel" : "reschedule";
-    }
 
-    private async Task<bool> HasOpenDraftForChangeAsync(AiChatRequestDto request, CancellationToken ct)
-    {
-        if (request.PendingSpecialtyId.HasValue || !string.IsNullOrWhiteSpace(request.DraftId)) return true;
-        if (_currentUserService.UserId is not { } userId || string.IsNullOrWhiteSpace(request.SessionId)) return false;
-        var now = _dateTimeProvider.UtcNow;
-        return await _dbContext.AiSessions.AsNoTracking().AnyAsync(s => s.UserId == userId && s.SessionId == request.SessionId &&
-            s.IsActive && s.ExpiresAtUtc > now && s.ActiveDraftId != null && s.ActiveDraftId != "", ct);
+        // The bare unaccented phrase remains ambiguous under the stateless cancellation guard.
+        if (match.Value == "huy lich" && !Regex.IsMatch(AiTextNormalizer.Normalize(message), @"\b(?:hủy|huỷ)\s+lịch\b", RegexOptions.IgnoreCase))
+            return null;
+        return match.Groups[1].Value == "huy" ? "cancel" : "reschedule";
     }
 
     private async Task<AiChatResponseDto?> ResolveAppointmentChangeAsync(
@@ -280,6 +274,7 @@ public partial class AiSpecialtyService
                 SlotDate = requestedDay?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
             }
         }));
+        if (appointments.Count == 0) response.DialogueOutcome = "NothingToCancel";
         response.Reply = response.Message;
         return WithDraftVersionSync(response, version);
     }

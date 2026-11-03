@@ -126,52 +126,81 @@ public sealed class PatientChatReadFiltersTests(CustomWebApplicationFactory fact
         Assert.Equal(3, Rows(range).Count());
     }
 
-    [Fact]
-    public async Task Upcoming_and_change_selection_use_clock_status_and_owner_without_writing()
+    [Theory]
+    [InlineData(1, "hủy lịch hẹn", "đổi lịch", false)]
+    [InlineData(2, "tôi muốn hủy lịch hẹn", "đổi lịch hẹn", false)]
+    [InlineData(3, "tôi muốn hủy lịch", "tôi muốn đổi lịch hẹn sang ngày mai", true)]
+    public async Task Upcoming_and_change_selection_use_clock_status_and_owner_without_writing(
+        int caseNumber, string cancelMessage, string rescheduleMessage, bool tomorrow)
     {
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var email = $"upcoming-{Guid.NewGuid():N}@test.com";
+        using var registration = await Client.PostAsJsonAsync("/api/v1/auth/register", new
+        {
+            fullName = "Bệnh nhân kiểm thử lịch sắp tới",
+            email,
+            phoneNumber = $"087641230{caseNumber}",
+            password = "Pass@123"
+        });
+        registration.EnsureSuccessStatusCode();
+        var patientId = await db.Patients.Where(patient => patient.Email == email).Select(patient => patient.Id).SingleAsync();
+
         var now = scope.ServiceProvider.GetRequiredService<IDateTimeProvider>().VietnamNow;
         var date = DateOnly.FromDateTime(now);
         var future = date.AddDays(30);
-        var own = AppointmentFor(Patient1EntityId, future, AppointmentStatus.Confirmed);
-        var pending = AppointmentFor(Patient1EntityId, future, AppointmentStatus.Pending);
-        var pendingCancel = AppointmentFor(Patient1EntityId, future, AppointmentStatus.PendingCancellation);
-        var pendingReschedule = AppointmentFor(Patient1EntityId, future, AppointmentStatus.PendingReschedule);
+        var own = AppointmentFor(patientId, future, AppointmentStatus.Confirmed);
+        var pending = AppointmentFor(patientId, future, AppointmentStatus.Pending);
+        var pendingCancel = AppointmentFor(patientId, future, AppointmentStatus.PendingCancellation);
+        var pendingReschedule = AppointmentFor(patientId, future, AppointmentStatus.PendingReschedule);
         db.Appointments.AddRange(own, pending, pendingCancel, pendingReschedule,
-            AppointmentFor(Patient1EntityId, date.AddDays(-1), AppointmentStatus.Confirmed),
-            AppointmentFor(Patient1EntityId, future, AppointmentStatus.NoShow),
-            AppointmentFor(Patient1EntityId, future, AppointmentStatus.Cancelled),
-            AppointmentFor(Patient1EntityId, future, AppointmentStatus.Completed),
+            AppointmentFor(patientId, date.AddDays(-1), AppointmentStatus.Confirmed),
+            AppointmentFor(patientId, future, AppointmentStatus.NoShow),
+            AppointmentFor(patientId, future, AppointmentStatus.Cancelled),
+            AppointmentFor(patientId, future, AppointmentStatus.Completed),
             AppointmentFor(Patient2EntityId, future, AppointmentStatus.Confirmed));
         if (now.TimeOfDay > TimeSpan.Zero)
         {
-            var pastToday = AppointmentFor(Patient1EntityId, date, AppointmentStatus.PendingCancellation);
+            var pastToday = AppointmentFor(patientId, date, AppointmentStatus.PendingCancellation);
             pastToday.StartTime = TimeOnly.MinValue;
             db.Appointments.Add(pastToday);
         }
         await db.SaveChangesAsync();
 
-        using var patient = await CreateAuthenticatedClientAsync("pat1@test.com");
+        using var patient = await CreateAuthenticatedClientAsync(email);
         var upcoming = await ChatAsync(patient, "lịch hẹn sắp tới của tôi");
         var results = upcoming.ToolResults.Single().Data;
-        var ids = JsonSerializer.SerializeToElement(results, JsonSerializerOptions.Web).GetProperty("items")
-            .EnumerateArray().Select(row => row.GetProperty("id").GetInt64()).Order().ToArray();
-        Assert.Equal(new[] { own.Id, pending.Id, pendingCancel.Id, pendingReschedule.Id }.Order(), ids);
-        var cancellation = await ChatAsync(patient, "tôi muốn hủy lịch hẹn");
-        var reschedule = await ChatAsync(patient, "tôi muốn đổi lịch hẹn sang ngày mai");
+        var actual = JsonSerializer.SerializeToElement(results, JsonSerializerOptions.Web).GetProperty("items")
+            .EnumerateArray()
+            .Select(row => (Id: row.GetProperty("id").GetInt64(), Code: row.GetProperty("appointmentCode").GetString()!,
+                Status: row.GetProperty("status").GetString()!))
+            .OrderBy(row => row.Id).ToArray();
+        var expected = new[] { own, pending, pendingCancel, pendingReschedule }
+            .Select(appointment => (Id: appointment.Id, Code: appointment.AppointmentCode, Status: appointment.Status.ToString()))
+            .OrderBy(row => row.Id).ToArray();
+        Assert.Equal(expected, actual);
+        var cancellation = await ChatAsync(patient, cancelMessage);
+        var reschedule = await ChatAsync(patient, rescheduleMessage);
         Assert.Equal(new[] { own.Id, pending.Id }.Order(), cancellation.Actions
             .Where(action => action.Type == "RequestCancellation").Select(action => action.Payload.AppointmentId!.Value).Order());
         Assert.Equal(new[] { own.Id, pending.Id }.Order(), reschedule.Actions
             .Where(action => action.Type == "RequestReschedule").Select(action => action.Payload.AppointmentId!.Value).Order());
         Assert.All(reschedule.Actions.Where(action => action.Type == "RequestReschedule"),
-            action => Assert.Equal(date.AddDays(1).ToString("yyyy-MM-dd"), action.Payload.SlotDate));
+            action => Assert.Equal(tomorrow ? date.AddDays(1).ToString("yyyy-MM-dd") : null, action.Payload.SlotDate));
         Assert.Empty(await db.AiPendingToolActions.ToListAsync());
         Assert.Empty(await db.AppointmentChangeRequests.ToListAsync());
     }
 
-    [Fact]
-    public async Task Active_draft_still_cancels_without_preparing_appointment_change()
+    [Theory]
+    [InlineData("hủy lịch")]
+    [InlineData("huỷ lịch hẹn")]
+    [InlineData("hủy lịch hẹn")]
+    [InlineData("tôi muốn hủy lịch")]
+    [InlineData("tôi muốn hủy lịch hẹn")]
+    [InlineData("đổi lịch")]
+    [InlineData("đổi lịch hẹn")]
+    [InlineData("tôi muốn đổi lịch hẹn sang ngày mai")]
+    public async Task Active_draft_still_cancels_without_preparing_appointment_change(string message)
     {
         using var scope = Factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAiSessionSnapshotStore>();
@@ -179,10 +208,7 @@ public sealed class PatientChatReadFiltersTests(CustomWebApplicationFactory fact
         var draftId = "draft_" + Guid.NewGuid().ToString("N");
         Assert.True((await store.TouchSessionAsync(sessionId, Patient1Id, draftId, 1, null)).IsAccepted);
         using var patient = await CreateAuthenticatedClientAsync("pat1@test.com");
-        var change = await ChatAsync(patient, "tôi muốn đổi lịch hẹn sang ngày mai", sessionId);
-        Assert.DoesNotContain(change.Actions, action => action.Type == "RequestReschedule");
-        Assert.NotEqual("Bạn không có lịch hẹn sắp tới nào có thể hủy/đổi.", change.Message);
-        var response = await ChatAsync(patient, "tôi muốn hủy lịch hẹn", sessionId);
+        var response = await ChatAsync(patient, message, sessionId);
         Assert.Equal("DraftCancelled", response.DialogueOutcome);
         Assert.Empty(response.Actions);
     }

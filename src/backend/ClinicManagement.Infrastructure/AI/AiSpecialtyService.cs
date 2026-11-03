@@ -227,7 +227,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
         // can never be silently rebound to another account or revived after expiry.
         // Stateless cancellation intentionally remains stateless until its scope is
         // proven, so an ambiguous cancel cannot create a new session as a side effect.
-        var likelyCancel = string.Equals(request.Intent, AiChatIntentTypes.CancelDraft, StringComparison.OrdinalIgnoreCase) ||
+        var likelyCancel = AppointmentChange(rawMessage) is not null || string.Equals(request.Intent, AiChatIntentTypes.CancelDraft, StringComparison.OrdinalIgnoreCase) ||
                            Regex.IsMatch(lowerMsg, @"(?<![\p{L}\p{M}\p{N}_])(?:hủy|huỷ|huy\s+(?:lich|hen|dat))(?![\p{L}\p{M}\p{N}_])",
                                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         // If a caller is continuing from a server-bound snapshot, leave the
@@ -343,7 +343,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
             return WithDraftVersionSync(unclearResponse, passiveDraftVersion);
         }
 
-        if (resolvedIntent == AiChatIntentTypes.CancelDraft || AppointmentChange(AiTextNormalizer.NormalizeForComparison(cleanMessage)) == "cancel")
+        if (resolvedIntent == AiChatIntentTypes.CancelDraft)
             return await ResolveCancellationAsync(request, cleanMessage, passiveDraftVersion, cancellationToken);
 
         // 3.3 Pricing Inquiry: Honest Consultation Fees from DB
