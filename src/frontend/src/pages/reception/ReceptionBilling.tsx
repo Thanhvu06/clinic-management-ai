@@ -33,6 +33,7 @@ import { DataTable, LoadingState, StatusBadge, PageHeader, StatCard, InlineError
 import type { DataTableColumn } from '../../components/common';
 import { ExpiryBadge } from '../../components/common/ExpiryBadge';
 import { getVisitStatusLabel } from '../../utils/visitStatusLabels';
+import { formatDateOnly } from '../../utils/formatters';
 import styles from './ReceptionBilling.module.css';
 
 export const ReceptionBilling: React.FC = () => {
@@ -87,10 +88,8 @@ export const ReceptionBilling: React.FC = () => {
         setInvoiceSourceOptions([]);
         setReferenceId('');
         const options: { value: string; label: string }[] = [];
-        const label = (code: string, name: string, date: string) => {
-            const parsed = new Date(date);
-            return `${code} — ${name} — ${Number.isNaN(parsed.getTime()) ? date : parsed.toLocaleDateString('vi-VN')}`;
-        };
+        const label = (code: string, name: string, date: string) =>
+            `${code} — ${name} — ${date ? formatDateOnly(date) : ''}`;
         try {
             let currentPage = 1;
             let pages = 1;

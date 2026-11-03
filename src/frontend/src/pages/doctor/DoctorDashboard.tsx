@@ -16,7 +16,7 @@ import type { DoctorDashboardDto, DoctorQueueItemDto } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
 import { PageHeader, MetricStrip, StatusBadge, InlineError, EmptyState, DataTable, LoadingState } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
-import { toLocalDateString } from '../../utils/formatters';
+import { formatDateOnly, toLocalDateString } from '../../utils/formatters';
 import styles from './DoctorDashboard.module.css';
 export const DoctorDashboard: React.FC = () => {
     const navigate = useNavigate();
@@ -222,7 +222,7 @@ export const DoctorDashboard: React.FC = () => {
     ];
 
     const upcomingColumns: DataTableColumn<DoctorQueueItemDto>[] = [
-        { header: 'Ngày khám', accessor: (item) => item.appointmentDate ? new Date(item.appointmentDate).toLocaleDateString('vi-VN') : '--', width: 120 },
+        { header: 'Ngày khám', accessor: (item) => item.appointmentDate ? formatDateOnly(item.appointmentDate) : '--', width: 120 },
         { header: 'Khung giờ', accessor: (item) => `${item.startTime?.substring(0, 5) || '--:--'} - ${item.endTime?.substring(0, 5) || '--:--'}`, width: 130 },
         { header: 'Mã lịch', accessor: 'appointmentCode', width: 120 },
         {

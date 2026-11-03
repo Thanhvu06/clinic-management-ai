@@ -8,6 +8,7 @@ import { useDialog } from '../../contexts/DialogContext';
 import { PageHeader, DataTable, StatusBadge, EmptyState, LoadingState, InlineError } from '../../components/common';
 import styles from './AdminFacilities.module.css';
 import { staffAssignmentRoleLabels, getStaffAssignmentRoleLabel } from '../../utils/roleLabels';
+import { formatDisplayDate } from '../../utils/formatters';
 
 interface AssignableUser { id: string; fullName: string; email: string; roles: string[] }
 type CreateKind = 'facility' | 'department' | 'room' | 'bed' | 'staff';
@@ -218,7 +219,7 @@ export const AdminFacilities: React.FC = () => {
                         { header: 'Khoa', accessor: s => s.departmentName || 'Toàn cơ sở' },
                         { header: 'Cơ sở', accessor: s => <Tag color={s.isPrimary ? 'success' : 'default'}>{s.isPrimary ? 'Cơ sở chính' : 'Cơ sở phụ'}</Tag> },
                         { header: 'Trạng thái', accessor: s => <StatusBadge status={s.isActive ? 'Approved' : 'Rejected'} label={s.isActive ? 'Hoạt động' : 'Tạm dừng'} /> },
-                        { header: 'Ngày phân công', accessor: s => new Date(s.assignedAtUtc).toLocaleDateString('vi-VN') },
+                        { header: 'Ngày phân công', accessor: s => formatDisplayDate(s.assignedAtUtc) },
                         { header: 'Thao tác', align: 'center', accessor: s => <Button type="text" danger aria-label="Hủy phân công" title="Hủy phân công" icon={<Trash2 size={16} />} onClick={() => handleDeleteStaffAssignment(s.id)} /> },
                     ]} />}
                 </> },
