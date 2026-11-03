@@ -174,7 +174,7 @@ export const DoctorSchedule: React.FC = () => {
 
             <div className={styles.weekBar}>
                 <span className={styles.weekLabel}>
-                    Tuần từ {currentMonday.toLocaleDateString('vi-VN')} đến {sunday.toLocaleDateString('vi-VN')}
+                    Tuần từ {formatDateOnly(toLocalDateString(currentMonday))} đến {formatDateOnly(toLocalDateString(sunday))}
                 </span>
                 <Button type="link" onClick={loadSchedule} disabled={loading} icon={<RefreshCw size={14} />}>
                     {loading ? 'Đang tải...' : 'Làm mới'}
