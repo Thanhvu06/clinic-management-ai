@@ -1,6 +1,7 @@
 using ClinicManagement.Application.AI.Tools;
 using ClinicManagement.Application.Appointments.Interfaces;
 using ClinicManagement.Domain.Enums;
+using ClinicManagement.Infrastructure.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClinicManagement.Infrastructure.AI.Tools;
@@ -48,6 +49,8 @@ public sealed partial class RoleCopilotToolHandler
             items.Add(new
             {
                 prescription.Id,
+                prescriptionCode = BusinessDisplay.PrescriptionCode(prescription.Id, prescription.CreatedAt, _clock),
+                prescription.PatientName,
                 status = prescription.Status,
                 prescription.CreatedAt,
                 prescription.PatientVisitId,

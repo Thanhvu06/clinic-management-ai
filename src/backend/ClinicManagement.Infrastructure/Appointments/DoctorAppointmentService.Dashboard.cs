@@ -244,7 +244,8 @@ public partial class DoctorAppointmentService
                             where a.DoctorId == doctor.Id
                                   && a.AppointmentDate > targetDate
                                   && a.AppointmentDate <= upcomingEndDate
-                                  && (a.Status == AppointmentStatus.Pending || a.Status == AppointmentStatus.Confirmed)
+                                  && (a.Status == AppointmentStatus.Pending || a.Status == AppointmentStatus.Confirmed
+                                      || a.Status == AppointmentStatus.PendingReschedule || a.Status == AppointmentStatus.PendingCancellation)
                             orderby a.AppointmentDate ascending, a.StartTime ascending
                             select new DoctorQueueItemDto
                             {

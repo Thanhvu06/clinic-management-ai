@@ -366,7 +366,21 @@ const TechnicianWorklistCard: React.FC<{ data: unknown }> = ({ data }) => {
 const PharmacyQueueCard: React.FC<{ data: unknown }> = ({ data }) => {
     const items = asRecords(data);
     if (!items.length) return <EmptyData message="Hàng đợi đơn thuốc hiện không có dữ liệu phù hợp." />;
-    return <List>{items.slice(0, 20).map((item, index) => <article className={styles.typedItem} key={index}><strong>Đơn thuốc trong hàng đợi</strong><StatusLine label="Trạng thái đơn" value={item.status} /><StatusLine label="Thanh toán" value={item.paymentStatus} />{asRecords(item.paymentItems).map((paymentItem, paymentIndex) => <div className={styles.typedSubsection} key={paymentIndex}><StatusLine label="Thuốc" value={paymentItem.medicine} /><StatusLine label="Số lượng yêu cầu" value={paymentItem.requiredQuantity} /><StatusLine label="Đã thanh toán" value={paymentItem.paidQuantity} /><StatusLine label="Trạng thái dòng thanh toán" value={paymentItem.itemPaymentStatus} /></div>)}</article>)}</List>;
+    return <List>{items.slice(0, 20).map((item, index) => {
+        const code = text(item.prescriptionCode);
+        const patient = text(item.patientName);
+        return <article className={styles.typedItem} key={index}>
+            <strong>{code && patient ? `${code} — ${patient}` : 'Đơn thuốc trong hàng đợi'}</strong>
+            <StatusLine label="Trạng thái đơn" value={item.status} />
+            <StatusLine label="Thanh toán" value={item.paymentStatus} />
+            {asRecords(item.paymentItems).map((paymentItem, paymentIndex) => <div className={styles.typedSubsection} key={paymentIndex}>
+                <StatusLine label="Thuốc" value={paymentItem.medicine} />
+                <StatusLine label="Số lượng yêu cầu" value={paymentItem.requiredQuantity} />
+                <StatusLine label="Đã thanh toán" value={paymentItem.paidQuantity} />
+                <StatusLine label="Trạng thái dòng thanh toán" value={paymentItem.itemPaymentStatus} />
+            </div>)}
+        </article>;
+    })}</List>;
 };
 
 const PharmacyPaymentCard: React.FC<{ data: unknown }> = ({ data }) => {

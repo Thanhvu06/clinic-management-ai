@@ -5,7 +5,7 @@ namespace ClinicManagement.Infrastructure.Appointments;
 
 internal static class DoctorDashboardShifts
 {
-    private static string ShiftName(DoctorWorkSchedule schedule, bool twentyFourSeven) => twentyFourSeven
+    internal static string ShiftName(DoctorWorkSchedule schedule, bool twentyFourSeven) => twentyFourSeven
         ? schedule.StartTime < new TimeOnly(8, 0) ? "Ca đêm" : schedule.StartTime < new TimeOnly(16, 0) ? "Ca ngày" : "Ca tối"
         : schedule.StartTime < new TimeOnly(12, 0) ? "Ca sáng" : "Ca chiều";
 

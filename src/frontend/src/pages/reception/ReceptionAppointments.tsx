@@ -12,7 +12,7 @@ import { Search, Eye, Clock, RefreshCw, UserCheck } from 'lucide-react';
 import { useDialog } from '../../contexts/DialogContext';
 import { CheckInTicketModal } from '../../components/CheckInTicketModal';
 import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
-import { toLocalDateString } from '../../utils/formatters';
+import { formatDateOnly, toLocalDateString } from '../../utils/formatters';
 import { getApiErrorMessage } from '../../utils/apiError';
 
 interface ReceptionAppointment {
@@ -267,14 +267,6 @@ export const ReceptionAppointments: React.FC = () => {
         }
     };
 
-    const formatDate = (dateString: string) => {
-        try {
-            return new Intl.DateTimeFormat('vi-VN').format(new Date(dateString));
-        } catch {
-            return dateString;
-        }
-    };
-
     const formatDateTime = (dateString: string) => {
         try {
             return new Intl.DateTimeFormat('vi-VN', {
@@ -301,7 +293,7 @@ export const ReceptionAppointments: React.FC = () => {
     };
 
     const columns: DataTableColumn<ReceptionAppointment>[] = [
-        { header: 'Lịch khám', accessor: apt => <><div className={styles.primaryText}>{apt.appointmentCode}</div><div className={styles.appointmentTime}><Clock size={12} /> {formatDate(apt.appointmentDate)} {apt.startTime.substring(0,5)}</div></> },
+        { header: 'Lịch khám', accessor: apt => <><div className={styles.primaryText}>{apt.appointmentCode}</div><div className={styles.appointmentTime}><Clock size={12} /> {formatDateOnly(apt.appointmentDate)} {apt.startTime.substring(0,5)}</div></> },
         { header: 'Bệnh nhân', accessor: apt => <><div className={styles.primaryText}>{apt.patientName}</div><div className={styles.secondaryText}>{apt.patientPhone}</div></> },
         { header: 'Bác sĩ & chuyên khoa', accessor: apt => <><div className={styles.primaryText}>{apt.doctorName}</div><div className={styles.secondaryText}>{apt.specialtyName}</div></> },
         { header: 'Trạng thái', accessor: apt => getStatusBadge(apt.status) },
@@ -329,7 +321,7 @@ export const ReceptionAppointments: React.FC = () => {
                 <div className={styles.detailGrid}>
                     <div className={styles.factCard}><div className={styles.factLabel}>Bệnh nhân</div><div className={styles.primaryText}>{modal.apt.patientName}</div><div>{modal.apt.patientPhone}</div></div>
                     <div className={styles.factCard}><div className={styles.factLabel}>Bác sĩ & chuyên khoa</div><div className={styles.primaryText}>{modal.apt.doctorName}</div><div>{modal.apt.specialtyName}</div></div>
-                    <div className={styles.timeCard}><div className={styles.factLabel}>Thời gian khám</div><div className={styles.appointmentTime}><Clock size={16} className={styles.primaryIcon} />{formatDate(modal.apt.appointmentDate)} ({modal.apt.startTime.substring(0,5)} - {modal.apt.endTime.substring(0,5)})</div></div>
+                    <div className={styles.timeCard}><div className={styles.factLabel}>Thời gian khám</div><div className={styles.appointmentTime}><Clock size={16} className={styles.primaryIcon} />{formatDateOnly(modal.apt.appointmentDate)} ({modal.apt.startTime.substring(0,5)} - {modal.apt.endTime.substring(0,5)})</div></div>
                 </div>
                 <section className={styles.detailSection}><div className={styles.sectionLabel}>Lý do khám:</div><div className={styles.notePanel}>{modal.apt.reason || <span className={styles.secondaryText}>Không có ghi chú</span>}</div></section>
                 <section className={styles.departmentPanel}>

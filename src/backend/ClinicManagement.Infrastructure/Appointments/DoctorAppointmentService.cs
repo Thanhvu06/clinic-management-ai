@@ -128,7 +128,7 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
                         };
                     }).ToList();
 
-                var shiftName = sch.StartTime < new TimeOnly(12, 0) ? "Ca sáng" : "Ca chiều";
+                var shiftName = DoctorDashboardShifts.ShiftName(sch, _dbContext.OperatingHours.IsTwentyFourSeven);
                 var bookedCount = schSlots.Count(s => s.IsBooked);
 
                 shiftDtos.Add(new DoctorShiftDto
