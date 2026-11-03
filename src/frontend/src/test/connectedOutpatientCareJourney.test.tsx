@@ -218,7 +218,7 @@ describe('Connected Outpatient Care Journey - Frontend Tests', () => {
             // Select the readable visit label instead of entering an internal ID.
             const select = screen.getByRole('combobox', { name: 'Chọn lượt khám *' });
             fireEvent.mouseDown(select);
-            fireEvent.click(await screen.findByText('VIS-20260913-0101 — NGUYỄN VĂN THỬ NGHIỆM — 13/9/2026'));
+            fireEvent.click(await screen.findByText('VIS-20260913-0101 — NGUYỄN VĂN THỬ NGHIỆM — 13/09/2026'));
 
             // Submit
             const submitBtn = screen.getByRole('button', { name: /Tạo hóa đơn/i });

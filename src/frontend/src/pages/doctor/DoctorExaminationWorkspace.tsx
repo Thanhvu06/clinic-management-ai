@@ -1,7 +1,7 @@
 import { ClinicalEditor } from './ClinicalEditor';
 import { getGenderLabel } from '../../utils/genderLabels';
 import { getApiErrorMessage } from '../../utils/apiError';
-import { toLocalDateString, formatDateOnly } from '../../utils/formatters';
+import { toLocalDateString, formatDateOnly, formatDisplayDate } from '../../utils/formatters';
 import { DiagnosticAttachmentList } from '../../components/diagnostics/DiagnosticAttachmentList';
 import { PrescriptionSafetyPanel } from '../../components/prescriptions/PrescriptionSafetyPanel';
 import { Icd10CodeInput } from '../../components/diagnoses/Icd10CodeInput';
@@ -1102,7 +1102,7 @@ const DoctorExaminationContent: React.FC = () => {
                                     Vùng 2: Số liệu đo lần trước
                                 </div>
                                 <div className={tabStyles.previousMeasurementDate}>
-                                    Ngày đo: {new Date(prevMeasurement.recordedAtUtc).toLocaleDateString('vi-VN')} ({new Date(prevMeasurement.recordedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })})
+                                    Ngày đo: {formatDisplayDate(prevMeasurement.recordedAtUtc)} ({new Date(prevMeasurement.recordedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })})
                                 </div>
                                 <Row className={[tabStyles.responsiveFormRow, tabStyles.measurementGrid].join(' ')}>
                                     <Col xs={24} md={8} className={tabStyles.responsiveColumn}><div className={tabStyles.previousMeasurementTile}>
@@ -1372,7 +1372,7 @@ const DoctorExaminationContent: React.FC = () => {
                                     {
                                         header: "Thời điểm đo", accessor: (item) => {
                                             return <>
-                                                {new Date(item.recordedAtUtc).toLocaleDateString('vi-VN')} {new Date(item.recordedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                                {formatDisplayDate(item.recordedAtUtc)} {new Date(item.recordedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                                             </>;
                                         }
                                     },
