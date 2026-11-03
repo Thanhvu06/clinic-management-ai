@@ -99,14 +99,14 @@ it.each([
     ['lịch sử khám', 'visits', 'patient.my_visits'],
     ['toa thuốc của mình đâu', 'prescriptions', 'patient.my_prescriptions'],
     ['xem kết quả xét nghiệm', 'results', 'patient.my_diagnostic_results'],
-    ['hóa đơn tháng này', 'bills', 'patient.my_bills'],
+    ['hóa đơn tháng này', 'bills', undefined],
 ] as const)('T routes typed %s to %s', async (text, intent, code) => {
     const { result } = renderHook(() => useAiBookingFlow(), { wrapper });
     await act(async () => result.current.setInput(text));
     await act(async () => result.current.handleSendMessage(text));
     expect(post).toHaveBeenCalledTimes(1);
-    expect(post).toHaveBeenCalledWith(intent === 'booking' ? '/ai/booking-wizard' : '/ai/copilot/chat',
-        expect.objectContaining(intent === 'booking' ? { step: 'start' } : { message: text, suggestionCode: code }), expect.anything());
+    expect(post).toHaveBeenCalledWith(intent === 'booking' ? '/ai/booking-wizard' : code ? '/ai/copilot/chat' : '/ai/chat',
+        expect.objectContaining(intent === 'booking' ? { step: 'start' } : code ? { message: text, suggestionCode: code } : { message: text }), expect.anything());
     expect(result.current.input).toBe('');
     expect(result.current.messages.filter(m => m.role === 'user').map(m => m.content)).toEqual([text]);
     // In the same conversation, a null intent still uses the legacy symptom path.

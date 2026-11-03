@@ -75,7 +75,7 @@ public sealed class AiCopilotDataAccuracyTests(CustomWebApplicationFactory facto
         var active = new[] { AppointmentStatus.Pending, AppointmentStatus.Confirmed, AppointmentStatus.PendingReschedule, AppointmentStatus.PendingCancellation };
         var added = new List<Appointment>();
         foreach (var status in active.Concat(new[] { AppointmentStatus.Cancelled, AppointmentStatus.Completed, AppointmentStatus.NoShow, AppointmentStatus.CheckedIn, AppointmentStatus.InConsultation }))
-            added.Add(await AppointmentAsync(db, today, status));
+            added.Add(await AppointmentAsync(db, today.AddDays(1), status));
         var past = await AppointmentAsync(db, today.AddDays(-1), AppointmentStatus.Confirmed);
         var foreign = await AppointmentAsync(db, today.AddDays(1), AppointmentStatus.Confirmed, Patient2EntityId);
         var client = await CreateAuthenticatedClientAsync("pat1@test.com");

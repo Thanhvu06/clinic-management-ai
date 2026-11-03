@@ -10,8 +10,9 @@ import {
 } from "../contexts/ChatContext";
 import { useAuth } from "../auth/AuthContext";
 import axiosClient from "../api/axiosClient";
-import { isLocalHelpPhrase, isPatientReadAlias } from "../components/copilot/patientPresentation";
-import { classifyPatientTypedIntent, extractBookingHint } from "../components/copilot/patientTypedIntent";
+import { isLocalHelpPhrase, isPatientReadAlias, isSafeClientRoute } from "../components/copilot/patientPresentation";
+import { classifyPatientTypedIntent, doctorScheduleHint, extractBookingHint, isConsultationPriceQuestion, isFilteredPatientRead } from "../components/copilot/patientTypedIntent";
+import { patientAppointmentChangeCard } from "../components/copilot/patientAppointmentChangeCard";
 import { aiChatFailureMessage } from "../api/aiErrorMessages";
 import { sendRoleCopilotMessage } from "../api/aiCopilotApi";
 import type { ApiResponse } from "../types";
@@ -82,24 +83,7 @@ export interface AppointmentEntityDto {
     status: string;
 }
 
-export const isSafeClientRoute = (url?: string): boolean => {
-    if (!url || typeof url !== "string") return false;
-    if (url === "tel:115") return true;
-    if (!url.startsWith("/") || url.startsWith("//")) return false;
-    if (url.includes("://") || url.includes(":") || url.includes("\\") || /\s/.test(url)) return false;
-
-    const [path] = url.split(/[?#]/);
-    const allowedPathPrefixes = [
-        "/patient/book",
-        "/patient/appointments",
-        "/patient/diagnostic-results",
-        "/patient/prescriptions",
-        "/patient/invoices",
-        "/doctors"
-    ];
-
-    return allowedPathPrefixes.some(prefix => path === prefix || path.startsWith(prefix + "/"));
-};
+export { isSafeClientRoute };
 
 export const formatVietnameseDate = (dateStr?: string): string => {
     if (!dateStr) return "";
@@ -330,31 +314,27 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             return;
         }
 
-        // Explicit help and read aliases use the existing read-only role
-        // endpoint; legacy booking requests and payloads keep their own path.
-        if (!pendingPayload && !prefixMessage && (isLocalHelpPhrase(trimmed) || isPatientReadAlias(trimmed))) {
-            setInput('');
-            await handleSuggestion({ code: '', label: trimmed }, true, retryError);
-            return;
-        }
-
-        if (!pendingPayload && !prefixMessage && wizard?.textToken &&
-            ['specialty', 'doctor', 'day', 'slot', 'facility'].includes(wizard.step)) {
-            setInput('');
-            setMessages(previous => [...previous, { role: 'user', content: trimmed }]);
-            await handleWizardStep('text', wizard.textToken, undefined, false, undefined, trimmed);
-            return;
-        }
-
-        if (!pendingPayload && !prefixMessage) {
-            const intent = classifyPatientTypedIntent(trimmed);
-            if (intent) {
+        if (!pendingPayload && !prefixMessage && !isFilteredPatientRead(trimmed)) {
+            if (isLocalHelpPhrase(trimmed) || isPatientReadAlias(trimmed)) {
                 setInput('');
-                if (intent === 'booking') {
+                await handleSuggestion({ code: '', label: trimmed }, true, retryError);
+                return;
+            }
+            if (wizard?.textToken && !isConsultationPriceQuestion(trimmed) && ['specialty', 'doctor', 'day', 'slot', 'facility'].includes(wizard.step)) {
+                setInput('');
+                setMessages(previous => [...previous, { role: 'user', content: trimmed }]);
+                await handleWizardStep('text', wizard.textToken, undefined, false, undefined, trimmed);
+                return;
+            }
+            const intent = classifyPatientTypedIntent(trimmed);
+            const scheduleHint = doctorScheduleHint(trimmed);
+            if (intent || scheduleHint) {
+                setInput('');
+                if (intent === 'booking' || scheduleHint) {
                     setMessages(previous => [...previous, { role: 'user', content: trimmed }]);
                     const suggestions = messages.findLast(message => message.role === 'model')?.suggestions;
-                    await handleWizardStep('start', undefined, undefined, false, extractBookingHint(trimmed) ?? (suggestions?.length === 1 ? suggestions[0].specialtyName : undefined));
-                } else {
+                    await handleWizardStep('start', undefined, undefined, false, scheduleHint ?? extractBookingHint(trimmed) ?? (suggestions?.length === 1 ? suggestions[0].specialtyName : undefined));
+                } else if (intent) {
                     const codes = {
                         appointments: 'patient.my_appointments', visits: 'patient.my_visits',
                         prescriptions: 'patient.my_prescriptions', results: 'patient.my_diagnostic_results',
@@ -918,6 +898,15 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             }
         }
 
+        const change = patientAppointmentChangeCard(action, sessionIdRef.current, accountKeyRef.current,
+            (session, account, result, content) => {
+                if (session === sessionIdRef.current && account === accountKeyRef.current)
+                    setMessages(previous => [...previous, { role: "model", content, toolResults: [result] }]);
+            });
+        if (change) {
+            setMessages(previous => [...previous, { role: "model", content: change.title, copilotCards: [change] }]);
+            return;
+        }
         switch (action.type) {
             case "ViewSpecialty": {
                 if (action.payload.specialtyId) {

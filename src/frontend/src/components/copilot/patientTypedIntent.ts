@@ -27,7 +27,7 @@ export function classifyPatientTypedIntent(text: string): PatientTypedIntent | n
     if (any(['lich hen', 'lich kham', 'lich cua toi'])) return 'appointments';
     if (any(['luot kham', 'lich su kham'])) return 'visits';
     if (any(['don thuoc', 'toa thuoc'])) return 'prescriptions';
-    if (has('ket qua') && (any(['xet nghiem', 'can lam sang', 'sieu am', 'chup']) ||
+    if (has('ket qua') && (any(['xet nghiem', 'can lam sang', 'sieu am', 'chup', 'x quang', 'cong thuc mau', 'duong huyet', 'dien tim', 'men gan', 'chuc nang gan', 'chuc nang than']) ||
         (has('cua toi') && !has('kham benh')))) return 'results';
     if (any(['hoa don', 'bien lai', 'vien phi'])) return 'bills';
     return null;
@@ -78,4 +78,31 @@ export function extractBookingHint(text: string): string | null {
     while (name.length && isEdge(name[name.length - 1])) name = name.slice(0, -1);
     if (name.length === 0 || name.length > MAX_HINT_WORDS) return null;
     return name.join(' ');
+}
+
+export function isFilteredPatientRead(text: string): boolean {
+    const normalized = normalizeTypedText(text);
+    const intent = classifyPatientTypedIntent(text);
+    if ((intent === 'appointments' || !intent && /^lich sap toi(?: cua (?:toi|minh))?$/.test(normalized)) &&
+        /\b(?:lich hen|lich kham|lich) sap toi\b/.test(normalized)) return true;
+    return !!intent && intent !== 'booking' && intent !== 'appointments' && (
+        /\b\d{1,2}\/\d{1,2}\/\d{4}\b/.test(text) ||
+        /\b(?:hom nay|hom qua|thang (?:nay|truoc|\d{1,2})|gan nhat|moi nhat|(?:chua|da|cho) thanh toan)\b/.test(normalized) ||
+        intent === 'results' && (
+            /\b(?:sieu am|x quang|cong thuc mau|xet nghiem mau tong quat|duong huyet|dien tim|men gan|chuc nang gan|chuc nang than)\b/.test(normalized) ||
+            /\bket qua (?:xet nghiem|can lam sang) \S/.test(normalized.replace(/\b(?:cua toi|cua minh|nhe|nha|a)\b/g, '').trim())
+        )
+    );
+}
+
+export function doctorScheduleHint(text: string): string | undefined {
+    const normalized = normalizeTypedText(text);
+    return /^(?:bac si|bac sy|bsi|bs)\s+\S.+\b(?:(?:kham|lam viec|truc)\s+(?:(?:vao )?(?:ngay|hom) nao|khi nao)|(?:co|con) lich(?: kham)? khong|lich kham(?: the nao)?|khi nao(?: kham)?)(?: (?:a|nhe|nha|vay))?$/.test(normalized)
+        ? text : undefined;
+}
+
+export function isConsultationPriceQuestion(text: string): boolean {
+    const normalized = normalizeTypedText(text);
+    return /\bkham\b/.test(normalized) && /\b(?:gia|chi phi|phi)\b/.test(normalized) &&
+        /\b(?:bao nhieu|the nao|la may)\b/.test(normalized);
 }

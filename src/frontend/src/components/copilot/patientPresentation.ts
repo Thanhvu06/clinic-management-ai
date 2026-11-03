@@ -22,3 +22,22 @@ export const patientSuggestions = (message: ChatMessage | undefined, menu: AiSug
     const needsBooking = message?.missingFields?.some(field => /doctor|slot|reason/i.test(field)) || message?.bookingDraft && !message.bookingDraft.isComplete;
     return needsBooking && start ? [start, ...(items ?? []).filter(item => item.code !== start.code)].slice(0, 6) : items;
 };
+
+export const isSafeClientRoute = (url?: string): boolean => {
+    if (!url || typeof url !== "string") return false;
+    if (url === "tel:115") return true;
+    if (!url.startsWith("/") || url.startsWith("//")) return false;
+    if (url.includes("://") || url.includes(":") || url.includes("\\") || /\s/.test(url)) return false;
+
+    const [path] = url.split(/[?#]/);
+    const allowedPathPrefixes = [
+        "/patient/book",
+        "/patient/appointments",
+        "/patient/diagnostic-results",
+        "/patient/prescriptions",
+        "/patient/invoices",
+        "/doctors"
+    ];
+
+    return allowedPathPrefixes.some(prefix => path === prefix || path.startsWith(prefix + "/"));
+};

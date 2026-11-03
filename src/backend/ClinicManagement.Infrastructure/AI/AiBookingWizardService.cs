@@ -26,7 +26,18 @@ public sealed class AiBookingWizardService(
     IAiSafetyGuard safety, IAiAuditService audit, AiBookingWizardTokens tokens, AiBookingReviewIssuer review)
 {
     private static readonly string[] Reasons = { "Khám tổng quát", "Tái khám theo hẹn", "Tư vấn kết quả xét nghiệm" };
-    private static readonly Regex HintPrefix = new(@"^(?:(?:bac si|bs|bsi|doctor|dr|chuyen khoa|khoa|kham)\s+)+", RegexOptions.CultureInvariant);
+    private static readonly Regex HintPrefix = new(@"^(?:(?:bac si|bac sy|bs|bsi|doctor|dr|chuyen khoa|khoa|kham)\s+)+", RegexOptions.CultureInvariant);
+    private static readonly Regex DoctorScheduleQuestion = new(
+        @"\s+(?:(?:kham|lam viec|truc)\s+(?:(?:vao\s+)?(?:ngay|hom)\s+nao|khi nao)|(?:co|con)\s+lich(?:\s+kham)?\s+khong|lich kham(?:\s+the nao)?|khi nao(?:\s+kham)?)(?:\s+(?:a|nhe|nha|vay))?$",
+        RegexOptions.CultureInvariant);
+
+    internal static string StripScheduleQuestion(string value)
+    {
+        var normalized = AiTextNormalizer.Normalize(value);
+        var match = DoctorScheduleQuestion.Match(AiTextNormalizer.NormalizeForComparison(normalized).TrimEnd('?', '.', '!', ' '));
+        return match.Success ? normalized[..match.Index] : value;
+    }
+
     private static readonly Regex DoctorHintSuffix = new(@"\s+(?:a|nha|nhe|oi|voi|giup|minh|toi)$", RegexOptions.CultureInvariant);
     private const int MaxListedOptions = 12;
 
@@ -88,7 +99,20 @@ public sealed class AiBookingWizardService(
         {
             try
             {
-                var prefilled = await ResolveHintAsync(hint, fresh);
+                var choices = new List<DoctorBasicDto>();
+                var prefilled = await ResolveHintAsync(hint, fresh, ambiguousDoctors: choices);
+                if (choices.Count > 1)
+                {
+                    var response = new AiBookingWizardResponseDto
+                    {
+                        Step = "doctor", Message = "Tìm thấy nhiều bác sĩ trùng tên. Bạn hãy chọn bác sĩ muốn khám."
+                    };
+                    foreach (var doctor in choices)
+                        Add(response, fresh with { Stage = BookingWizardStage.Day, SpecialtyId = doctor.SpecialtyId!.Value, DoctorId = doctor.Id },
+                            doctor.FullName, user, session);
+                    Back(response, fresh, user, session);
+                    return response;
+                }
                 if (prefilled is not null)
                 {
                     var response = await RenderAsync(prefilled, user, session, ct);
@@ -103,10 +127,11 @@ public sealed class AiBookingWizardService(
         return await RenderAsync(fresh, user, session, ct);
     }
 
-    private async Task<BookingWizardSelection?> ResolveHintAsync(string hint, BookingWizardSelection fresh, bool doctorOnly = false)
+    private async Task<BookingWizardSelection?> ResolveHintAsync(string hint, BookingWizardSelection fresh, bool doctorOnly = false, List<DoctorBasicDto>? ambiguousDoctors = null)
     {
         var text = NormalizeHint(hint);
-        var name = HintPrefix.Replace(text, string.Empty).Trim();
+        var scheduleQuestion = DoctorScheduleQuestion.Match(text);
+        var name = HintPrefix.Replace(scheduleQuestion.Success ? text[..scheduleQuestion.Index] : text, string.Empty).Trim();
         if (name.Length == 0) return null;
 
         // Same sources and visible lists as the specialty and doctor steps.
@@ -131,6 +156,7 @@ public sealed class AiBookingWizardService(
         }
         if (doctorMatches.Count == 1)
             return fresh with { Stage = BookingWizardStage.Day, SpecialtyId = doctorMatches[0].SpecialtyId!.Value, DoctorId = doctorMatches[0].Id, AnyDoctor = false };
+        if (scheduleQuestion.Success && doctorMatches.Count > 1) ambiguousDoctors?.AddRange(doctorMatches);
         if (doctorOnly || doctorMatches.Count > 1) return null;
 
         var specialtyMatches = aiSpecialties.Where(specialty =>

@@ -1,4 +1,5 @@
 import React from 'react';
+import { PatientAppointmentChangeForm, type PatientAppointmentChangeData } from './PatientAppointmentChangeForm';
 import { CopilotWorkspaceReadCard } from './CopilotWorkspaceReadCards';
 import type { AiCopilotCard } from '../../api/aiCopilotApi';
 import { formatDateOnly } from '../../utils/formatters';
@@ -262,11 +263,17 @@ const PatientResultsCard: React.FC<{ data: unknown }> = ({ data }) => {
     })}</List>;
 };
 
+function patientPrescriptionTitle(prescription: DataRecord): string {
+    const code = text(prescription.prescriptionCode);
+    const date = text(prescription.prescribedDate);
+    return code && date ? code + ' — ' + formatDateOnly(date) : 'Đơn thuốc của bạn';
+}
+
 const PrescriptionCard: React.FC<{ data: unknown; patient?: boolean }> = ({ data, patient = false }) => {
     const items = asRecords(data);
     if (!items.length) return <EmptyData message={patient ? 'Bạn chưa có đơn thuốc đã phát hành.' : 'Ca khám chưa có đơn thuốc được công bố trong dữ liệu này.'} />;
     return <List>{items.slice(0, 20).map((prescription, index) => <article className={styles.typedItem} key={index}>
-        <strong>{patient ? 'Đơn thuốc của bạn' : 'Đơn thuốc của ca khám'}</strong>
+        <strong>{patient ? patientPrescriptionTitle(prescription) : 'Đơn thuốc của ca khám'}</strong>
         <StatusLine label="Trạng thái đơn" value={prescription.status} />
         <StatusLine label="Kê lúc" value={prescription.CreatedAt ?? prescription.createdAt} date />
         <StatusLine label="Phát lúc" value={prescription.DispensedAt ?? prescription.dispensedAt} date />
@@ -520,6 +527,10 @@ export const renderCopilotCardData = (card: AiCopilotCard): React.ReactNode => {
         case 'available_slots': return <SlotCard data={card.data} />;
         case 'facilities': return <FacilityCard data={card.data} />;
         case 'pricing_catalog': return <PricingCard data={card.data} />;
+        case 'patient_appointment_change_form': {
+            const form = card.data as PatientAppointmentChangeData | undefined;
+            return typeof form?.onPreview === 'function' ? <PatientAppointmentChangeForm data={form} /> : null;
+        }
         case 'appointments': return <AppointmentCard data={card.data} />;
         case 'appointment_detail': return <AppointmentCard data={card.data} detail />;
         case 'patient_visits': return <PatientVisitsCard data={card.data} />;

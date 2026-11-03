@@ -1943,7 +1943,7 @@ public class AiActionAssistantTests : IntegrationTestBase
         Assert.Equal("PricingInquiryResolved", res.Data.DialogueOutcome);
         Assert.Equal("NotCalled", res.Data.ProviderStatus);
         Assert.Contains("bảng giá chi phí khám", res.Data.Message.ToLowerInvariant());
-        Assert.Contains("VNĐ", res.Data.Message);
+        Assert.Contains("₫", res.Data.Message);
     }
 
     [Fact]
@@ -1997,7 +1997,7 @@ public class AiActionAssistantTests : IntegrationTestBase
         Assert.Equal("PricingInquiryResolved", res.Data.DialogueOutcome);
         Assert.Equal("NotCalled", res.Data.ProviderStatus);
         Assert.Contains("Nhi khoa", res.Data.Message);
-        Assert.Contains("180,000", res.Data.Message);
+        Assert.Contains("180.000", res.Data.Message);
 
         // Crucial: The user's active draft for Cardiology was preserved and NOT overwritten by Pediatrics
         Assert.NotNull(res.Data.BookingDraft);

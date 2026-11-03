@@ -227,7 +227,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
         // can never be silently rebound to another account or revived after expiry.
         // Stateless cancellation intentionally remains stateless until its scope is
         // proven, so an ambiguous cancel cannot create a new session as a side effect.
-        var likelyCancel = string.Equals(request.Intent, AiChatIntentTypes.CancelDraft, StringComparison.OrdinalIgnoreCase) ||
+        var likelyCancel = AppointmentChange(rawMessage) is not null || string.Equals(request.Intent, AiChatIntentTypes.CancelDraft, StringComparison.OrdinalIgnoreCase) ||
                            Regex.IsMatch(lowerMsg, @"(?<![\p{L}\p{M}\p{N}_])(?:hủy|huỷ|huy\s+(?:lich|hen|dat))(?![\p{L}\p{M}\p{N}_])",
                                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         // If a caller is continuing from a server-bound snapshot, leave the
@@ -314,7 +314,6 @@ public partial class AiSpecialtyService : IAiSpecialtyService
             ContextSnapshotId = request.ContextSnapshotId
         };
 
-        // Both Vietnamese spellings use the existing cancellation classifier, without changing its model or rules.
         var classificationMessage = cleanMessage.Replace("huỷ", "hủy", StringComparison.OrdinalIgnoreCase);
         var localClassification = _conversationPipeline?.Analyze(classificationMessage, intentContext).Intent
             ?? _intentClassifier.Classify(classificationMessage, intentContext);
@@ -323,7 +322,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
             : localClassification.Intent;
 
         var passiveDraftVersion = ResolveDraftVersion(request.DraftVersion, hasSubstantiveChanges: false);
-        if (await TryResolveLocalPatientReadAsync(request, cleanMessage, passiveDraftVersion, cancellationToken) is { } localResponse)
+        if (await ResolvePatientChatReadAsync(request, cleanMessage, passiveDraftVersion, cancellationToken) is { } localResponse)
             return localResponse;
 
         // 3.1 Unclear or Out-of-Scope: Politeness Guardian (Prevents dropping into Degraded or polluting Reason)
@@ -344,162 +343,8 @@ public partial class AiSpecialtyService : IAiSpecialtyService
             return WithDraftVersionSync(unclearResponse, passiveDraftVersion);
         }
 
-        // 3.2 Cancel Draft: Clears active draft in session without touching database appointments
         if (resolvedIntent == AiChatIntentTypes.CancelDraft)
-        {
-            var currentUserId = _currentUserService.UserId;
-            var nowUtc = _dateTimeProvider.UtcNow;
-            // A legacy draft containing selections but no persisted identity belongs
-            // only to this client; clearing it must not cancel another saved tab.
-            var hasLocalDraft = request.PendingSpecialtyId.HasValue &&
-                string.IsNullOrWhiteSpace(request.SessionId) && string.IsNullOrWhiteSpace(request.DraftId) &&
-                string.IsNullOrWhiteSpace(request.ContextSnapshotId);
-            var scopeResult = await _snapshotStore.TryResolveCancelScopeFromSnapshotAsync(
-                request.ContextSnapshotId,
-                currentUserId,
-                request.SessionId,
-                request.DraftId,
-                nowUtc,
-                cancellationToken);
-
-            // Infer only one live, caller-owned draft. Multiple tabs remain fail-closed;
-            // never replace a supplied snapshot or silently target a different conversation.
-            var activeDraftScopes = await _dbContext.AiSessions.AsNoTracking()
-                .Where(s => currentUserId.HasValue && s.UserId == currentUserId && s.IsActive &&
-                            s.ExpiresAtUtc > nowUtc && s.ActiveDraftId != null && s.ActiveDraftId != "")
-                .Select(s => new { s.SessionId, DraftId = s.ActiveDraftId! })
-                .Union(_dbContext.AiSelectionSnapshots.AsNoTracking()
-                    .Where(s => currentUserId.HasValue && s.UserId == currentUserId && !s.IsRevoked &&
-                                s.ExpiresAtUtc > nowUtc && s.SessionId != null && s.SessionId != "" &&
-                                s.DraftId != null && s.DraftId != "")
-                    .Select(s => new { SessionId = s.SessionId!, DraftId = s.DraftId! }))
-                .Take(2)
-                .ToListAsync(cancellationToken);
-
-            if (!scopeResult.HasResolved && !hasLocalDraft && activeDraftScopes.Count == 1 &&
-                string.IsNullOrWhiteSpace(request.ContextSnapshotId))
-            {
-                var candidate = activeDraftScopes[0];
-                if ((string.IsNullOrWhiteSpace(request.SessionId) || request.SessionId.Trim() == candidate.SessionId) &&
-                    (string.IsNullOrWhiteSpace(request.DraftId) || request.DraftId.Trim() == candidate.DraftId))
-                {
-                    scopeResult = await _snapshotStore.TryResolveCancelScopeFromSnapshotAsync(
-                        null, currentUserId, candidate.SessionId, candidate.DraftId, nowUtc, cancellationToken);
-                }
-            }
-
-            var hasResolvedScope = scopeResult.HasResolved;
-            var cancelTargetSessionId = scopeResult.SessionId;
-            var cancelTargetDraftId = scopeResult.DraftId;
-
-            if (hasResolvedScope && cancelTargetSessionId != null && cancelTargetDraftId != null)
-            {
-                await _snapshotStore.InvalidateDraftSnapshotsForCancelAsync(
-                    cancelTargetDraftId,
-                    cancelTargetSessionId,
-                    currentUserId,
-                    facilityId: null,
-                    nowUtc: nowUtc,
-                    cancellationToken: cancellationToken);
-
-                if (currentUserId.HasValue)
-                {
-                    await _confirmationStore.RevokeForDraftAsync(
-                        currentUserId.Value,
-                        cancelTargetSessionId,
-                        cancelTargetDraftId,
-                        cancellationToken);
-                }
-
-                await _auditService.LogActionAsync(new AiAuditLogEntry
-                {
-                    UserId = currentUserId,
-                    SessionId = cancelTargetSessionId,
-                    DraftId = cancelTargetDraftId,
-                    DraftVersion = passiveDraftVersion,
-                    ActionType = "CancelDraft",
-                    Outcome = "DraftCancelled"
-                }, cancellationToken);
-
-                var cancelResponse = new AiChatResponseDto
-                {
-                    Message = "Đã hủy bản nháp đặt lịch hiện tại. Bạn có cần hỗ trợ gì khác không?",
-                    DialogueOutcome = "DraftCancelled",
-                    PrimaryIntent = AiChatIntentTypes.CancelDraft,
-                    AssistantStatus = "Online",
-                    ProviderStatus = "NotCalled",
-                    PromptVersion = GeminiAiProvider.CurrentPromptVersion,
-                    BookingDraft = null,
-                    SessionId = cancelTargetSessionId,
-                    DraftId = null
-                };
-                return WithDraftVersionSync(cancelResponse, passiveDraftVersion);
-            }
-
-            if ((!hasLocalDraft && activeDraftScopes.Count > 0) ||
-                !string.IsNullOrWhiteSpace(request.DraftId) ||
-                !string.IsNullOrWhiteSpace(request.ContextSnapshotId))
-            {
-                await _auditService.LogActionAsync(new AiAuditLogEntry
-                {
-                    UserId = currentUserId,
-                    SessionId = request.SessionId,
-                    DraftId = request.DraftId,
-                    DraftVersion = passiveDraftVersion,
-                    ActionType = "CancelDraft",
-                    Outcome = "ClarificationRequired",
-                    ErrorCode = "AMBIGUOUS_SCOPE"
-                }, cancellationToken);
-
-                // Fail closed: do NOT revoke snapshots across sessions/drafts when target scope cannot be uniquely determined
-                var failClosedCancelResponse = new AiChatResponseDto
-                {
-                    Message = "Không thể xác định yêu cầu đặt lịch cần hủy. Vui lòng quay lại cuộc trò chuyện đang đặt lịch và chọn Hủy.",
-                    ClarificationPrompt = "Vui lòng quay lại cuộc trò chuyện có yêu cầu đặt lịch cần hủy và chọn Hủy.",
-                    DialogueOutcome = "ClarificationRequired",
-                    PrimaryIntent = AiChatIntentTypes.CancelDraft,
-                    AssistantStatus = "Online",
-                    ProviderStatus = "NotCalled",
-                    PromptVersion = GeminiAiProvider.CurrentPromptVersion,
-                    BookingDraft = null,
-                    SessionId = !string.IsNullOrWhiteSpace(request.SessionId) ? request.SessionId.Trim() : null,
-                    DraftId = null
-                };
-                return WithDraftVersionSync(failClosedCancelResponse, passiveDraftVersion);
-            }
-
-            // A legacy client-only draft can still be cleared. Otherwise, distinguish
-            // real upcoming appointments from an empty account instead of claiming cancellation.
-            var today = _dateTimeProvider.VietnamToday;
-            var time = _dateTimeProvider.VietnamTime;
-            var hasUpcomingAppointment = currentUserId.HasValue && await _dbContext.Appointments.AsNoTracking()
-                .AnyAsync(a => a.Patient.UserId == currentUserId.Value &&
-                    ClinicManagement.Domain.Enums.AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status) &&
-                    (a.AppointmentDate > today || (a.AppointmentDate == today && a.StartTime > time)), cancellationToken);
-
-            var statelessCancelResponse = new AiChatResponseDto
-            {
-                Message = hasLocalDraft
-                    ? "Đã hủy bản nháp đặt lịch hiện tại. Bạn có cần hỗ trợ gì khác không?"
-                    : hasUpcomingAppointment
-                        ? "Bạn có lịch hẹn sắp tới. Vui lòng mở Lịch hẹn của tôi, chọn lịch hẹn cần hủy và gửi yêu cầu hủy."
-                        : "Hiện bạn chưa có lịch hẹn hay yêu cầu đặt lịch nào đang chờ để hủy.",
-                DialogueOutcome = hasLocalDraft ? "DraftCancelled" : hasUpcomingAppointment ? "NavigationInquiryResolved" : "NothingToCancel",
-                PrimaryIntent = AiChatIntentTypes.CancelDraft,
-                AssistantStatus = "Online",
-                ProviderStatus = "NotCalled",
-                PromptVersion = GeminiAiProvider.CurrentPromptVersion,
-                BookingDraft = null,
-                SessionId = request.SessionId,
-                DraftId = null
-            };
-            if (!hasLocalDraft && hasUpcomingAppointment)
-            {
-                await AddNavigationActionsIfRequestedAsync(cleanMessage, string.Empty, AiActionTypes.ViewMyAppointments,
-                    statelessCancelResponse, cancellationToken);
-            }
-            return WithDraftVersionSync(statelessCancelResponse, passiveDraftVersion);
-        }
+            return await ResolveCancellationAsync(request, cleanMessage, passiveDraftVersion, cancellationToken);
 
         // 3.3 Pricing Inquiry: Honest Consultation Fees from DB
         if (resolvedIntent == AiChatIntentTypes.PricingInquiry)
@@ -2565,7 +2410,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
 
         if (targetSpec != null)
         {
-            response.Message = $"Chi phí khám chuyên khoa **{targetSpec.Name}** tại ClinicCare là **{targetSpec.ConsultationFee:N0} VNĐ** / lượt khám (chưa bao gồm các dịch vụ cận lâm sàng hoặc thuốc nếu có chỉ định của bác sĩ).";
+            response.Message = $"Chi phí khám chuyên khoa **{targetSpec.Name}** tại ClinicCare là **{Common.BusinessDisplay.Money(targetSpec.ConsultationFee)}** / lượt khám (chưa bao gồm các dịch vụ cận lâm sàng hoặc thuốc nếu có chỉ định của bác sĩ).";
         }
         else
         {
@@ -2573,7 +2418,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
             sb.AppendLine("Bảng giá chi phí khám tham khảo tại Phòng khám ClinicCare theo từng chuyên khoa:");
             foreach (var s in specialtiesWithFee.Take(6))
             {
-                sb.AppendLine($"- **Khoa {s.Name}**: {s.ConsultationFee:N0} VNĐ / lượt khám");
+                sb.AppendLine($"- **Khoa {s.Name}**: {Common.BusinessDisplay.Money(s.ConsultationFee)} / lượt khám");
             }
             sb.AppendLine("\n*Lưu ý: Chi phí trên là phí khám ban đầu, chưa bao gồm các chỉ định cận lâm sàng phát sinh nếu có.*");
             response.Message = sb.ToString();
@@ -2954,7 +2799,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
         var docMatch = doctorNamePattern.Match(cleanMessage);
         if (docMatch.Success)
         {
-            var rawName = docMatch.Groups[1].Value;
+            var rawName = AiBookingWizardService.StripScheduleQuestion(docMatch.Groups[1].Value);
             var delimiterMatch = Regex.Match(rawName, @"^(.*?)(?:\s+(?:vào|từ|lúc|ngày|khoa|chuyên khoa|sáng|chiều|tối)\b|[,\.\?!])", RegexOptions.IgnoreCase);
             var candidateName = (delimiterMatch.Success ? delimiterMatch.Groups[1].Value : rawName).Trim();
             var normCandidate = NormalizeVietnamese(candidateName);
