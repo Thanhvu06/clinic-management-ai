@@ -152,10 +152,17 @@ const PatientMedicalChatWidget: React.FC = () => {
     }, [isOpen]);
     useEffect(() => {
         const previous = previousMessagesRef.current;
-        const wizardChanged = wizard !== previousWizardRef.current;
+        const previousWizard = previousWizardRef.current;
+        const wizardChanged = wizard !== previousWizard;
         previousMessagesRef.current = messages;
         previousWizardRef.current = wizard;
         if (!isOpen || (messages === previous && !wizardChanged)) return;
+        if (wizard && wizard.step !== previousWizard?.step) {
+            const area = messageAreaRef.current;
+            if (area) nearBottomRef.current = area.scrollHeight - area.scrollTop - area.clientHeight <= 80;
+            setHasNewMessages(false);
+            return;
+        }
         const ownMessage = messages.slice(previous.length).some(message => message.role === 'user');
         if (nearBottomRef.current) scrollToLatest();
         else if (messages.length > previous.length || (wizardChanged && wizard)) setHasNewMessages(true);
@@ -463,7 +470,7 @@ const PatientMedicalChatWidget: React.FC = () => {
                             {emptySuggestions && !activeSuggestions?.length && <div className={styles.quickPrompts}>{QUICK_PROMPTS.map(qp => <button key={qp.label} type="button" className={styles.quickPromptChip} disabled={suggestionsBusy} onClick={() => void handleSendMessage(qp.label, { intent: qp.intent })}>{qp.label}</button>)}</div>}
                         </div>}
                         {history.filter(({ idx }) => reviewIndex < 0 || idx < reviewIndex).map(({ msg, idx }) => renderMessage(msg, idx))}
-                        <BookingWizard state={wizard} busy={loading || submittingBooking} onStep={handleWizardStep} scrollOnStepChange={false} reviewContent={reviewIndex >= 0 ? <>{renderMessage(messages[reviewIndex], reviewIndex)}{history.filter(({ idx }) => idx > reviewIndex).map(({ msg, idx }) => renderMessage(msg, idx))}</> : undefined} />
+                        <BookingWizard state={wizard} busy={loading || submittingBooking} onStep={handleWizardStep} reviewContent={reviewIndex >= 0 ? <>{renderMessage(messages[reviewIndex], reviewIndex)}{history.filter(({ idx }) => idx > reviewIndex).map(({ msg, idx }) => renderMessage(msg, idx))}</> : undefined} />
                         {loading && (
                             <div className={`${styles.messageRow} ${styles.rowModel}`}>
                                 <div className={`${styles.bubble} ${styles.bubbleModel}`}>

@@ -91,7 +91,7 @@ it('renders ten messages in order and keeps typed wizard messages above the fina
     expect(post.mock.lastCall?.[1]).toMatchObject({ step: 'text', text: 'bác sĩ khải á' });
 });
 
-it('keeps a reader above the bottom in place when the wizard changes steps', async () => {
+it('aligns a new wizard step at the top even when the reader is above the bottom', async () => {
     mockWizard('specialty', 'Chọn chuyên khoa');
     mockWizard('day', 'Chọn ngày khám');
     openChat();
@@ -103,7 +103,6 @@ it('keeps a reader above the bottom in place when the wizard changes steps', asy
     vi.mocked(HTMLElement.prototype.scrollIntoView).mockClear();
     send('bác sĩ khải á');
     await screen.findByRole('heading', { name: 'Chọn ngày khám' });
-    expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Có tin nhắn mới' }));
-    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ behavior: 'instant', block: 'end' });
+    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledExactlyOnceWith({ behavior: 'instant', block: 'start' });
+    expect(screen.queryByRole('button', { name: 'Có tin nhắn mới' })).not.toBeInTheDocument();
 });
