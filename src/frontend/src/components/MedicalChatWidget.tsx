@@ -99,12 +99,11 @@ const PatientMedicalChatWidget: React.FC = () => {
     const launcherRef = useRef<HTMLButtonElement>(null);
     const chatWindowRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
-    const [historyExpanded, setHistoryExpanded] = useState(false);
     const [hasNewMessages, setHasNewMessages] = useState(false);
     const messageAreaRef = useRef<HTMLDivElement>(null);
     const nearBottomRef = useRef(true);
-    const wizardHistoryLimitRef = useRef<number | null>(null);
     const previousMessagesRef = useRef<typeof messages>([]);
+    const previousWizardRef = useRef<typeof wizard>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const location = useLocation();
     const { user } = useAuth();
@@ -153,18 +152,15 @@ const PatientMedicalChatWidget: React.FC = () => {
     }, [isOpen]);
     useEffect(() => {
         const previous = previousMessagesRef.current;
+        const wizardChanged = wizard !== previousWizardRef.current;
         previousMessagesRef.current = messages;
-        if (!isOpen || messages === previous || wizard) return;
+        previousWizardRef.current = wizard;
+        if (!isOpen || (messages === previous && !wizardChanged)) return;
         const ownMessage = messages.slice(previous.length).some(message => message.role === 'user');
-        if (nearBottomRef.current || ownMessage) scrollToLatest();
-        else if (messages.length > previous.length) setHasNewMessages(true);
-        if (ownMessage) inputRef.current?.focus();
+        if (nearBottomRef.current) scrollToLatest();
+        else if (messages.length > previous.length || (wizardChanged && wizard)) setHasNewMessages(true);
+        if (ownMessage && !wizard) inputRef.current?.focus({ preventScroll: true });
     }, [messages, isOpen, wizard]);
-
-    useEffect(() => {
-        if (!wizard) wizardHistoryLimitRef.current = null;
-        else if (wizardHistoryLimitRef.current === null) wizardHistoryLimitRef.current = messages.length;
-    }, [wizard, messages.length]);
 
     // Accessible keyboard handling: Escape and Tab Focus Trap
     useEffect(() => {
@@ -240,10 +236,6 @@ const PatientMedicalChatWidget: React.FC = () => {
             (version === undefined && (activeDraft?.version ?? 1) > 1);
     };
     const history = messages.map((msg, idx) => ({ msg, idx })).filter(({ msg, idx }) => idx !== reviewIndex && !(idx === 0 && msg.content === DEFAULT_AI_MESSAGE.content));
-    const wizardHistoryLimit = wizardHistoryLimitRef.current ?? messages.length;
-    const priorHistory = wizard ? history.filter(({ idx }) => idx < (reviewIndex >= 0 ? reviewIndex : wizardHistoryLimit)) : history;
-    const hiddenCount = wizard ? priorHistory.length : history.length > 6 ? Math.max(0, history.length - 4) : 0;
-    const visibleHistory = historyExpanded ? priorHistory : wizard ? [] : history.slice(hiddenCount);
     const latestMessage = messages[latestAssistantIndex];
     const announcement = (isNotUnderstood(latestMessage) ? NOT_UNDERSTOOD_MESSAGE : errorMsg || latestMessage?.content || '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[*_#`>]/g, '').slice(0, 200);
     const renderMessage = (msg: typeof messages[number], idx: number) => (
@@ -470,9 +462,8 @@ const PatientMedicalChatWidget: React.FC = () => {
                             <span>Thông tin chỉ mang tính tham khảo, không thay thế chẩn đoán y khoa.</span></> : <p>Xin chào{user?.fullName ? `, ${user.fullName}` : ''}! Thông tin chỉ mang tính tham khảo, không thay thế chẩn đoán y khoa.</p>}
                             {emptySuggestions && !activeSuggestions?.length && <div className={styles.quickPrompts}>{QUICK_PROMPTS.map(qp => <button key={qp.label} type="button" className={styles.quickPromptChip} disabled={suggestionsBusy} onClick={() => void handleSendMessage(qp.label, { intent: qp.intent })}>{qp.label}</button>)}</div>}
                         </div>}
-                        {hiddenCount > 0 && <button type="button" className={styles.textLink} onClick={() => setHistoryExpanded(value => !value)}>{historyExpanded ? 'Thu gọn' : `Xem ${hiddenCount} tin nhắn trước`}</button>}
-                        {visibleHistory.map(({ msg, idx }) => renderMessage(msg, idx))}
-                    <BookingWizard state={wizard} busy={loading || submittingBooking} onStep={handleWizardStep} reviewContent={reviewIndex >= 0 ? <>{renderMessage(messages[reviewIndex], reviewIndex)}{history.filter(({ idx }) => idx > reviewIndex).map(({ msg, idx }) => renderMessage(msg, idx))}</> : undefined} />
+                        {history.filter(({ idx }) => reviewIndex < 0 || idx < reviewIndex).map(({ msg, idx }) => renderMessage(msg, idx))}
+                        <BookingWizard state={wizard} busy={loading || submittingBooking} onStep={handleWizardStep} scrollOnStepChange={false} reviewContent={reviewIndex >= 0 ? <>{renderMessage(messages[reviewIndex], reviewIndex)}{history.filter(({ idx }) => idx > reviewIndex).map(({ msg, idx }) => renderMessage(msg, idx))}</> : undefined} />
                         {loading && (
                             <div className={`${styles.messageRow} ${styles.rowModel}`}>
                                 <div className={`${styles.bubble} ${styles.bubbleModel}`}>
@@ -485,7 +476,6 @@ const PatientMedicalChatWidget: React.FC = () => {
                                 </div>
                             </div>
                         )}
-                        {wizard && reviewIndex < 0 && history.filter(({ idx }) => idx >= wizardHistoryLimit).map(({ msg, idx }) => renderMessage(msg, idx))}
                         <div ref={messagesEndRef} />
                     </div>
 

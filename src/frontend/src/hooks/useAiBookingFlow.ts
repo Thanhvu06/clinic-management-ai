@@ -352,8 +352,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 setInput('');
                 if (intent === 'booking') {
                     setMessages(previous => [...previous, { role: 'user', content: trimmed }]);
-                    // Only this typed start carries a hint; chips and retries start without one.
-                    await handleWizardStep('start', undefined, undefined, false, extractBookingHint(trimmed) ?? undefined);
+                    const suggestions = messages.findLast(message => message.role === 'model')?.suggestions;
+                    await handleWizardStep('start', undefined, undefined, false, extractBookingHint(trimmed) ?? (suggestions?.length === 1 ? suggestions[0].specialtyName : undefined));
                 } else {
                     const codes = {
                         appointments: 'patient.my_appointments', visits: 'patient.my_visits',

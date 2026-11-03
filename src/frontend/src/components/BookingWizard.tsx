@@ -11,18 +11,19 @@ interface Props {
     busy: boolean;
     onStep: (step: AiBookingWizardRequest["step"], token?: string, reason?: string) => Promise<void>;
     reviewContent?: ReactNode;
+    scrollOnStepChange?: boolean;
 }
 
-export const BookingWizard = ({ state, busy, onStep, reviewContent }: Props) => {
+export const BookingWizard = ({ state, busy, onStep, reviewContent, scrollOnStepChange = true }: Props) => {
     const [reason, setReason] = useState("");
     const [selections, setSelections] = useState<string[]>([]);
     const reasonId = useId();
     const heading = useRef<HTMLHeadingElement>(null);
     const card = useRef<HTMLElement>(null);
     useEffect(() => {
-        card.current?.scrollIntoView({ block: 'start', behavior: 'instant' });
+        if (scrollOnStepChange) card.current?.scrollIntoView({ block: 'start', behavior: 'instant' });
         heading.current?.focus({ preventScroll: true });
-    }, [state?.step]);
+    }, [state?.step, scrollOnStepChange]);
     if (!state) return null;
     const hasFacilityStep = state.step === 'facility' || state.summary?.requiresFacilitySelection === true;
     const steps = allSteps.filter(step => hasFacilityStep || step !== 'facility');
