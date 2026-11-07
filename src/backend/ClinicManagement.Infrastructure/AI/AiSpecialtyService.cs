@@ -324,10 +324,10 @@ public partial class AiSpecialtyService : IAiSpecialtyService
             : localClassification.Intent;
 
         var passiveDraftVersion = ResolveDraftVersion(request.DraftVersion, hasSubstantiveChanges: false);
-        if (await ResolvePatientChatReadAsync(request, cleanMessage, passiveDraftVersion, cancellationToken) is { } localResponse)
-            return localResponse;
+        if (await ResolveKnowledgeAsync(request, cleanMessage, resolvedIntent, localClassification, passiveDraftVersion, cancellationToken, early: true) is { } earlyKnowledgeResponse) return earlyKnowledgeResponse;
+        if (await ResolvePatientChatReadAsync(request, cleanMessage, passiveDraftVersion, cancellationToken) is { } localResponse) return localResponse;
 
-        if (await ResolveKnowledgeAsync(request, cleanMessage, resolvedIntent, passiveDraftVersion, cancellationToken) is { } knowledgeResponse)
+        if (await ResolveKnowledgeAsync(request, cleanMessage, resolvedIntent, localClassification, passiveDraftVersion, cancellationToken) is { } knowledgeResponse)
             return knowledgeResponse;
 
         // 3.1 Unclear or Out-of-Scope: Politeness Guardian (Prevents dropping into Degraded or polluting Reason)

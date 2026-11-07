@@ -11,9 +11,10 @@ public partial class AiSpecialtyService
     private readonly IClinicKnowledgeAnswerer? _knowledgeAnswerer;
 
     private async Task<AiChatResponseDto?> ResolveKnowledgeAsync(AiChatRequestDto request, string message,
-        string intent, int version, CancellationToken ct)
+        string intent, ClinicManagement.Application.AI.Interfaces.IntentClassificationResult classification, int version, CancellationToken ct, bool early = false)
     {
-        if (_knowledgeAnswerer is null || !KnowledgeQuestionPolicy.IsCandidate(message, intent, !string.IsNullOrWhiteSpace(request.Intent)))
+        if (_knowledgeAnswerer is null || early != KnowledgeQuestionPolicy.IsEarlyGuidance(message, classification) ||
+            !KnowledgeQuestionPolicy.IsCandidate(message, intent, !string.IsNullOrWhiteSpace(request.Intent), classification))
             return null;
         var answer = await _knowledgeAnswerer.AnswerAsync(message, ct);
         if (answer is null) return null;

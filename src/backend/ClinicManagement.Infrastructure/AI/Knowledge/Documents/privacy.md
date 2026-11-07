@@ -15,4 +15,4 @@ Website kiểm tra quyền truy cập; bệnh nhân chỉ xem dữ liệu của 
 
 ## Xử lý thắc mắc bảo mật
 
-Tính năng hỏi đáp dựa trên tài liệu công khai; mô hình ngôn ngữ cục bộ chỉ nhận câu hỏi chuẩn hóa từ các cụm hướng dẫn công khai và đoạn tài liệu truy xuất. Lịch sử chat, hồ sơ khám và thông tin tài khoản không được gửi vào mô hình RAG. Nếu cần trao đổi quyền dữ liệu, xóa dữ liệu hay báo sự cố bảo mật, liên hệ cơ sở; hướng dẫn này không tự cam kết thời hạn lưu hay quy trình pháp lý.
+Phần hỏi đáp tìm thông tin trong tài liệu công khai. Trước khi gửi câu hỏi cho mô hình cục bộ, hệ thống che số định danh, thông tin liên hệ, mã hồ sơ và tên được giới thiệu trong tin nhắn. Lịch sử chat, hồ sơ khám và thông tin tài khoản không được gửi vào mô hình RAG. Nếu cần trao đổi quyền dữ liệu, xóa dữ liệu hay báo sự cố bảo mật, liên hệ cơ sở; hướng dẫn này không tự cam kết thời hạn lưu hay quy trình pháp lý.

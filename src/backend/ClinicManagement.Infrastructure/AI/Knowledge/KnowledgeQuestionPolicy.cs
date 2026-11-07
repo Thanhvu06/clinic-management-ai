@@ -1,47 +1,60 @@
 using System.Text.RegularExpressions;
 using ClinicManagement.Application.AI.DTOs;
+using ClinicManagement.Application.AI.Interfaces;
 
 namespace ClinicManagement.Infrastructure.AI.Knowledge;
 
 public static class KnowledgeQuestionPolicy
 {
-    private static readonly (string PublicQuestion, string Pattern)[] Topics =
-    [
-        ("Chuẩn bị trước khi khám", "chuan bi|truoc khi kham|di kham|tai kham|quan ao|trang phuc|danh sach thuoc|di ung|buoi kham"),
-        ("Chuẩn bị xét nghiệm, nhịn ăn, uống nước theo hướng dẫn", "nhin an|uong nuoc|lay mau|xet nghiem|sieu am|chup phim|chup x quang|cong huong tu|chan doan hinh anh"),
-        ("Giấy tờ cần mang khi khám", "giay to|can cuoc|giay khai sinh|ho so cu|mang theo|cccd"),
-        ("Quy trình một lượt khám, tiếp nhận, khám, cận lâm sàng, thanh toán, nhận thuốc", "quy trinh|thu tuc|cac buoc|tiep nhan|lay so|xep hang|buoc tiep theo|thu tu|kham xong|luot kham"),
-        ("Hướng dẫn đặt lịch, gửi yêu cầu đổi hủy lịch và vắng mặt", "dat lich|doi lich|huy lich|vang mat|tre hen|den tre|bo hen|khong den|lo hen"),
-        ("Nhận kết quả cận lâm sàng sau khi bác sĩ duyệt", "ket qua|bac si duyet|cho duyet|bao lau|cong bo"),
-        ("Đơn thuốc và nhận thuốc tại nhà thuốc", "don thuoc|toa thuoc|nhan thuoc|linh thuoc|nha thuoc|mua thuoc"),
-        ("Thanh toán tại quầy, hóa đơn, không thanh toán trực tuyến", "thanh toan|tra tien|hoa don|bien lai|online|truc tuyen|bao hiem|noi tru|vien phi|khoan thu|the ngan hang"),
-        ("Tài khoản, đăng ký, đăng nhập website và quên mật khẩu", "tai khoan|dang nhap|dang ky|mat khau|website|dang xuat"),
-        ("Bảo mật dữ liệu cá nhân và quyền riêng tư", "bao mat|du lieu|rieng tu|thong tin ca nhan|chia se|nguoi khac|lich su chat"),
-        ("Hướng dẫn khi nào cần đi cấp cứu", "cap cuu|khan cap|dot quy|co giat|bat tinh|chay mau|dau nguc|kho tho"),
-        ("Trẻ em, người cao tuổi và phụ nữ mang thai đi khám", "tre em|tre nho|nguoi cao tuoi|nguoi gia|mang thai|co thai|thai phu|nguoi di kem")
-    ];
-
-    public static string? PublicQuestion(string question)
+    public static bool IsEarlyGuidance(string message, IntentClassificationResult classification)
     {
-        var text = KnowledgeText.Normalize(question);
-        var topics = Topics.Where(topic => Regex.IsMatch(text, @"\b(?:" + topic.Pattern + @")\b",
-            RegexOptions.CultureInvariant)).Select(topic => topic.PublicQuestion).ToArray();
-        // Only server-owned phrases cross the model boundary; free-form names and clinical details never do.
-        return topics.Length == 0 ? null : "Thông tin phòng khám về: " + string.Join("; ", topics) + ".";
+        var text = KnowledgeText.Normalize(message);
+        return Regex.IsMatch(text, @"\b(?:huong dan|cach|nhu the nao|the nao|quy trinh|thu tuc|phai lam gi)\b") &&
+            !Regex.IsMatch(text, @"\b(?:cua (?:chinh )?(?:toi|em|con|minh|anh|chi|ban)|ma|so)\b") && !HasSelection(message, classification);
     }
 
-    public static bool IsCandidate(string message, string intent, bool explicitIntent)
+    public static bool IsCandidate(string message, string intent, bool explicitIntent,
+        IntentClassificationResult? classification = null)
     {
-        if (explicitIntent || intent is AiChatIntentTypes.PricingInquiry or AiChatIntentTypes.FacilityInquiry
-            or AiChatIntentTypes.CancelDraft or AiChatIntentTypes.ConfirmBooking or AiChatIntentTypes.ReviewDraft)
+        if (explicitIntent || intent == AiChatIntentTypes.PricingInquiry)
             return false;
         var text = KnowledgeText.Normalize(message);
         if (Regex.IsMatch(text, @"\b(?:gia kham|gia bao nhieu|chi phi|phi kham|gio lam|mo cua|dia chi|so dien thoai)\b")) return false;
-        var symptomText = Regex.Replace(KnowledgeText.Normalize(message, false), @"\b(?:lần đầu|lan dau)\b", "");
-        if (Regex.IsMatch(symptomText,
-            @"\b(?:đau|dau|sốt|sot|ho|ngứa|ngua|nôn|non|chóng mặt|chong mat|tê tay|te tay|mệt mỏi|met moi|khó thở|kho tho)\b")) return false;
-        if (PublicQuestion(message) is null) return false;
-        return Regex.IsMatch(text,
-            @"\b(?:chuan bi|co can|can mang|giay to|quy trinh|thu tuc|huong dan|cach|the nao|bao lau|khi nao|duoc khong|khong a|la gi|tai sao)\b");
+        if (HasSymptoms(message)) return false;
+        var question = message.Contains('?') || Regex.IsMatch(text,
+            @"\b(?:chuan bi|co can|can mang|giay to|quy trinh|thu tuc|huong dan|cach|the nao|bao lau|khi nao|duoc khong|khong a|la gi|tai sao|khong|ko|k|chua|sao|ra sao|o dau|ai|gi|nao|bao gio|a|ha|phai khong|duoc ko|duoc k|co phai)\b");
+        if (!question) return false;
+        if (intent == AiChatIntentTypes.FacilityInquiry)
+            return Regex.IsMatch(text, @"\bo dau\b") && !HasSelection(message, classification);
+        if (intent == AiChatIntentTypes.UnclearOrOutOfScope) return true;
+        var instructions = Regex.IsMatch(text, @"\b(?:nhu the nao|the nao|nhu nao|cach|quy trinh|thu tuc|huong dan|phai lam gi|lam sao)\b");
+        if (!instructions && Regex.IsMatch(text, @"^(?:cho toi|giup toi|toi muon|toi can)\b.*\b(?:dat|huy|doi|xem)\b"))
+            return false;
+        var processQuestion = Regex.IsMatch(text,
+            @"\b(?:chuan bi|can mang|mang theo|mang.*cu|co nen mang|co can.*(?:mang|quay|tiep nhan)|co tu|phai cho|dang cho|cho.*xu ly|het han|vang mat|khoa.*online|gio hen thi sao|thi.*kiem tra giay to)\b");
+        var guidance = instructions || processQuestion;
+        if (intent == AiChatIntentTypes.ConfirmBooking && !instructions && !Regex.IsMatch(text, @"\b(?:xac nhan|hoan tat)\b"))
+            return false;
+        var action = intent is AiChatIntentTypes.StartBooking or AiChatIntentTypes.DoctorSearch or
+            AiChatIntentTypes.SelectDoctor or AiChatIntentTypes.SelectSlot or AiChatIntentTypes.ProvideReason or
+            AiChatIntentTypes.ReviewDraft or AiChatIntentTypes.ConfirmBooking or AiChatIntentTypes.ModifyDraft or
+            AiChatIntentTypes.CancelDraft or AiChatIntentTypes.ViewAppointments or AiChatIntentTypes.FindEarliestAvailableSlot or
+            AiChatIntentTypes.DiagnosticLookup or AiChatIntentTypes.PrescriptionLookup or AiChatIntentTypes.PatientSummary or
+            AiChatIntentTypes.QueueLookup;
+        if (action) return guidance && !HasSelection(message, classification);
+        return classification?.IsClear == false;
+    }
+
+    private static bool HasSelection(string message, IntentClassificationResult? classification) =>
+        SymptomSpecialtyRules.HasNamedSpecialty(message) || !string.IsNullOrWhiteSpace(classification?.ExtractedDoctorName) ||
+        !string.IsNullOrWhiteSpace(classification?.ExtractedDate) || !string.IsNullOrWhiteSpace(classification?.ExtractedTimePreference) ||
+        classification?.ExtractedRelativeDoctorIndex is not null || classification?.ExtractedRelativeSlotIndex is not null;
+
+    private static bool HasSymptoms(string message)
+    {
+        var accented = KnowledgeText.Normalize(message, false);
+        if (Regex.IsMatch(accented, @"\b(?:đau|sốt|ngứa|nôn|chóng mặt|tê tay|mệt mỏi|khó thở)\b")) return true;
+        return Regex.IsMatch(KnowledgeText.Normalize(message),
+            @"\b(?:bi ho|ho khan|ho nhieu|ho keo dai|ho \d+ ngay|dau dau|dau bung|dau nguc|bi dau|bi sot|buon non|bi non|chong mat|te tay|met moi|kho tho|o chua|day bung|hoi hop|danh trong nguc|tim dap nhanh|u tai|nghe kem|mo mat|khat nhieu|tieu nhieu|tre kinh|cham kinh|roi loan kinh|khi hu|ra huyet|noi man|man ngua|noi ban|phat ban|viem da|rung toc|nam da|me day|nghet mui|viem xoang|viem amidan|chay mau cam|sung khop|cung khop|te bi|run tay|mat ngu|do mat|nhin mo|kho mat|o nong|tieu chay|tao bon|trao nguoc|cam cum)\b");
     }
 }
