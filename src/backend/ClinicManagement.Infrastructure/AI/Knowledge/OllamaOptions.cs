@@ -8,7 +8,10 @@ public sealed class OllamaOptions
     public string ChatModel { get; set; } = "qwen2.5:7b";
     public string EmbeddingModel { get; set; } = "bge-m3";
     public int TimeoutSeconds { get; set; } = 45;
-    public double MinScore { get; set; } = 0.35;
+    public double MinScore { get; set; } = 0.45;
+    public double MinQueryCoverage { get; set; } = 0.5;
+    public double MinTermIdf { get; set; } = 1.25;
+    public double MinCosine { get; set; } = 0.20;
     public int TopK { get; set; } = 4;
 
     public Uri LocalEndpoint(string path)
