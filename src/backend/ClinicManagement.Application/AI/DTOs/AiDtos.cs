@@ -592,6 +592,7 @@ public class AiChatRequestDto
 
 public class AiChatResponseDto
 {
+    public List<ClinicManagement.Application.AI.Knowledge.KnowledgeSource> Sources { get; set; } = new();
     public string Message { get; set; } = string.Empty;
 
     /// <summary>

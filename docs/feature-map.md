@@ -223,3 +223,14 @@
 - [AI](../src/backend/ClinicManagement.Infrastructure/AI)
 - [tools](../src/tools)
 - [ai](ai)
+
+## Hỏi đáp tài liệu phòng khám (RAG cục bộ)
+
+- Vai trò: Patient qua `POST /api/v1/ai/chat`; endpoint hiện có vẫn yêu cầu đăng nhập.
+- Tích hợp: [AiSpecialtyService.Knowledge.cs](../src/backend/ClinicManagement.Infrastructure/AI/AiSpecialtyService.Knowledge.cs); giữ safety, thao tác đặt lịch và giá/cơ sở từ CSDL.
+- Hợp đồng: [IClinicKnowledge.cs](../src/backend/ClinicManagement.Application/AI/Knowledge/IClinicKnowledge.cs).
+- Truy xuất, Ollama và kho tài liệu: [Knowledge](../src/backend/ClinicManagement.Infrastructure/AI/Knowledge).
+- Nguồn trích dẫn: [MedicalChatWidgetSources.tsx](../src/frontend/src/components/MedicalChatWidgetSources.tsx).
+- Đánh giá phát triển: [RagEval](../src/tools/ClinicManagement.AI.RagEval); 176 câu, không dùng đề ẩn.
+- Test: [RagKnowledgeTests.cs](../src/backend/ClinicManagement.IntegrationTests/RagKnowledgeTests.cs), [RagChatRoutingTests.cs](../src/backend/ClinicManagement.IntegrationTests/RagChatRoutingTests.cs), [ragKnowledgeSources.test.tsx](../src/frontend/src/test/ragKnowledgeSources.test.tsx).
+- Kiến trúc và kết quả: [RAG_ARCHITECTURE.md](ai/RAG_ARCHITECTURE.md), [RAG_EVALUATION.md](ai/RAG_EVALUATION.md).

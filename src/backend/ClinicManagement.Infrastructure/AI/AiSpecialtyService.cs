@@ -57,7 +57,8 @@ public partial class AiSpecialtyService : IAiSpecialtyService
         IAiSafetyGuard? safetyGuard = null,
         IAiToolExecutor? toolExecutor = null,
         IAiConversationPipeline? conversationPipeline = null,
-        IAiProviderHealth? providerHealth = null)
+        IAiProviderHealth? providerHealth = null,
+        ClinicManagement.Application.AI.Knowledge.IClinicKnowledgeAnswerer? knowledgeAnswerer = null)
     {
         _dbContext = dbContext;
         _aiProvider = aiProvider;
@@ -75,6 +76,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
         _toolExecutor = toolExecutor;
         _conversationPipeline = conversationPipeline;
         _providerHealth = providerHealth;
+        _knowledgeAnswerer = knowledgeAnswerer;
     }
 
     public async Task<AiSuggestionResponseDto> GetSuggestionsAsync(AiSuggestionRequestDto request, CancellationToken cancellationToken = default)
@@ -324,6 +326,9 @@ public partial class AiSpecialtyService : IAiSpecialtyService
         var passiveDraftVersion = ResolveDraftVersion(request.DraftVersion, hasSubstantiveChanges: false);
         if (await ResolvePatientChatReadAsync(request, cleanMessage, passiveDraftVersion, cancellationToken) is { } localResponse)
             return localResponse;
+
+        if (await ResolveKnowledgeAsync(request, cleanMessage, resolvedIntent, passiveDraftVersion, cancellationToken) is { } knowledgeResponse)
+            return knowledgeResponse;
 
         // 3.1 Unclear or Out-of-Scope: Politeness Guardian (Prevents dropping into Degraded or polluting Reason)
         if (SymptomSpecialtyRules.RequiresClarification(!localClassification.IsClear || resolvedIntent == AiChatIntentTypes.UnclearOrOutOfScope, cleanMessage))

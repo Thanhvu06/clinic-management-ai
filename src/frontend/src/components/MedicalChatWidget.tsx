@@ -23,6 +23,7 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import type { AiAction, AiChatIntent, AiToolExecutionResult, ChatMessage } from "../types/ai";
 import SafeMarkdown from "./SafeMarkdown";
+import { MedicalChatWidgetSources } from "./MedicalChatWidgetSources";
 import { aiToolErrorMessage, isAiToolArgumentError } from '../api/aiErrorMessages';
 import { SuggestionChips } from "./copilot/SuggestionChips";
 import { useSuggestionMenu } from "./copilot/useSuggestionMenu";
@@ -253,6 +254,8 @@ const PatientMedicalChatWidget: React.FC = () => {
                             >
                                 <div data-chat-bubble className={`${styles.bubble} ${msg.role === "user" ? styles.bubbleUser : styles.bubbleModel}`}>
                                     {isNotUnderstood(msg) ? <p>{NOT_UNDERSTOOD_MESSAGE}</p> : !msg.bookingResult && <SafeMarkdown content={idx === reviewIndex ? "" : msg.content} />}
+
+                                    {msg.role === "model" && <MedicalChatWidgetSources message={msg} />}
 
                                     {/* Emergency Card */}
                                     {msg.urgency === "EMERGENCY" && (
