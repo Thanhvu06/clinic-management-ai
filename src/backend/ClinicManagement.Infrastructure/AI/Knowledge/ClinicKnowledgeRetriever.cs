@@ -84,8 +84,11 @@ public sealed class ClinicKnowledgeRetriever(MarkdownKnowledgeCatalog catalog, O
         if (string.IsNullOrWhiteSpace(maskedQuestion)) return new([]);
         var lexical = _bm25.Search(maskedQuestion);
         var min = Math.Clamp(options.Value.MinScore, 0, 1);
+        var minCoverage = Math.Clamp(options.Value.MinQueryCoverage, 0, 1);
+        var minTermIdf = Math.Max(0, options.Value.MinTermIdf);
         var accepted = lexical.Where(h => h.Score >= min).ToArray();
-        if (accepted.Length == 0) return new([]);
+        if (accepted.Length == 0 || !_bm25.MeetsCoverage(maskedQuestion, accepted[0].Chunk, minCoverage, minTermIdf))
+            return new([]);
         var vectors = Volatile.Read(ref _embeddings);
         var called = false;
         var hybridUsed = false;
@@ -96,9 +99,14 @@ public sealed class ClinicKnowledgeRetriever(MarkdownKnowledgeCatalog catalog, O
             called = query.WasCalled;
             if (ValidVectors(query.Value, 1) && query.Value![0].Length == vectors[0].Length)
             {
-                var semantic = catalog.Chunks.Select((chunk, i) => new KnowledgeHit(chunk, Bm25KnowledgeIndex.Cosine(query.Value[0], vectors[i])))
-                    .Where(h => h.Score >= 0.55 && accepted.Any(a => a.Chunk.Id == h.Chunk.Id))
-                    .OrderByDescending(h => h.Score).ToArray();
+                var minCosine = Math.Clamp(options.Value.MinCosine, 0, 1);
+                var cosines = catalog.Chunks.Select((chunk, i) => (chunk, Score: Bm25KnowledgeIndex.Cosine(query.Value[0], vectors[i])))
+                    .ToDictionary(x => x.chunk.Id, x => x.Score, StringComparer.Ordinal);
+                if (cosines[accepted[0].Chunk.Id] < minCosine)
+                    return new([], called, true);
+                var semantic = accepted.Select(a => new KnowledgeHit(a.Chunk, cosines[a.Chunk.Id]))
+                    .Where(h => h.Score >= Math.Max(0.55, minCosine))
+                    .OrderByDescending(h => h.Score).ThenBy(h => h.Chunk.Id, StringComparer.Ordinal).ToArray();
                 ranked = Bm25KnowledgeIndex.Fuse(accepted, semantic);
                 hybridUsed = true;
             }

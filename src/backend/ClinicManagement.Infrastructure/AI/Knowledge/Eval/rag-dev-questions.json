@@ -702,5 +702,165 @@
   {
     "question": "Cách thay lốp xe đạp",
     "expectedDocId": null
+  },
+  {
+    "question": "Bitcoin tăng hay giảm?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Giá đồng Ethereum hôm nay tăng hay giảm vậy?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Có nên mua tiền ảo Dogecoin lúc này ko?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Cổ phiếu ngành ngân hàng tuần này tăng hay giảm?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Chỉ số VN-Index hôm nay tăng bao nhiêu điểm vậy?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Đầu tư chứng khoán phái sinh cần lưu ý gì?",
+    "expectedDocId": null
+  },
+  {
+    "question": "thời tiết mai thế nào?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Cuối tuần này trời có mưa bão gì ko?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Nhiệt độ ngoài trời hôm nay bao nhiêu độ C?",
+    "expectedDocId": null
+  },
+  {
+    "question": "đội nào vô địch world cup?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Lịch thi đấu bóng đá Ngoại hạng Anh tối nay thế nào?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Cầu thủ nào ghi nhiều bàn thắng nhất Cúp C1 vậy?",
+    "expectedDocId": null
+  },
+  {
+    "question": "viết code python sắp xếp mảng được k",
+    "expectedDocId": null
+  },
+  {
+    "question": "Làm sao để sửa lỗi vòng lặp vô hạn trong JavaScript?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Ngôn ngữ lập trình C# khác gì với Java?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Cách nấu bún bò Huế đậm đà tại nhà là gì?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Ướp thịt nướng cho mềm thì cần gia vị gì ko?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Làm bánh bông lan nướng bao nhiêu phút thì chín?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Đi du lịch Đà Lạt mùa này có gì vui ko?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Kinh nghiệm đặt phòng khách sạn Phú Quốc giá rẻ thế nào?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Đi Nhật Bản tự túc có cần xin visa trước k?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Làm giúp mình bài thơ lục bát về quê hương được k?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Sáng tác bài thơ bốn câu tặng mẹ nhân ngày lễ?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Viết bài thơ ngắn về biển cả được ko ạ?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Cách tính tích phân và đạo hàm hàm lượng giác là gì?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Giải hệ phương trình hai ẩn bằng cách thế được k?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Diện tích hình tròn bán kính 5cm tính thế nào?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Tin tức thời sự thế giới hôm nay có gì mới?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Giá vàng miếng SJC sáng nay tăng hay giảm vậy?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Tình hình giao thông giờ cao điểm sáng nay thế nào?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Bị viêm dạ dày cấp thì uống thuốc gì cho nhanh khỏi?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Cách chữa bệnh tiểu đường tại nhà bằng thảo dược là gì?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Bị cảm cúm sổ mũi nên mua thuốc gì uống được ko?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Cách trị dứt điểm bệnh gút tại nhà thế nào?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Bác sĩ nào giỏi nhất ở phòng khám hiện nay vậy?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Cho hỏi ai là bác sĩ chữa bệnh mát tay nhất ở đây?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Khám nội khoa thì bác sĩ nào giỏi nhất được k?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Bệnh viện Chợ Rẫy thứ bảy có khám dịch vụ ko?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Phòng khám đa khoa bên quận 1 làm việc thế nào?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Bệnh viện Đại học Y Dược gửi xe ở cổng nào vậy?",
+    "expectedDocId": null
   }
 ]

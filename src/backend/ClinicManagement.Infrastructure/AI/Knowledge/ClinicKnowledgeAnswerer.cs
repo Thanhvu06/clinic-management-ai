@@ -6,6 +6,10 @@ namespace ClinicManagement.Infrastructure.AI.Knowledge;
 public sealed class ClinicKnowledgeAnswerer(IClinicKnowledgeRetriever retriever, OllamaKnowledgeClient ollama)
     : IClinicKnowledgeAnswerer
 {
+    private static readonly Regex NoInformationAnswer = new(
+        @"\b(?:chua co thong tin|khong co thong tin|tai lieu (?:cong khai )?(?:khong|chua) (?:co thong tin|de cap|neu)|khong tim thay thong tin|ngoai pham vi tai lieu)\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     public async Task<KnowledgeAnswer?> AnswerAsync(string question, CancellationToken ct = default)
     {
         var maskedQuestion = KnowledgePrivacyMask.Mask(question);
@@ -18,6 +22,7 @@ public sealed class ClinicKnowledgeAnswerer(IClinicKnowledgeRetriever retriever,
             $"[{h.Chunk.Source.DocId}] {h.Chunk.Source.Title} — {h.Chunk.Source.Heading}\n{h.Chunk.Text}"));
         var generated = await ollama.ChatAsync(maskedQuestion, documents, ct);
         var hasAnswer = !string.IsNullOrWhiteSpace(generated.Value);
+        if (hasAnswer && NoInformationAnswer.IsMatch(KnowledgeText.Normalize(generated.Value!))) return null;
         var text = hasAnswer ? Limit(generated.Value!) : Limit(retrieval.Hits[0].Chunk.Text);
         var sources = (hasAnswer ? supported : retrieval.Hits.Take(1))
             .Select(h => h.Chunk.Source).Distinct().ToArray();
