@@ -8,16 +8,18 @@ public sealed class ClinicKnowledgeAnswerer(IClinicKnowledgeRetriever retriever,
 {
     public async Task<KnowledgeAnswer?> AnswerAsync(string question, CancellationToken ct = default)
     {
-        var publicQuestion = KnowledgeQuestionPolicy.PublicQuestion(question);
-        if (publicQuestion is null) return null;
-        var retrieval = await retriever.RetrieveAsync(question, ct);
+        var maskedQuestion = KnowledgePrivacyMask.Mask(question);
+        if (string.IsNullOrWhiteSpace(maskedQuestion)) return null;
+        var retrieval = await retriever.RetrieveAsync(maskedQuestion, ct);
         if (retrieval.Hits.Count == 0) return null;
-        var documents = string.Join("\n\n", retrieval.Hits.Select(h =>
+        var supported = retrieval.Hits.Where(hit => hit.Score >= retrieval.Hits[0].Score * 0.6)
+            .DistinctBy(hit => (hit.Chunk.Source.DocId, hit.Chunk.Source.Heading)).Take(2).ToArray();
+        var documents = string.Join("\n\n", supported.Select(h =>
             $"[{h.Chunk.Source.DocId}] {h.Chunk.Source.Title} — {h.Chunk.Source.Heading}\n{h.Chunk.Text}"));
-        var generated = await ollama.ChatAsync(publicQuestion, documents, ct);
+        var generated = await ollama.ChatAsync(maskedQuestion, documents, ct);
         var hasAnswer = !string.IsNullOrWhiteSpace(generated.Value);
         var text = hasAnswer ? Limit(generated.Value!) : Limit(retrieval.Hits[0].Chunk.Text);
-        var sources = (hasAnswer ? retrieval.Hits : retrieval.Hits.Take(1))
+        var sources = (hasAnswer ? supported : retrieval.Hits.Take(1))
             .Select(h => h.Chunk.Source).Distinct().ToArray();
         return new(text, sources, hasAnswer, generated.WasCalled || retrieval.EmbeddingWasCalled);
     }

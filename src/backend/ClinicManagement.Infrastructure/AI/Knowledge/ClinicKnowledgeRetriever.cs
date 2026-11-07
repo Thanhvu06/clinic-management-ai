@@ -28,6 +28,15 @@ public sealed class ClinicKnowledgeRetriever(MarkdownKnowledgeCatalog catalog, O
             { logger.LogWarning("RAG embedding cache unavailable; lexical retrieval remains available."); }
             if (!EmbeddingsReady) await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
         }
+        if (EmbeddingsReady && !stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                var warmup = await ollama.WarmChatModelAsync(stoppingToken);
+                if (warmup.Value is null) logger.LogWarning("RAG chat model warm-up failed; extractive answers remain available.");
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
+        }
     }
 
     public async Task BuildEmbeddingsAsync(CancellationToken ct = default)
@@ -71,19 +80,19 @@ public sealed class ClinicKnowledgeRetriever(MarkdownKnowledgeCatalog catalog, O
 
     public async Task<KnowledgeRetrieval> RetrieveAsync(string question, CancellationToken ct = default)
     {
-        if (KnowledgeQuestionPolicy.PublicQuestion(question) is null) return new([]);
-        var lexical = _bm25.Search(question);
+        var maskedQuestion = KnowledgePrivacyMask.Mask(question);
+        if (string.IsNullOrWhiteSpace(maskedQuestion)) return new([]);
+        var lexical = _bm25.Search(maskedQuestion);
         var min = Math.Clamp(options.Value.MinScore, 0, 1);
         var accepted = lexical.Where(h => h.Score >= min).ToArray();
         if (accepted.Length == 0) return new([]);
         var vectors = Volatile.Read(ref _embeddings);
-        var safeQuestion = KnowledgeQuestionPolicy.PublicQuestion(question);
         var called = false;
         var hybridUsed = false;
         IReadOnlyList<KnowledgeHit> ranked = accepted;
-        if (options.Value.IsEnabled && vectors is not null && safeQuestion is not null)
+        if (options.Value.IsEnabled && vectors is not null)
         {
-            var query = await ollama.EmbedAsync([safeQuestion], ct);
+            var query = await ollama.EmbedAsync([maskedQuestion], ct);
             called = query.WasCalled;
             if (ValidVectors(query.Value, 1) && query.Value![0].Length == vectors[0].Length)
             {

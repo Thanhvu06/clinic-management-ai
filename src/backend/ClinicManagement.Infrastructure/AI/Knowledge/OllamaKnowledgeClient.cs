@@ -37,13 +37,13 @@ public sealed class OllamaKnowledgeClient
     }
 
     public Task<OllamaResult<float[][]>> EmbedAsync(string[] publicText, CancellationToken ct) =>
-        PostAsync("api/embed", new { model = _options.EmbeddingModel, input = publicText, keep_alive = "10m" },
+        PostAsync("api/embed", new { model = _options.EmbeddingModel, input = publicText, keep_alive = "30m" },
             root => root.GetProperty("embeddings").Deserialize<float[][]>(), ct);
 
     public Task<OllamaResult<string>> ChatAsync(string publicQuestion, string publicDocuments, CancellationToken ct) =>
         PostAsync("api/chat", new
         {
-            model = _options.ChatModel, stream = false, keep_alive = "10m",
+            model = _options.ChatModel, stream = false, keep_alive = "30m",
             options = new { temperature = 0.1, num_predict = 350, num_ctx = 4096 },
             messages = new[]
             {
@@ -51,6 +51,10 @@ public sealed class OllamaKnowledgeClient
                 new { role = "user", content = "Câu hỏi đã làm sạch: " + publicQuestion + "\nTài liệu công khai:\n" + publicDocuments }
             }
         }, root => root.GetProperty("message").GetProperty("content").GetString(), ct);
+
+    public Task<OllamaResult<string>> WarmChatModelAsync(CancellationToken ct) =>
+        PostAsync("api/chat", new { model = _options.ChatModel, stream = false, keep_alive = "30m", messages = Array.Empty<object>() },
+            root => root.TryGetProperty("done", out var done) && done.ValueKind == JsonValueKind.True ? "Ready" : null, ct);
 
     private async Task<OllamaResult<T>> PostAsync<T>(string path, object body, Func<JsonElement, T?> read, CancellationToken ct)
     {
