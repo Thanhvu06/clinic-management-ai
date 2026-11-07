@@ -1,0 +1,706 @@
+[
+  {
+    "question": "Đi khám lần đầu cần chuẩn bị gì vậy?",
+    "expectedDocId": "prepare-visit"
+  },
+  {
+    "question": "Trước buổi khám nên chuẩn bị những gì?",
+    "expectedDocId": "prepare-visit"
+  },
+  {
+    "question": "di kham lan dau chuan bi sao a",
+    "expectedDocId": "prepare-visit"
+  },
+  {
+    "question": "Có cần nhịn ăn khi khám thông thường không?",
+    "expectedDocId": "prepare-visit"
+  },
+  {
+    "question": "Đi tái khám cần chuẩn bị như nào?",
+    "expectedDocId": "prepare-visit"
+  },
+  {
+    "question": "Mặc quần áo thế nào cho tiện lúc khám?",
+    "expectedDocId": "prepare-visit"
+  },
+  {
+    "question": "Trước khám có cần ghi lại câu hỏi cho bác sĩ?",
+    "expectedDocId": "prepare-visit"
+  },
+  {
+    "question": "Có nên chuẩn bị danh sách thuốc đang dùng trước khám?",
+    "expectedDocId": "prepare-visit"
+  },
+  {
+    "question": "Chuẩn bị thông tin dị ứng để nói với bác sĩ được ko?",
+    "expectedDocId": "prepare-visit"
+  },
+  {
+    "question": "Đi khám thường có bắt buộc nhịn ăn ko ạ?",
+    "expectedDocId": "prepare-visit"
+  },
+  {
+    "question": "chuan bi truoc buoi kham nhu nao",
+    "expectedDocId": "prepare-visit"
+  },
+  {
+    "question": "Chưa có lịch thì chuẩn bị đi khám lần đầu ra sao?",
+    "expectedDocId": "prepare-visit"
+  },
+  {
+    "question": "Tái khám nên chuẩn bị đơn cũ hay câu hỏi gì?",
+    "expectedDocId": "prepare-visit"
+  },
+  {
+    "question": "Xét nghiệm có cần nhịn ăn không?",
+    "expectedDocId": "prepare-tests"
+  },
+  {
+    "question": "nhin an truoc xet nghiem bao lau",
+    "expectedDocId": "prepare-tests"
+  },
+  {
+    "question": "Trước lấy máu có uống nước lọc được không?",
+    "expectedDocId": "prepare-tests"
+  },
+  {
+    "question": "Lỡ ăn sáng rồi có lấy mẫu xét nghiệm được ko?",
+    "expectedDocId": "prepare-tests"
+  },
+  {
+    "question": "Có được uống cà phê trước xét nghiệm không ạ?",
+    "expectedDocId": "prepare-tests"
+  },
+  {
+    "question": "Uống sữa trước lấy máu có cần báo nhân viên ko?",
+    "expectedDocId": "prepare-tests"
+  },
+  {
+    "question": "Chuẩn bị mẫu nước tiểu thế nào?",
+    "expectedDocId": "prepare-tests"
+  },
+  {
+    "question": "Đi siêu âm cần uống nước hay nhịn ăn?",
+    "expectedDocId": "prepare-tests"
+  },
+  {
+    "question": "Chụp X-quang cần chuẩn bị gì vậy?",
+    "expectedDocId": "prepare-tests"
+  },
+  {
+    "question": "Chụp cộng hưởng từ có cần tháo kim loại không?",
+    "expectedDocId": "prepare-tests"
+  },
+  {
+    "question": "Có thiết bị cấy ghép thì trước chụp phim cần báo ai?",
+    "expectedDocId": "prepare-tests"
+  },
+  {
+    "question": "Đang dùng thuốc thì chuẩn bị xét nghiệm ra sao?",
+    "expectedDocId": "prepare-tests"
+  },
+  {
+    "question": "truoc xet nghiem co duoc uong nuoc k",
+    "expectedDocId": "prepare-tests"
+  },
+  {
+    "question": "Đi khám cần mang theo giấy tờ gì?",
+    "expectedDocId": "bring-documents"
+  },
+  {
+    "question": "mang theo giay to gi khi di kham",
+    "expectedDocId": "bring-documents"
+  },
+  {
+    "question": "Em quên căn cước thì đi khám cần hỏi ai?",
+    "expectedDocId": "bring-documents"
+  },
+  {
+    "question": "Trẻ đi khám cần giấy khai sinh không?",
+    "expectedDocId": "bring-documents"
+  },
+  {
+    "question": "Có cần mang hồ sơ khám cũ không?",
+    "expectedDocId": "bring-documents"
+  },
+  {
+    "question": "Tái khám mang theo đơn thuốc cũ được không?",
+    "expectedDocId": "bring-documents"
+  },
+  {
+    "question": "Có cần cầm kết quả xét nghiệm trước đây tới khám?",
+    "expectedDocId": "bring-documents"
+  },
+  {
+    "question": "Giấy hẹn tái khám có nên mang không ạ?",
+    "expectedDocId": "bring-documents"
+  },
+  {
+    "question": "Được mang bản điện tử hồ sơ cũ thay giấy không?",
+    "expectedDocId": "bring-documents"
+  },
+  {
+    "question": "Người giám hộ cần chuẩn bị giấy tờ gì?",
+    "expectedDocId": "bring-documents"
+  },
+  {
+    "question": "Mã xác nhận lịch hẹn có cần mang theo?",
+    "expectedDocId": "bring-documents"
+  },
+  {
+    "question": "Thiếu giấy tờ nhận diện thì phải làm gì?",
+    "expectedDocId": "bring-documents"
+  },
+  {
+    "question": "giay to kham benh can nhung gi ak",
+    "expectedDocId": "bring-documents"
+  },
+  {
+    "question": "Quy trình một lượt khám thế nào?",
+    "expectedDocId": "visit-workflow"
+  },
+  {
+    "question": "quy trinh kham gom nhung buoc gi",
+    "expectedDocId": "visit-workflow"
+  },
+  {
+    "question": "Đặt lịch rồi có cần ghé quầy tiếp nhận nữa không?",
+    "expectedDocId": "visit-workflow"
+  },
+  {
+    "question": "Khám xong thì làm cận lâm sàng hay thanh toán trước?",
+    "expectedDocId": "visit-workflow"
+  },
+  {
+    "question": "Lấy số rồi chờ khám ở đâu vậy?",
+    "expectedDocId": "visit-workflow"
+  },
+  {
+    "question": "Có phải ai đi khám cũng làm xét nghiệm không?",
+    "expectedDocId": "visit-workflow"
+  },
+  {
+    "question": "Xét nghiệm xong có quay lại gặp bác sĩ không?",
+    "expectedDocId": "visit-workflow"
+  },
+  {
+    "question": "Khám xong tới nhận thuốc theo quy trình nào?",
+    "expectedDocId": "visit-workflow"
+  },
+  {
+    "question": "Chat có cam kết được vào khám ngay không?",
+    "expectedDocId": "visit-workflow"
+  },
+  {
+    "question": "Thứ tự các bước tiếp nhận khám và nhận thuốc ra sao?",
+    "expectedDocId": "visit-workflow"
+  },
+  {
+    "question": "Lượt khám ngoại trú hoàn tất thì kiểm tra giấy tờ gì?",
+    "expectedDocId": "visit-workflow"
+  },
+  {
+    "question": "Cho em hỏi thủ tục từ đặt lịch tới khám xong",
+    "expectedDocId": "visit-workflow"
+  },
+  {
+    "question": "Không biết bước tiếp theo sau khám thì hỏi ai?",
+    "expectedDocId": "visit-workflow"
+  },
+  {
+    "question": "Đặt lịch trên website làm thế nào?",
+    "expectedDocId": "appointments"
+  },
+  {
+    "question": "cach dat lich online nhu nao a",
+    "expectedDocId": "appointments"
+  },
+  {
+    "question": "Cách gửi yêu cầu đổi lịch đã đặt?",
+    "expectedDocId": "appointments"
+  },
+  {
+    "question": "Hủy lịch thì có tự hủy ngay khi gửi yêu cầu không?",
+    "expectedDocId": "appointments"
+  },
+  {
+    "question": "Đổi lịch phải chờ nhân viên xử lý à?",
+    "expectedDocId": "appointments"
+  },
+  {
+    "question": "Đến trễ hơn 30 phút có bị vắng mặt không?",
+    "expectedDocId": "appointments"
+  },
+  {
+    "question": "Chưa xác nhận lịch mà tới giờ hẹn thì sao?",
+    "expectedDocId": "appointments"
+  },
+  {
+    "question": "Tôi không đến được thì cần làm gì với lịch hẹn?",
+    "expectedDocId": "appointments"
+  },
+  {
+    "question": "Vắng mặt nhiều lần có bị khóa đặt lịch online không?",
+    "expectedDocId": "appointments"
+  },
+  {
+    "question": "Yêu cầu hủy lịch chưa xử lý tới giờ khám thì sao?",
+    "expectedDocId": "appointments"
+  },
+  {
+    "question": "Có yêu cầu đổi lịch đang chờ thì gửi thêm được không?",
+    "expectedDocId": "appointments"
+  },
+  {
+    "question": "Muốn đổi lịch phải chọn giờ còn trống không?",
+    "expectedDocId": "appointments"
+  },
+  {
+    "question": "dat lich xong den tre thi lam sao",
+    "expectedDocId": "appointments"
+  },
+  {
+    "question": "Bao lâu có kết quả cận lâm sàng?",
+    "expectedDocId": "diagnostic-results"
+  },
+  {
+    "question": "Kết quả xét nghiệm chỉ xem sau khi bác sĩ duyệt à?",
+    "expectedDocId": "diagnostic-results"
+  },
+  {
+    "question": "ky thuat vien nhap ket qua roi sao chua xem dc",
+    "expectedDocId": "diagnostic-results"
+  },
+  {
+    "question": "Kết quả đang chờ duyệt thì cần làm gì?",
+    "expectedDocId": "diagnostic-results"
+  },
+  {
+    "question": "Cách xem kết quả cận lâm sàng trên website?",
+    "expectedDocId": "diagnostic-results"
+  },
+  {
+    "question": "Có thời gian trả kết quả chung cho mọi xét nghiệm không?",
+    "expectedDocId": "diagnostic-results"
+  },
+  {
+    "question": "Không tải được tệp kết quả đã công bố thì sao?",
+    "expectedDocId": "diagnostic-results"
+  },
+  {
+    "question": "Kết quả đã công bố mà không thấy trên tài khoản thì làm sao?",
+    "expectedDocId": "diagnostic-results"
+  },
+  {
+    "question": "Bác sĩ chưa duyệt thì có được mở kết quả không?",
+    "expectedDocId": "diagnostic-results"
+  },
+  {
+    "question": "Thời gian trả kết quả phụ thuộc những gì?",
+    "expectedDocId": "diagnostic-results"
+  },
+  {
+    "question": "Tài khoản có xem được kết quả của người khác ko?",
+    "expectedDocId": "diagnostic-results"
+  },
+  {
+    "question": "Nhập xong kết quả là bệnh nhân được xem ngay chưa?",
+    "expectedDocId": "diagnostic-results"
+  },
+  {
+    "question": "bao lau co ket qua xet nghiem vay a",
+    "expectedDocId": "diagnostic-results"
+  },
+  {
+    "question": "Đơn thuốc nằm ở đâu trên website?",
+    "expectedDocId": "prescriptions"
+  },
+  {
+    "question": "Làm thế nào để nhận thuốc tại nhà thuốc?",
+    "expectedDocId": "prescriptions"
+  },
+  {
+    "question": "linh thuoc can thanh toan truoc khong",
+    "expectedDocId": "prescriptions"
+  },
+  {
+    "question": "Có đơn thuốc là đã cấp thuốc xong chưa?",
+    "expectedDocId": "prescriptions"
+  },
+  {
+    "question": "Đơn phát hành mấy ngày thì hết hạn lĩnh thuốc?",
+    "expectedDocId": "prescriptions"
+  },
+  {
+    "question": "Đơn thuốc hết hạn thì cần hỏi ai?",
+    "expectedDocId": "prescriptions"
+  },
+  {
+    "question": "Nhận thuốc cần đối chiếu với đơn không?",
+    "expectedDocId": "prescriptions"
+  },
+  {
+    "question": "Không thấy toa thuốc trên tài khoản thì sao?",
+    "expectedDocId": "prescriptions"
+  },
+  {
+    "question": "Nhà thuốc có tự giao thuốc tận nhà không?",
+    "expectedDocId": "prescriptions"
+  },
+  {
+    "question": "Có mua thuốc tự động qua chat được không?",
+    "expectedDocId": "prescriptions"
+  },
+  {
+    "question": "Tôi nên hỏi dược sĩ khi chưa rõ thông tin đơn thuốc ở đâu?",
+    "expectedDocId": "prescriptions"
+  },
+  {
+    "question": "Cách xem đơn thuốc của chính mình như nào?",
+    "expectedDocId": "prescriptions"
+  },
+  {
+    "question": "don thuoc cu het han linh roi lam sao",
+    "expectedDocId": "prescriptions"
+  },
+  {
+    "question": "Thanh toán tại quầy hay trên website vậy?",
+    "expectedDocId": "payments"
+  },
+  {
+    "question": "co thanh toan truc tuyen khong a",
+    "expectedDocId": "payments"
+  },
+  {
+    "question": "Website có nút trả tiền online không?",
+    "expectedDocId": "payments"
+  },
+  {
+    "question": "Xem hóa đơn có tự đánh dấu đã thanh toán không?",
+    "expectedDocId": "payments"
+  },
+  {
+    "question": "Đã trả tiền mà hóa đơn vẫn chưa thanh toán thì sao?",
+    "expectedDocId": "payments"
+  },
+  {
+    "question": "Muốn kiểm tra khoản thu trên hóa đơn cần hỏi ai?",
+    "expectedDocId": "payments"
+  },
+  {
+    "question": "Có triển khai bảo hiểm y tế không?",
+    "expectedDocId": "payments"
+  },
+  {
+    "question": "Phòng khám có điều trị nội trú không vậy?",
+    "expectedDocId": "payments"
+  },
+  {
+    "question": "Hóa đơn chưa thanh toán thì phải đến đâu?",
+    "expectedDocId": "payments"
+  },
+  {
+    "question": "Xem trạng thái hóa đơn trên tài khoản như thế nào?",
+    "expectedDocId": "payments"
+  },
+  {
+    "question": "Chat có tự hoàn tiền trên hóa đơn không?",
+    "expectedDocId": "payments"
+  },
+  {
+    "question": "Co dong vien phi online duoc ko",
+    "expectedDocId": "payments"
+  },
+  {
+    "question": "Thông tin thẻ ngân hàng có nên gửi vào chat để trả tiền không?",
+    "expectedDocId": "payments"
+  },
+  {
+    "question": "Tài khoản bệnh nhân đăng ký như thế nào?",
+    "expectedDocId": "accounts"
+  },
+  {
+    "question": "cach dang nhap website phong kham",
+    "expectedDocId": "accounts"
+  },
+  {
+    "question": "Quên mật khẩu thì liên hệ ai hỗ trợ?",
+    "expectedDocId": "accounts"
+  },
+  {
+    "question": "Khách chưa có tài khoản có đặt lịch được không?",
+    "expectedDocId": "accounts"
+  },
+  {
+    "question": "Website báo lỗi đăng nhập thì cần làm gì?",
+    "expectedDocId": "accounts"
+  },
+  {
+    "question": "Dùng máy tính chung có cần đăng xuất không?",
+    "expectedDocId": "accounts"
+  },
+  {
+    "question": "Không nhớ mật khẩu thì chat đặt lại được không?",
+    "expectedDocId": "accounts"
+  },
+  {
+    "question": "Cần đăng nhập để xem hồ sơ cá nhân không?",
+    "expectedDocId": "accounts"
+  },
+  {
+    "question": "Điền biểu mẫu đăng ký bị lỗi thì xử lý sao?",
+    "expectedDocId": "accounts"
+  },
+  {
+    "question": "Có nên nhờ người lạ đăng nhập hộ tài khoản không?",
+    "expectedDocId": "accounts"
+  },
+  {
+    "question": "Tài khoản bị dùng trái phép thì liên hệ đâu?",
+    "expectedDocId": "accounts"
+  },
+  {
+    "question": "Đang dùng nhầm tài khoản thì có thấy hồ sơ mình không?",
+    "expectedDocId": "accounts"
+  },
+  {
+    "question": "quen mat khau dang nhap thi phai lam sao",
+    "expectedDocId": "accounts"
+  },
+  {
+    "question": "Chat có bảo mật dữ liệu cá nhân không?",
+    "expectedDocId": "privacy"
+  },
+  {
+    "question": "Có nên gửi số căn cước vào khung chat không?",
+    "expectedDocId": "privacy"
+  },
+  {
+    "question": "Tôi có nên nhập số điện thoại vào cuộc trò chuyện?",
+    "expectedDocId": "privacy"
+  },
+  {
+    "question": "AI hỏi đáp có nhận hồ sơ bệnh nhân không?",
+    "expectedDocId": "privacy"
+  },
+  {
+    "question": "Mô hình RAG có nhận lịch sử chat không?",
+    "expectedDocId": "privacy"
+  },
+  {
+    "question": "Dữ liệu nào được gửi vào mô hình ngôn ngữ cục bộ?",
+    "expectedDocId": "privacy"
+  },
+  {
+    "question": "Có được yêu cầu chat tìm hồ sơ người khác không?",
+    "expectedDocId": "privacy"
+  },
+  {
+    "question": "Quyền riêng tư khi nhờ người thân xem hồ sơ thế nào?",
+    "expectedDocId": "privacy"
+  },
+  {
+    "question": "Muốn hỏi về xóa dữ liệu cá nhân thì liên hệ ai?",
+    "expectedDocId": "privacy"
+  },
+  {
+    "question": "Có thể dùng chat cập nhật thông tin định danh không?",
+    "expectedDocId": "privacy"
+  },
+  {
+    "question": "bao mat thong tin ca nhan khi dung chat ra sao",
+    "expectedDocId": "privacy"
+  },
+  {
+    "question": "Có nên chia sẻ tài khoản cho người khác xem hộ không?",
+    "expectedDocId": "privacy"
+  },
+  {
+    "question": "Báo sự cố bảo mật dữ liệu thì làm thế nào?",
+    "expectedDocId": "privacy"
+  },
+  {
+    "question": "Khi nào cần đi cấp cứu?",
+    "expectedDocId": "emergency"
+  },
+  {
+    "question": "Có dấu hiệu khẩn cấp thì nên chờ chat không?",
+    "expectedDocId": "emergency"
+  },
+  {
+    "question": "Đau ngực khó thở thì có đợi lịch khám không?",
+    "expectedDocId": "emergency"
+  },
+  {
+    "question": "Nếu bất tỉnh thì cần hỗ trợ khẩn cấp thế nào?",
+    "expectedDocId": "emergency"
+  },
+  {
+    "question": "Nghi đột quỵ có chờ đặt lịch online được ko?",
+    "expectedDocId": "emergency"
+  },
+  {
+    "question": "Chat có điều phối xe cấp cứu không?",
+    "expectedDocId": "emergency"
+  },
+  {
+    "question": "Tình huống y tế khẩn cấp thì có nên đổi lịch trước không?",
+    "expectedDocId": "emergency"
+  },
+  {
+    "question": "Chảy máu không cầm thì nên tìm hỗ trợ ở đâu?",
+    "expectedDocId": "emergency"
+  },
+  {
+    "question": "Khi có co giật có chờ hỏi đáp trên chat không?",
+    "expectedDocId": "emergency"
+  },
+  {
+    "question": "khi nao can di cap cuu a",
+    "expectedDocId": "emergency"
+  },
+  {
+    "question": "Trợ lý có theo dõi liên tục tình trạng cấp cứu không?",
+    "expectedDocId": "emergency"
+  },
+  {
+    "question": "Hướng dẫn cấp cứu trong chat có thay chẩn đoán được không?",
+    "expectedDocId": "emergency"
+  },
+  {
+    "question": "Khi cần cấp cứu có nên chờ phản hồi trò chuyện không?",
+    "expectedDocId": "emergency"
+  },
+  {
+    "question": "Trẻ em đi khám cần người giám hộ đi cùng không?",
+    "expectedDocId": "supported-visitors"
+  },
+  {
+    "question": "Người cao tuổi đi khám nên có người đi kèm không?",
+    "expectedDocId": "supported-visitors"
+  },
+  {
+    "question": "Phụ nữ mang thai cần báo nhân viên trước chụp phim không?",
+    "expectedDocId": "supported-visitors"
+  },
+  {
+    "question": "tre em chuan bi di kham can luu y gi",
+    "expectedDocId": "supported-visitors"
+  },
+  {
+    "question": "Người già cần hỗ trợ di chuyển thì báo ai?",
+    "expectedDocId": "supported-visitors"
+  },
+  {
+    "question": "Thai phụ có nên mang hồ sơ thai kỳ theo không?",
+    "expectedDocId": "supported-visitors"
+  },
+  {
+    "question": "Có được tự áp dụng hướng dẫn nhịn ăn người lớn cho trẻ nhỏ không?",
+    "expectedDocId": "supported-visitors"
+  },
+  {
+    "question": "Nghi có thai thì trước thực hiện kỹ thuật cần làm gì?",
+    "expectedDocId": "supported-visitors"
+  },
+  {
+    "question": "Chat có xác nhận xe lăn cho người cao tuổi không?",
+    "expectedDocId": "supported-visitors"
+  },
+  {
+    "question": "Trẻ em cần hỗ trợ lúc chờ thì hỏi ai?",
+    "expectedDocId": "supported-visitors"
+  },
+  {
+    "question": "Người cao tuổi có được tự coi là đã đặt dịch vụ đưa đón không?",
+    "expectedDocId": "supported-visitors"
+  },
+  {
+    "question": "phu nu mang thai di kham chuan bi sao",
+    "expectedDocId": "supported-visitors"
+  },
+  {
+    "question": "Người giám hộ trẻ cần trao đổi thông tin với bác sĩ trực tiếp không?",
+    "expectedDocId": "supported-visitors"
+  },
+  {
+    "question": "Bitcoin hôm nay tăng hay giảm?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Viết giúp bài văn về mùa thu",
+    "expectedDocId": null
+  },
+  {
+    "question": "Làm sao sửa lỗi màn hình máy tính xanh?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Công thức nấu phở bò ngon",
+    "expectedDocId": null
+  },
+  {
+    "question": "Dự báo thời tiết Hà Nội ngày mai",
+    "expectedDocId": null
+  },
+  {
+    "question": "Tư vấn mua cổ phiếu ngân hàng",
+    "expectedDocId": null
+  },
+  {
+    "question": "Ai thắng giải bóng đá tối qua",
+    "expectedDocId": null
+  },
+  {
+    "question": "Tạo giúp một bài thơ tình",
+    "expectedDocId": null
+  },
+  {
+    "question": "Hướng dẫn lập trình trò chơi cờ vua",
+    "expectedDocId": null
+  },
+  {
+    "question": "Mua vé máy bay giá rẻ ở đâu?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Tìm khách sạn ở Đà Nẵng",
+    "expectedDocId": null
+  },
+  {
+    "question": "Làm bài toán phương trình bậc hai",
+    "expectedDocId": null
+  },
+  {
+    "question": "Dịch câu tiếng Nhật này giúp tôi",
+    "expectedDocId": null
+  },
+  {
+    "question": "Cách chăm sóc cây hoa lan",
+    "expectedDocId": null
+  },
+  {
+    "question": "Tôi muốn đổi chiếc điện thoại mới",
+    "expectedDocId": null
+  },
+  {
+    "question": "Món ăn chay nào ngon?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Hãy kể chuyện cổ tích",
+    "expectedDocId": null
+  },
+  {
+    "question": "Định luật Newton là gì?",
+    "expectedDocId": null
+  },
+  {
+    "question": "Bảng xếp hạng bóng đá thế giới",
+    "expectedDocId": null
+  },
+  {
+    "question": "Cách thay lốp xe đạp",
+    "expectedDocId": null
+  }
+]

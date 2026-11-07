@@ -25,6 +25,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="AI\Knowledge\Documents\*.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="AI\Knowledge\Eval\*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="models\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\tools\ClinicManagement.AI.Training\models\role-intent-v2\role_intent_model_v2.zip" Link="models\role-intent-v2\role_intent_model_v2.zip" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\tools\ClinicManagement.AI.Training\models\role-intent-v2\role_intent_model_meta_v2.json" Link="models\role-intent-v2\role_intent_model_meta_v2.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

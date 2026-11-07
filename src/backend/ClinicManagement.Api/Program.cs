@@ -172,6 +172,7 @@ builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiSession
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiAuditService, ClinicManagement.Infrastructure.AI.Persistence.EfAiAuditService>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiBookingConfirmationStore, ClinicManagement.Infrastructure.AI.Persistence.EfAiBookingConfirmationStore>();
 builder.Services.AddScoped<ClinicManagement.Application.AI.Interfaces.IAiSpecialtyService, ClinicManagement.Infrastructure.AI.AiSpecialtyService>();
+ClinicManagement.Infrastructure.AI.Knowledge.KnowledgeRegistration.AddClinicKnowledge(builder.Services, builder.Configuration);
 builder.Services.AddScoped<ClinicManagement.Infrastructure.AI.AiBookingReviewIssuer>();
 builder.Services.AddScoped<ClinicManagement.Infrastructure.AI.AiBookingWizardTokens>();
 builder.Services.AddScoped<ClinicManagement.Infrastructure.AI.AiBookingWizardService>();

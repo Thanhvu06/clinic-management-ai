@@ -329,7 +329,14 @@ export interface AiBookingDraft {
     confirmationId?: string;
 }
 
+export interface KnowledgeSource {
+    docId: string;
+    title: string;
+    heading: string;
+}
+
 export interface AiChatResponse {
+    sources?: KnowledgeSource[];
     message: string;
     reply?: string;
     urgency: "ROUTINE" | "SOON" | "EMERGENCY";
@@ -374,6 +381,7 @@ export interface AiToolExecutionResult {
 }
 
 export interface ChatMessage {
+    sources?: KnowledgeSource[];
     isError?: boolean;
     bookingResult?: {
         appointmentId: number; appointmentCode?: string; doctorName?: string; specialtyName?: string;
