@@ -430,9 +430,10 @@ public sealed class BillingQueueAndDemoCleanupTests
         Assert.Equal(PrescriptionStatus.Expired, reloadedStalePrescription.Status);
 
         var reloadedStaleInvoice = await db.Invoices.Include(i => i.Items).SingleAsync(i => i.Id == staleUnpaidInvoice.Id);
-        Assert.Equal(InvoiceStatus.Cancelled, reloadedStaleInvoice.Status);
-        Assert.Equal("Dọn dữ liệu demo cũ", reloadedStaleInvoice.CancellationReason);
-        Assert.All(reloadedStaleInvoice.Items, item => Assert.True(item.IsCancelled));
+        Assert.Equal(InvoiceStatus.Unpaid, reloadedStaleInvoice.Status);
+        Assert.Null(reloadedStaleInvoice.CancelledAtUtc);
+        Assert.Null(reloadedStaleInvoice.CancellationReason);
+        Assert.All(reloadedStaleInvoice.Items, item => Assert.False(item.IsCancelled));
 
         var reloadedStaleVisit = await db.PatientVisits.SingleAsync(v => v.Id == staleOpenVisit.Id);
         Assert.Equal(VisitStatus.Cancelled, reloadedStaleVisit.Status);
@@ -454,7 +455,7 @@ public sealed class BillingQueueAndDemoCleanupTests
         var logs = await db.SystemAuditLogs.Where(l => l.Action == "AutomaticExpiry").ToListAsync();
         Assert.Contains(logs, l => l.EntityName == nameof(DiagnosticOrder) && l.EntityId == staleOrder.Id.ToString() && l.Description.Contains("Dọn dữ liệu demo cũ"));
         Assert.Contains(logs, l => l.EntityName == nameof(Prescription) && l.EntityId == stalePrescription.Id.ToString() && l.Description.Contains("Dọn dữ liệu demo cũ"));
-        Assert.Contains(logs, l => l.EntityName == nameof(Invoice) && l.EntityId == staleUnpaidInvoice.Id.ToString() && l.Description.Contains("Dọn dữ liệu demo cũ"));
+        Assert.DoesNotContain(logs, l => l.EntityName == nameof(Invoice) && l.EntityId == staleUnpaidInvoice.Id.ToString());
         Assert.Contains(logs, l => l.EntityName == nameof(PatientVisit) && l.EntityId == staleOpenVisit.Id.ToString() && l.Description.Contains("Dọn dữ liệu demo cũ"));
     }
 

@@ -54,10 +54,13 @@ Khi môi trường là **Development**, `DemoSeed:Enabled=true` và `ClinicOpera
 | `TopUpIntervalMinutes` | `60` | Chu kỳ bổ sung sau lần khởi động; giới hạn 1–1440 phút. |
 | `MinUpcomingConfirmed` | `12` | Số lịch Confirmed tối thiểu trong 24 giờ tới của ba bác sĩ demo; giới hạn 0–100. |
 | `MinPendingConfirmations` | `3` | Số lịch Pending tối thiểu trong cùng khoảng thời gian; giới hạn 0–100. |
+| `StaleAfterHours` | `48` | Ngưỡng tuổi dữ liệu để dọn phiếu chỉ định đang xử lý, đơn thuốc chờ cấp và lượt khám chưa kết thúc. |
+
+Trước khi bổ sung, tác vụ dọn phiếu chỉ định đang xử lý, đơn thuốc chờ cấp và lượt khám chưa kết thúc đã quá ngưỡng `StaleAfterHours`. Hóa đơn chưa thanh toán (`Unpaid`) không bị dọn, kể cả khi đã quá 48 giờ; các dòng hóa đơn và đăng ký gói khám đi kèm cũng được giữ nguyên. Hóa đơn này vẫn có nút **Thu tiền** trong hàng đợi, không khiến lượt khám đã hoàn tất quay lại hàng đợi chờ lập hóa đơn.
 
 Top-up chỉ thêm phần còn thiếu, phân bổ cho các tài khoản bác sĩ `doctor@cliniccare.local`, `bacsi.02@cliniccare.local`, `bacsi.03@cliniccare.local`. Bệnh nhân `patient@cliniccare.local` được ưu tiên có một lịch sắp tới; hôm nay có ít nhất một lượt WaitingForDoctor cho BS Nguyễn Minh Khải. Thời gian dùng giờ Việt Nam từ clock nghiệp vụ. Lịch mới bắt đầu sau ít nhất 30 phút, nằm trong 24 giờ tới và tuân thủ điều kiện tuổi/giới tính chuyên khoa của dữ liệu demo.
 
-Chỉ chọn các danh tính bệnh nhân demo được seed sẵn. Không xóa/sửa lịch, lượt khám hoặc lịch sử đã có, không dùng lại cặp bệnh nhân–ngày đã có lịch/lượt khám, không lấy slot đã đặt, slot có lịch đang giữ chỗ, lịch nghỉ hoặc lịch làm việc ngừng hoạt động. Chỉ đánh dấu slot trống của lịch mới là đã đặt. Giao dịch Serializable và khóa trong worker giúp tránh các lượt top-up chồng nhau. Chạy lại ngay không sinh thêm khi các mức tối thiểu đã đủ.
+Chỉ chọn các danh tính bệnh nhân demo được seed sẵn. Ngoài bước dọn dữ liệu cũ nêu trên, không xóa/sửa lịch, lượt khám hoặc lịch sử đã có, không dùng lại cặp bệnh nhân–ngày đã có lịch/lượt khám, không lấy slot đã đặt, slot có lịch đang giữ chỗ, lịch nghỉ hoặc lịch làm việc ngừng hoạt động. Chỉ đánh dấu slot trống của lịch mới là đã đặt. Giao dịch Serializable và khóa trong worker giúp tránh các lượt top-up chồng nhau. Chạy lại ngay không sinh thêm khi các mức tối thiểu đã đủ.
 
 Nếu thiếu lịch làm việc/slot, tác vụ chỉ thêm các ca và slot còn thiếu của ba bác sĩ demo cho hôm nay và ngày cuối cửa sổ 24 giờ; không bật lại ca đã ngừng hoạt động và không đồng bộ lại cờ slot cũ. Cơ chế này độc lập với `GenerateSlots`, vốn điều khiển seed lịch tổng quát ban đầu. Seed mới vẫn giữ dữ liệu mẫu ban đầu trải đều 24 giờ; top-up duy trì mức tối thiểu sau đó. Không cần xóa CSDL hoặc reset demo khi qua ngày.
 

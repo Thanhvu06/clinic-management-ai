@@ -189,30 +189,6 @@ internal static class TwentyFourSevenDemoTopUp
             AddAudit(db, clock, nameof(Prescription), prescription.Id, BusinessDisplay.PrescriptionCode(prescription, clock), reason);
         }
 
-        var staleInvoices = await db.Invoices
-            .Include(i => i.Items)
-            .Include(i => i.HealthPackageRegistration)
-            .Where(i => i.Status == InvoiceStatus.Unpaid && i.CreatedAtUtc <= cutoffUtc)
-            .OrderBy(i => i.Id)
-            .ToListAsync(ct);
-
-        foreach (var invoice in staleInvoices)
-        {
-            invoice.Status = InvoiceStatus.Cancelled;
-            invoice.CancelledAtUtc = clock.UtcNow;
-            invoice.CancellationReason = reason;
-            foreach (var item in invoice.Items)
-                item.IsCancelled = true;
-            if (invoice.HealthPackageRegistration is { Status: not HealthPackageRegistrationStatus.Cancelled } registration)
-            {
-                registration.Status = HealthPackageRegistrationStatus.Cancelled;
-                registration.CancellationReason = reason;
-                registration.UpdatedAt = clock.UtcNow;
-                AddAudit(db, clock, nameof(HealthPackageRegistration), registration.Id, registration.RegistrationCode, reason);
-            }
-            AddAudit(db, clock, nameof(Invoice), invoice.Id, invoice.InvoiceCode, reason);
-        }
-
         var staleVisits = await db.PatientVisits
             .Include(v => v.Appointment)
             .Where(v => v.Status != VisitStatus.Completed &&
@@ -255,7 +231,7 @@ internal static class TwentyFourSevenDemoTopUp
             AddAudit(db, clock, nameof(PatientVisit), visit.Id, visit.VisitCode, reason);
         }
 
-        if (staleOrders.Count > 0 || stalePrescriptions.Count > 0 || staleInvoices.Count > 0 || staleVisits.Count > 0)
+        if (staleOrders.Count > 0 || stalePrescriptions.Count > 0 || staleVisits.Count > 0)
             await db.SaveChangesAsync(ct);
     }
 
