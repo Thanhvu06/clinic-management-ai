@@ -398,3 +398,57 @@ Theo ngoại lệ được người dùng cho phép, giữ nguyên `AiSessionCle
 Lượt toàn bộ dùng `--artifacts-path` đã dừng vì các test `IntentTrainingOutputDirectoryTests` giả định độ sâu cố định của output và tìm sai repository root. Đây là cấu hình chạy không phù hợp, không sửa/skip test để xử lý; lượt toàn bộ hợp lệ được chạy lại trong `bin/Debug/net10.0` chuẩn, log `App_Data/rag-v2-all-standard.log`, TRX `App_Data/rag-v2-all-standard-results/rag-v2-all-standard.trx`.
 
 Kết quả lượt toàn bộ chuẩn: `Passed!  - Failed:     0, Passed:  2728, Skipped:     0, Total:  2728, Duration: 13 m 25 s - ClinicManagement.IntegrationTests.dll (net10.0)`.
+
+## Vòng kiểm thử thủ công 1 — 08/11/2026
+
+Phạm vi L1–L5 trên main cc36412: wizard tính quan hệ DoctorSpecialties của chuyên khoa còn hoạt động, giữ SpecialtyId bệnh nhân chọn; viết lại hướng dẫn đến trễ và giấy tờ lần đầu; tự gửi ngoài wizard cuộn xuống; ẩn gợi ý nội bộ khi SafetyBlocked/EMERGENCY. Không sửa luồng đặt lịch ngoài wizard, model ML.NET hoặc bộ câu hỏi mốc/v2.
+
+### RagEval trên tài liệu cuối
+
+Chạy `end-to-end` (BM25) và `end-to-end-hybrid` với `--questions baseline|v2|combined`. Mẫu số Hit@3 gồm mọi câu trong phạm vi, kể cả bị gate từ chối. Giữ MinScore 0,45; MinQueryCoverage 0,5; MinTermIdf 1,25; MinCosine 0,2; TopK 4. Cả sáu lượt vượt Hit@3 ≥ 85% và từ chối đúng ≥ 90%.
+
+| Chế độ | Bộ | Trong/ngoài phạm vi | Hit@3 | Từ chối đúng |
+|---|---|---:|---:|---:|
+| end-to-end | Mốc | 156/60 | 87.18% | 98.33% |
+| end-to-end | v2 | 36/10 | 88.89% | 90.00% |
+| end-to-end | Gộp | 192/70 | 87.50% | 97.14% |
+| end-to-end-hybrid | Mốc | 156/60 | 86.54% | 98.33% |
+| end-to-end-hybrid | v2 | 36/10 | 88.89% | 90.00% |
+| end-to-end-hybrid | Gộp | 192/70 | 86.98% | 97.14% |
+
+Các JSON/log đo nằm trong `App_Data/manual-round-one-final-rag-*` (không commit). Bộ mốc vẫn 216 câu, v2 46 câu, bộ gộp 262 câu. Một lượt hybrid trung gian không hoàn tất embedding đã bị công cụ từ chối báo số; bảng trên chỉ dùng các lượt hoàn tất trên nội dung cuối.
+
+### API thật và wizard
+
+Backend Development http://localhost:5258, Ollama cục bộ qwen2.5:7b và bge-m3; tài khoản bệnh nhân demo, không ghi mật khẩu/token. Lượt cuối dùng kết nối trực tiếp Ollama, proxy chẩn đoán tạm đã dừng.
+
+| Câu hỏi | HTTP | DialogueOutcome | Gọi Ollama | ms | Nguồn |
+|---|---:|---|---|---:|---|
+| trễ hẹn 20p có sao k | 200 | KnowledgeAnswer | Có | 1393.2 | appointments — Đến trễ và vắng mặt |
+| di kham lan dau can mang gi | 200 | KnowledgeAnswer | Có | 1917.4 | prepare-visit — Lần đầu và tái khám; supported-visitors — Người cao tuổi và người cần hỗ trợ |
+
+Nguyên văn hai câu trả lời cuối:
+
+**trễ hẹn 20p có sao k**
+
+> Trễ hẹn 20 phút vẫn đến quầy tiếp nhận bình thường. Nếu trễ quá 30 phút, lịch có thể bị chuyển thành vắng mặt.
+
+**di kham lan dau can mang gi**
+
+> Đi khám lần đầu cần mang CCCD hoặc giấy tờ tùy thân có ảnh, danh sách thuốc đang dùng và kết quả cũ nếu có. Với trẻ em, mang giấy khai sinh hoặc CCCD của cha mẹ và sổ tiêm chủng. Người cao tuổi nên có người đi cùng, mang toàn bộ thuốc đang dùng và danh sách thuốc, giấy tờ, hồ sơ cũ để bác sĩ đối chiếu. Báo lễ tân nhu cầu hỗ trợ di chuyển khi đến.
+
+Wizard thật qua API: Đặt lịch khám → Tim mạch hiển thị **Nguyễn Minh Khải** và **Bác sĩ nào cũng được (lịch gần nhất)**. Cả chọn BS Khải và chọn bất kỳ đều có ngày 08/11/2026, 09/11/2026, 10/11/2026, 11/11/2026, 12/11/2026, 13/11/2026, 14/11/2026. Chỉ xem tới bước ngày; **không xác nhận và không tạo lịch thật**. Việc xác nhận và lưu SpecialtyId Tim mạch được kiểm chứng riêng trên CSDL test. Kiểm tra thêm bằng trình duyệt Chromium thật tại http://localhost:5173/patient: thấy nút BS Nguyễn Minh Khải, cả hai nhánh hiện đúng bảy ngày trên; dừng ở bước ngày, không xác nhận. Kết quả cục bộ: `App_Data/manual-round-one-browser.json`.
+
+### Test hồi quy và kiểm chứng
+
+- `BookingWizardSecondarySpecialtyTests.cs`: 4 ca, hai nhánh đặt lịch lưu đúng SpecialtyId/DoctorId, không liệt kê bác sĩ ngoài khoa; gợi ý tên vẫn chọn chuyên khoa phụ khi chuyên khoa chính tắt AI hoặc ngừng hoạt động.
+- `RagManualRoundOneTests.cs`: 2 ca, đúng tài liệu/heading cho hai câu thủ công, đủ coverage và nội dung qua output safety ở chế độ trích xuất. Cùng `RagContentV2Tests`: 11/11 đạt.
+- `patientChatManualRoundOne.test.tsx`: 6 ca, tự gửi ngoài wizard cuộn xuống, trong wizard giữ vị trí, tin model khi đang cuộn lên hiện nút, ẩn hint với SafetyBlocked/EMERGENCY và giữ hint ở trường hợp lỗi thường.
+- Sửa đúng một ca cũ được người dùng mở khóa: `patientChatOwnMessageIndicator.test.tsx` → `announces a model reply while the reader remains more than 80 pixels above the bottom`. Ca từ PR #148 từng giữ lỗi L4; nay xác nhận tin tự gửi cuộn xuống, rồi giả lập người đọc cuộn lên trước khi bot trả lời để giữ đúng mục đích kiểm tra nút tin mới. Ca wizard cùng file giữ nguyên.
+- Bốn file chat liên quan: 27/27 đạt. Toàn bộ frontend: 1.648/1.648, 157 file, với `npm test -- --maxWorkers=4`. Lượt đầu chạy song song mặc định có timeout 5 giây ở checkinDateAndDepartment và facilityRoleLabels; hai file chạy riêng đạt 8/8 trước lượt toàn bộ xanh. Không sửa timeout hoặc test để xử lý.
+- `dotnet build`: đạt, 0 lỗi; `dotnet ef migrations has-pending-model-changes`: sạch. `npm run lint` và `npm run build`: đạt; vẫn có cảnh báo sẵn có.
+- `npm run verify-ui -- --only /patient --only /`: 51 routes / 102 page-viewports; NEW 0, KNOWN 0, STALE 0; 221,868 giây.
+
+Giới hạn: bản nháp đầu có cụm “mang thêm đơn thuốc” bị output guard nhận nhầm là thêm thuốc; đã bỏ cụm đó và có test fallback. Một câu sinh trung gian trả lời đúng nhưng thêm “chưa có thông tin về vật cần mang khác”, khiến bộ nhận diện từ chối bỏ câu trả lời; đã viết đoạn L3 thành câu hỏi–đáp ngắn, hai lượt kiểm tra liên tiếp và lượt cuối trực tiếp đều trả đúng CCCD. Model vẫn có thể đưa thêm hướng dẫn người cao tuổi từ nguồn thứ hai và lược câu ưu tiên chỉ định bác sĩ. Nội dung phổ thông trong RAG_CONTENT_REVIEW vẫn cần nhóm duyệt.
+
+Ba dịch vụ backend, frontend và Ollama được giữ chạy nền sau kiểm chứng; không dùng model :cloud hoặc đăng nhập ollama.com.

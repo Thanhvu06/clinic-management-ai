@@ -19,7 +19,7 @@ Chờ duyệt đổi lịch hoặc Chờ duyệt hủy nghĩa là yêu cầu ch�
 
 ## Đến trễ và vắng mặt
 
-Theo mặc định, lịch đã xác nhận chưa tiếp nhận sau giờ bắt đầu 30 phút sẽ chuyển Vắng mặt khi tác vụ hết hạn chạy. Lịch chưa xác nhận đến giờ bắt đầu có thể bị hủy do quá hạn xác nhận. Nếu đến trễ hoặc không đến được, liên hệ lễ tân sớm và kiểm tra Lịch hẹn của tôi; màn hình chưa cập nhật không bảo đảm lịch còn hiệu lực. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
+Đến trễ dưới 30 phút sau giờ bắt đầu, bạn vẫn đến quầy tiếp nhận bình thường. Quá 30 phút mà chưa được tiếp nhận, lịch có thể chuyển Vắng mặt. Lịch chưa được xác nhận khi đến giờ có thể bị hủy do quá hạn. Nếu biết sẽ trễ hoặc không đến được, báo lễ tân sớm. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
 
 ## Hạn xử lý và hạn chế online
 

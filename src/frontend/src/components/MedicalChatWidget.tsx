@@ -165,7 +165,7 @@ const PatientMedicalChatWidget: React.FC = () => {
             return;
         }
         const ownMessage = messages.slice(previous.length).some(message => message.role === 'user');
-        if (nearBottomRef.current) scrollToLatest();
+        if (nearBottomRef.current || (ownMessage && !wizard)) scrollToLatest();
         else if (!ownMessage && (messages.length > previous.length || (wizardChanged && wizard))) setHasNewMessages(true);
         if (ownMessage && !wizard) inputRef.current?.focus({ preventScroll: true });
     }, [messages, isOpen, wizard]);
@@ -462,7 +462,7 @@ const PatientMedicalChatWidget: React.FC = () => {
 
                     <ProviderStatus state={wizard ? 'NotCalled' : messages[latestAssistantIndex]?.providerState} error={errorMsg || (messages[latestAssistantIndex]?.assistantStatus === 'Offline' ? messages[latestAssistantIndex]?.content : undefined)} detail={messages[latestAssistantIndex]?.executionMode} />
 
-                    {(latestMessage?.isError || latestMessage?.toolResults?.some(result => result.status === 'failed') || isNotUnderstood(latestMessage) || providerStateTone(latestMessage?.providerState) === 'amber' || /quá nhiều|giới hạn lưu lượng|429/i.test(errorMsg)) && <p className={styles.localHint}>Trợ lý đang ở chế độ nội bộ nên chỉ hiểu một số câu. Bạn dùng các gợi ý bên dưới để chắc chắn nhất.</p>}
+                    {latestMessage?.providerState !== 'SafetyBlocked' && latestMessage?.urgency !== 'EMERGENCY' && (latestMessage?.isError || latestMessage?.toolResults?.some(result => result.status === 'failed') || isNotUnderstood(latestMessage) || providerStateTone(latestMessage?.providerState) === 'amber' || /quá nhiều|giới hạn lưu lượng|429/i.test(errorMsg)) && <p className={styles.localHint}>Trợ lý đang ở chế độ nội bộ nên chỉ hiểu một số câu. Bạn dùng các gợi ý bên dưới để chắc chắn nhất.</p>}
                     <div ref={messageAreaRef} className={styles.messageArea} data-chat-messages onScroll={() => {
                         const area = messageAreaRef.current;
                         if (area) { nearBottomRef.current = area.scrollHeight - area.scrollTop - area.clientHeight <= 80; if (nearBottomRef.current) setHasNewMessages(false); }
