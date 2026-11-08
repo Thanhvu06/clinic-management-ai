@@ -643,14 +643,14 @@ public static class DevelopmentDataSeeder
         var diagnosticServiceDefs = new[]
         {
             new DiagnosticService { Code = "LAB-CBC", Name = "Tổng phân tích tế bào máu ngoại vi", Category = DiagnosticCategory.Laboratory, Price = 120000m, PreparationInstructions = "Không cần nhịn ăn đặc biệt.", IsActive = true },
-            new DiagnosticService { Code = "LAB-GLU", Name = "Định lượng Glucose máu", Category = DiagnosticCategory.Laboratory, Price = 80000m, PreparationInstructions = "Nhịn đói ít nhất 8 tiếng trước khi lấy máu.", IsActive = true },
-            new DiagnosticService { Code = "LAB-LIPID", Name = "Bộ mỡ máu toàn phần (Lipid panel)", Category = DiagnosticCategory.Laboratory, Price = 150000m, PreparationInstructions = "Nhịn ăn 10-12 tiếng trước khi lấy máu.", IsActive = true },
+            new DiagnosticService { Code = "LAB-GLU", Name = "Định lượng Glucose máu", Category = DiagnosticCategory.Laboratory, Price = 80000m, PreparationInstructions = "Nhịn ăn ít nhất 8 giờ trước khi lấy máu, được uống nước lọc; nên lấy máu buổi sáng.", IsActive = true },
+            new DiagnosticService { Code = "LAB-LIPID", Name = "Bộ mỡ máu toàn phần (Lipid panel)", Category = DiagnosticCategory.Laboratory, Price = 150000m, PreparationInstructions = "Nhịn ăn 10–12 giờ trước khi lấy máu, được uống nước lọc.", IsActive = true },
             new DiagnosticService { Code = "LAB-LFT", Name = "Đánh giá chức năng gan (AST, ALT)", Category = DiagnosticCategory.Laboratory, Price = 140000m, PreparationInstructions = "Tránh uống rượu bia 24 giờ trước khi xét nghiệm.", IsActive = true },
             new DiagnosticService { Code = "LAB-RFT", Name = "Đánh giá chức năng thận (Ure, Creatinin)", Category = DiagnosticCategory.Laboratory, Price = 130000m, PreparationInstructions = "Uống đủ nước, sinh hoạt bình thường.", IsActive = true },
-            new DiagnosticService { Code = "US-ABD", Name = "Siêu âm ổ bụng tổng quát", Category = DiagnosticCategory.Ultrasound, Price = 250000m, PreparationInstructions = "Nhịn ăn ít nhất 6 tiếng, uống nhiều nước và nhịn tiểu.", IsActive = true },
+            new DiagnosticService { Code = "US-ABD", Name = "Siêu âm ổ bụng tổng quát", Category = DiagnosticCategory.Ultrasound, Price = 250000m, PreparationInstructions = "Nhịn ăn ít nhất 6 giờ (thường 6–8 giờ); uống khoảng 0,5–1 lít nước lọc và nhịn tiểu khoảng 1 giờ trước khi siêu âm để quan sát bàng quang.", IsActive = true },
             new DiagnosticService { Code = "US-THY", Name = "Siêu âm tuyến giáp", Category = DiagnosticCategory.Ultrasound, Price = 200000m, PreparationInstructions = "Không cần chuẩn bị trước.", IsActive = true },
             new DiagnosticService { Code = "US-ECHO", Name = "Siêu âm Doppler tim màu", Category = DiagnosticCategory.Ultrasound, Price = 450000m, PreparationInstructions = "Nghỉ ngơi 15 phút trước khi thực hiện.", IsActive = true },
-            new DiagnosticService { Code = "IMG-CXR", Name = "Chụp X-quang ngực thẳng", Category = DiagnosticCategory.Imaging, Price = 180000m, PreparationInstructions = "Tháo bỏ trang sức kim loại vùng ngực và cổ.", IsActive = true },
+            new DiagnosticService { Code = "IMG-CXR", Name = "Chụp X-quang ngực thẳng", Category = DiagnosticCategory.Imaging, Price = 180000m, PreparationInstructions = "Tháo bỏ trang sức, vật kim loại vùng ngực và cổ; báo nhân viên nếu có thai hoặc nghi có thai.", IsActive = true },
             new DiagnosticService { Code = "IMG-ECG", Name = "Điện tâm đồ (ECG 12 chuyển đạo)", Category = DiagnosticCategory.Other, Price = 100000m, PreparationInstructions = "Nghỉ ngơi yên tĩnh 10 phút trước khi đo.", IsActive = true }
         };
 
