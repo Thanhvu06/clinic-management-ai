@@ -166,7 +166,7 @@ const PatientMedicalChatWidget: React.FC = () => {
         }
         const ownMessage = messages.slice(previous.length).some(message => message.role === 'user');
         if (nearBottomRef.current) scrollToLatest();
-        else if (messages.length > previous.length || (wizardChanged && wizard)) setHasNewMessages(true);
+        else if (!ownMessage && (messages.length > previous.length || (wizardChanged && wizard))) setHasNewMessages(true);
         if (ownMessage && !wizard) inputRef.current?.focus({ preventScroll: true });
     }, [messages, isOpen, wizard]);
 

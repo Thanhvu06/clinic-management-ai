@@ -2,17 +2,17 @@
 id: privacy
 title: Bảo mật dữ liệu cá nhân
 category: privacy
-updated: 2026-11-07
+updated: 2026-11-08
 ---
 
 ## Thông tin không gửi vào chat
 
-Không gửi họ tên kèm hồ sơ y tế, số điện thoại, email, số căn cước, địa chỉ, mật khẩu hoặc dữ liệu bệnh nhân vào khung chat. Khi hỏi thông tin chung, chỉ hỏi quy trình hoặc hướng dẫn công khai. Nếu cần cập nhật thông tin cá nhân, dùng chức năng tài khoản được cấp quyền hoặc trao đổi trực tiếp với nhân viên, không yêu cầu chat sửa dữ liệu định danh.
+Không gửi họ tên kèm hồ sơ y tế, số điện thoại, email, căn cước, địa chỉ, mật khẩu hay dữ liệu bệnh nhân vào chat. Chỉ hỏi hướng dẫn công khai. Cần cập nhật thông tin cá nhân thì đăng nhập, mở Hồ sơ cá nhân, sửa trường được phép rồi bấm Lưu thay đổi; nếu cần hỗ trợ thì trao đổi trực tiếp với nhân viên, không nhờ chat sửa định danh. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
 
 ## Quyền riêng tư và dữ liệu người khác
 
-Website kiểm tra quyền truy cập; bệnh nhân chỉ xem dữ liệu của chính mình theo tài khoản. Chat không cung cấp hồ sơ người khác, không tìm hồ sơ bằng thông tin định danh và không mở quyền truy cập thay nhân viên. Không chia sẻ tài khoản để người thân xem hộ; nếu cần hỗ trợ người phụ thuộc, hỏi cơ sở về cách làm phù hợp trước khi cung cấp thông tin.
+Website kiểm tra quyền; bệnh nhân chỉ xem dữ liệu của chính mình, không xem hồ sơ người khác bằng cách đổi mã đường dẫn. Không chia sẻ tài khoản cho người thân xem hộ. Trên thiết bị dùng chung, mở menu tài khoản → Đăng xuất rồi kiểm tra đã về trang đăng nhập. Hỗ trợ người phụ thuộc cần hỏi cơ sở về cách làm phù hợp. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
 
 ## Xử lý thắc mắc bảo mật
 
-Phần hỏi đáp tìm thông tin trong tài liệu công khai. Trước khi gửi câu hỏi cho mô hình cục bộ, hệ thống che số định danh, thông tin liên hệ, mã hồ sơ và tên được giới thiệu trong tin nhắn. Lịch sử chat, hồ sơ khám và thông tin tài khoản không được gửi vào mô hình RAG. Nếu cần trao đổi quyền dữ liệu, xóa dữ liệu hay báo sự cố bảo mật, liên hệ cơ sở; hướng dẫn này không tự cam kết thời hạn lưu hay quy trình pháp lý.
+Hỏi đáp dùng tài liệu công khai. Trước khi gửi câu hỏi thật cho mô hình cục bộ, hệ thống che định danh, liên hệ, mã hồ sơ và tên được giới thiệu. Lịch sử chat, hồ sơ khám, thông tin tài khoản không gửi vào mô hình RAG. Cần xóa dữ liệu hoặc báo sự cố bảo mật thì liên hệ cơ sở; không gửi lại dữ liệu nhạy cảm qua chat và không có cam kết thời hạn lưu ở đây. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.

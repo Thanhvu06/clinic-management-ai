@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useLayoutEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { AiBookingWizardRequest, AiBookingWizardResponse } from "../types/ai";
 import styles from "./MedicalChatWidget.module.css";
 import { Check } from 'lucide-react';
@@ -19,7 +19,7 @@ export const BookingWizard = ({ state, busy, onStep, reviewContent }: Props) => 
     const reasonId = useId();
     const heading = useRef<HTMLHeadingElement>(null);
     const card = useRef<HTMLElement>(null);
-    useEffect(() => {
+    useLayoutEffect(() => {
         card.current?.scrollIntoView({ block: 'start', behavior: 'instant' });
         heading.current?.focus({ preventScroll: true });
     }, [state?.step]);
