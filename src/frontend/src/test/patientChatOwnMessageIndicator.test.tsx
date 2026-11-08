@@ -82,6 +82,9 @@ it('announces a model reply while the reader remains more than 80 pixels above t
     post.mockReturnValueOnce(pending.promise);
 
     send('Câu hỏi tiếp theo');
+    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ behavior: 'instant', block: 'end' });
+    expect(screen.queryByRole('button', { name: 'Có tin nhắn mới' })).not.toBeInTheDocument();
+    scrollAboveLatest();
     await act(async () => { pending.resolve({ success: true, message: '', data: { message: 'Tin mới từ trợ lý' } }); });
 
     await within(area).findByText('Tin mới từ trợ lý');

@@ -137,10 +137,11 @@ public sealed class AiBookingWizardService(
         // Same sources and visible lists as the specialty and doctor steps.
         var aiSpecialties = (await specialties.GetSpecialtiesAsync()).Where(x => x.AiEnabled).OrderBy(x => x.Id).Take(MaxListedOptions).ToList();
         var specialtyIds = aiSpecialties.Select(x => x.Id).ToHashSet();
-        var listedDoctors = (await doctors.GetAllActiveDoctorsAsync())
+        var listedDoctors = (await GetWizardDoctorsAsync())
             .Where(x => x.SpecialtyId.HasValue && specialtyIds.Contains(x.SpecialtyId.Value))
             .GroupBy(x => x.SpecialtyId!.Value)
             .SelectMany(group => group.OrderBy(x => x.Id).Take(MaxListedOptions))
+            .DistinctBy(x => x.Id)
             .ToList();
         List<DoctorBasicDto> MatchDoctors(string candidate) => listedDoctors.Where(doctor =>
         {
@@ -195,7 +196,7 @@ public sealed class AiBookingWizardService(
         var specialty = specialtyList.FirstOrDefault(x => x.Id == state.SpecialtyId && x.AiEnabled);
         if (state.Stage != BookingWizardStage.Specialty && specialty is null)
             return Error("SPECIALTY_NOT_AVAILABLE", "Chuyên khoa không còn nhận đặt lịch qua trợ lý. Vui lòng bắt đầu lại.");
-        var doctorList = state.Stage >= BookingWizardStage.Day ? await doctors.GetAllActiveDoctorsAsync() : null;
+        var doctorList = state.Stage >= BookingWizardStage.Day ? await GetWizardDoctorsAsync(state.SpecialtyId, ct) : null;
         var doctor = doctorList?.FirstOrDefault(x => x.Id == state.DoctorId && x.SpecialtyId == state.SpecialtyId);
         if (state.Stage >= BookingWizardStage.Day && state.DoctorId > 0 && doctor is null)
             return Error("DOCTOR_NOT_AVAILABLE", "Bác sĩ không còn khả dụng. Vui lòng bắt đầu lại.");
@@ -217,7 +218,7 @@ public sealed class AiBookingWizardService(
             case BookingWizardStage.Doctor:
                 response.Title = "Chọn bác sĩ";
                 response.Message = "Chọn bác sĩ hoặc xem lịch trống gần nhất của chuyên khoa.";
-                foreach (var item in (await doctors.GetAllActiveDoctorsAsync()).Where(x => x.SpecialtyId == state.SpecialtyId).OrderBy(x => x.Id).Take(12))
+                foreach (var item in (await GetWizardDoctorsAsync(state.SpecialtyId, ct)).OrderBy(x => x.Id).Take(12))
                     Add(response, state with { Stage = BookingWizardStage.Day, DoctorId = item.Id, AnyDoctor = false }, item.FullName, user, session);
                 Add(response, state with { Stage = BookingWizardStage.Day, DoctorId = 0, AnyDoctor = true }, "Bác sĩ nào cũng được (lịch gần nhất)", user, session);
                 Back(response, state with { Stage = BookingWizardStage.Specialty, SpecialtyId = 0 }, user, session);
@@ -480,7 +481,7 @@ public sealed class AiBookingWizardService(
     private async Task<List<AvailableSlotDto>> SlotsAsync(BookingWizardSelection state, Guid user, CancellationToken ct)
     {
         var today = DateOnly.FromDateTime(clock.UtcNow.AddHours(7));
-        var active = (await doctors.GetAllActiveDoctorsAsync()).Where(x => x.SpecialtyId == state.SpecialtyId).Select(x => x.Id).ToHashSet();
+        var active = (await GetWizardDoctorsAsync(state.SpecialtyId, ct)).Select(x => x.Id).ToHashSet();
         var slots = await availability.GetAvailableSlotsAsync(new BatchSlotAvailabilityRequest
         {
             SpecialtyId = state.SpecialtyId, DoctorId = state.DoctorId > 0 ? state.DoctorId : null,
@@ -488,6 +489,26 @@ public sealed class AiBookingWizardService(
         }, ct);
         return slots.Where(x => active.Contains(x.DoctorId) && db.OperatingHours.IsOpen(x.SlotDate) &&
             x.SlotDate >= today && x.SlotDate <= today.AddDays(13)).OrderBy(x => x.SlotDate).ThenBy(x => x.StartTime).ThenBy(x => x.DoctorId).ThenBy(x => x.SlotId).ToList();
+    }
+
+    private async Task<List<DoctorBasicDto>> GetWizardDoctorsAsync(long? specialtyId = null, CancellationToken ct = default)
+    {
+        var activeDoctors = (await doctors.GetAllActiveDoctorsAsync()).ToDictionary(x => x.Id);
+        var memberships = await db.DoctorSpecialties.AsNoTracking()
+            .Where(x => x.Specialty.IsActive && (!specialtyId.HasValue || x.SpecialtyId == specialtyId.Value))
+            .OrderByDescending(x => x.IsPrimary).ThenBy(x => x.SpecialtyId)
+            .Select(x => new { x.DoctorId, x.SpecialtyId, SpecialtyName = x.Specialty.Name })
+            .ToListAsync(ct);
+        return memberships.Where(x => activeDoctors.ContainsKey(x.DoctorId)).Select(x =>
+        {
+            var doctor = activeDoctors[x.DoctorId];
+            return new DoctorBasicDto
+            {
+                Id = doctor.Id, FullName = doctor.FullName, AcademicTitle = doctor.AcademicTitle,
+                ExperienceYears = doctor.ExperienceYears, Description = doctor.Description,
+                SpecialtyId = x.SpecialtyId, SpecialtyName = x.SpecialtyName
+            };
+        }).ToList();
     }
 
     private void Add(AiBookingWizardResponseDto response, BookingWizardSelection state, string label, Guid user, string session, string? hint = null) =>

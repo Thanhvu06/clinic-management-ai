@@ -15,4 +15,4 @@ Khám thông thường không cần nhịn ăn trừ khi được dặn. Mặc �
 
 ## Lần đầu và tái khám
 
-Đi khám lần đầu: đăng nhập, mở Lịch hẹn của tôi, kiểm tra ngày, giờ, bác sĩ rồi đến quầy tiếp nhận. Tái khám mang đơn thuốc, giấy hẹn và kết quả cũ để đối chiếu. Nếu chưa có lịch, xem lịch trống trên website hoặc liên hệ lễ tân. Có thể xem Cơ sở khám trước khi đi. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
+Đi khám lần đầu cần mang gì? Cần mang CCCD hoặc giấy tờ tùy thân có ảnh, danh sách thuốc đang dùng, kết quả cũ nếu có. Với trẻ em, mang giấy khai sinh hoặc CCCD cha mẹ và sổ tiêm chủng. Khi tái khám, mang đơn thuốc và giấy hẹn. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
