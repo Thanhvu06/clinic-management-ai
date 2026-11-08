@@ -80,7 +80,7 @@ public sealed class RagContentV2Tests
 
     [Theory]
     [InlineData("Siêu âm bụng nhịn ăn mấy tiếng?", "prepare-tests", "6–8 giờ")]
-    [InlineData("Đường huyết lúc đói cần nhịn ăn mấy giờ?", "prepare-tests", "8–12 giờ")]
+    [InlineData("Đường huyết lúc đói cần nhịn ăn mấy giờ?", "prepare-tests", "ít nhất 8 giờ")]
     [InlineData("Siêu âm bàng quang cần uống bao nhiêu nước?", "prepare-tests", "0,5–1 lít")]
     [InlineData("Chụp MRI cần báo thiết bị cấy ghép và tháo gì?", "prepare-tests", "máy tạo nhịp")]
     [InlineData("Đi khám nên đến sớm bao nhiêu phút?", "prepare-visit", "15 phút")]

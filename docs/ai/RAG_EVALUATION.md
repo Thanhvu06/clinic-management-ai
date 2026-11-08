@@ -452,3 +452,68 @@ Wizard thật qua API: Đặt lịch khám → Tim mạch hiển thị **Nguyễ
 Giới hạn: bản nháp đầu có cụm “mang thêm đơn thuốc” bị output guard nhận nhầm là thêm thuốc; đã bỏ cụm đó và có test fallback. Một câu sinh trung gian trả lời đúng nhưng thêm “chưa có thông tin về vật cần mang khác”, khiến bộ nhận diện từ chối bỏ câu trả lời; đã viết đoạn L3 thành câu hỏi–đáp ngắn, hai lượt kiểm tra liên tiếp và lượt cuối trực tiếp đều trả đúng CCCD. Model vẫn có thể đưa thêm hướng dẫn người cao tuổi từ nguồn thứ hai và lược câu ưu tiên chỉ định bác sĩ. Nội dung phổ thông trong RAG_CONTENT_REVIEW vẫn cần nhóm duyệt.
 
 Ba dịch vụ backend, frontend và Ollama được giữ chạy nền sau kiểm chứng; không dùng model :cloud hoặc đăng nhập ollama.com.
+
+## Đồng bộ hướng dẫn chuẩn bị cận lâm sàng — 08/11/2026
+
+Nội dung được đồng bộ giữa 10 dịch vụ trong danh mục seed và `prepare-tests.md` theo bảng nhóm đã chốt. Đường huyết lúc đói dùng ít nhất 8 giờ, mỡ máu 10–12 giờ; siêu âm ổ bụng dùng ít nhất 6 giờ (thường 6–8 giờ), nước lọc 0,5–1 lít và nhịn tiểu khoảng 1 giờ. Bổ sung các mục tổng phân tích máu, chức năng gan/thận, siêu âm tuyến giáp/tim, X-quang ngực và điện tâm đồ.
+
+### Phép đo trước/sau
+
+Đo thực tế trên cùng checkout trước/sau sửa nội dung, cùng cấu hình mặc định MinScore=0,45; MinQueryCoverage=0,50; MinTermIdf=1,25; MinCosine=0,20; TopK=4. Không thay ngưỡng, classifier, model/dataset ML.NET hay bộ câu hỏi; không mở đề ẩn. Corpus tăng từ 12 tài liệu/43 đoạn lên 12 tài liệu/51 đoạn. Mỗi mục trong tài liệu chuẩn bị dài tối đa 357 ký tự và kết thúc bằng câu ưu tiên chỉ định riêng.
+
+| Chế độ | Bộ câu hỏi | Trong/ngoài phạm vi | Hit@3 trước | Hit@3 sau | Từ chối đúng trước | Từ chối đúng sau |
+|---|---|---:|---:|---:|---:|---:|
+| bm25 | baseline | 156/60 | 98.08% | 98.08% | 95.00% | 95.00% |
+| bm25 | v2 | 36/10 | 100.00% | 100.00% | 90.00% | 90.00% |
+| bm25 | combined | 192/70 | 98.44% | 98.44% | 94.29% | 94.29% |
+| end-to-end | baseline | 156/60 | 87.18% | 87.18% | 98.33% | 98.33% |
+| end-to-end | v2 | 36/10 | 88.89% | 88.89% | 90.00% | 90.00% |
+| end-to-end | combined | 192/70 | 87.50% | 87.50% | 97.14% | 97.14% |
+
+Cả ba bộ end-to-end đạt Hit@3 ≥85% và từ chối đúng ≥90%; số liệu trước/sau giữ nguyên. Mẫu số Hit@3 gồm toàn bộ câu trong phạm vi, kể cả câu bị gate loại. `end-to-end` ở đây là safety + classifier + candidate gate + retrieval, không bao gồm sinh câu trả lời hay toàn bộ handler API. Không chạy hybrid trong lượt đo này. Log/JSON và script kiểm tra lưu tạm ngoài repo trong `%TEMP%/clinic-align-preparation`, không commit.
+
+### Kiểm tra nội dung và phạm vi
+
+Script tạm xác nhận 10/10 chuỗi `PreparationInstructions` khớp chính xác bảng chốt và file seed chỉ thay giá trị trường này. Sáu dịch vụ vốn đã khớp được giữ nguyên. Bản ghi hiện hữu được seed ghi đè qua `existing.PreparationInstructions = ds.PreparationInstructions`; API sau khởi động lại xác nhận cả 10 dịch vụ đã nhận đúng nội dung. Tài liệu không còn cụm gộp “8–12 giờ”, câu phủ định uống nước/nhịn tiểu cho siêu âm bụng hay đơn vị “tiếng”; 15 mục đều không quá 550 ký tự và có câu kết bắt buộc. Bảng duyệt có 68 dòng, cột Nhóm duyệt đều trống.
+
+Chỉ sửa đúng một dòng `[InlineData]` trong `RagContentV2Tests.Preparation_retrieval_contains_the_concrete_guidance`: evidence đường huyết đổi từ `8–12 giờ` thành `ít nhất 8 giờ`, giữ nguyên câu hỏi và docId, theo quyền mở khóa đích danh của người dùng. Lý do: nhóm đã chốt tách đường huyết khỏi mỡ máu. Ca siêu âm bụng vẫn giữ nguyên evidence `6–8 giờ`; không sửa test khác.
+
+`dotnet build` đạt (0 lỗi; còn cảnh báo có sẵn). `dotnet ef migrations has-pending-model-changes --no-build` báo không có thay đổi model; không thêm migration. `verify-ui`: không áp dụng vì không sửa frontend.
+
+### API thật sau khi khởi động lại Development
+
+Backend http://localhost:5258, frontend http://localhost:5173 và Ollama http://localhost:11434 đang phản hồi. Đăng nhập bác sĩ demo để đọc `GET /api/v1/diagnostic-services`, đăng nhập bệnh nhân demo để gọi `POST /api/v1/ai/chat`. Mật khẩu/token chỉ giữ trong RAM, không in hoặc lưu vào báo cáo.
+
+PreparationInstructions đọc nguyên văn từ API:
+
+- **LAB-GLU**: Nhịn ăn ít nhất 8 giờ trước khi lấy máu, được uống nước lọc; nên lấy máu buổi sáng.
+- **LAB-LIPID**: Nhịn ăn 10–12 giờ trước khi lấy máu, được uống nước lọc.
+- **US-ABD**: Nhịn ăn ít nhất 6 giờ (thường 6–8 giờ); uống khoảng 0,5–1 lít nước lọc và nhịn tiểu khoảng 1 giờ trước khi siêu âm để quan sát bàng quang.
+
+Nguyên văn bốn câu trả lời, mỗi câu gửi độc lập với context rỗng:
+
+**xét nghiệm đường huyết nhịn ăn bao lâu** — HTTP 200, outcome: KnowledgeAnswer, execution: ProviderAssisted, 2734.3 ms.
+
+> Xét nghiệm đường huyết nhịn ăn ít nhất 8 giờ trước khi lấy máu, được uống nước lọc. Nếu đã ăn khi được dặn nhịn, nên báo nhân viên trước khi lấy mẫu.
+
+Nguồn: prepare-tests — Nhịn ăn trước xét nghiệm đường huyết lúc đói; prepare-tests — Nhịn ăn trước xét nghiệm mỡ máu
+
+**mỡ máu nhịn ăn mấy tiếng** — HTTP 200, outcome: null, execution: DeterministicFallback, 356.3 ms.
+
+> Dựa trên từ khóa triệu chứng bạn mô tả, bạn có thể khám: Nội tiết. Đây là gợi ý tham khảo, không phải chẩn đoán. Gợi ý này được tạo theo quy tắc từ khóa.
+
+Nguồn: không có.
+
+**siêu âm bụng tổng quát chuẩn bị sao** — HTTP 200, outcome: KnowledgeAnswer, execution: ProviderAssisted, 3310.1 ms.
+
+> Siêu âm bụng tổng quát cần nhịn ăn ít nhất 6 giờ, thường là 6-8 giờ. Uống khoảng 0,5-1 lít nước lọc và nhịn tiểu khoảng 1 giờ trước khi siêu âm để quan sát bàng quang. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu có yêu cầu khác.
+
+Nguồn: prepare-tests — Siêu âm ổ bụng; prepare-tests — Siêu âm bàng quang và vùng chậu
+
+**chụp x quang ngực cần lưu ý gì** — HTTP 200, outcome: KnowledgeAnswer, execution: ProviderAssisted, 2528.9 ms.
+
+> Khi chụp X-quang ngực, bạn nên tháo bỏ trang sức và vật kim loại ở vùng ngực và cổ. Nếu có thai hoặc nghi có thai, hãy thông báo cho nhân viên thực hiện. Tuân theo chỉ định cụ thể của bác sĩ hoặc nhân viên tại phòng khám.
+
+Nguồn: prepare-tests — X-quang ngực; prepare-tests — Siêu âm, chụp phim và an toàn
+
+Giới hạn quan sát được: câu “mỡ máu nhịn ăn mấy tiếng” trả gợi ý Nội tiết, không trả hướng dẫn 10–12 giờ và không có Sources. `KnowledgeQuestionPolicy.IsCandidate` hiện chưa nhận mẫu hỏi “mấy tiếng” trong câu không có dấu hỏi; thay nội dung tài liệu không sửa được cổng này. Không sửa policy/classifier vì nằm ngoài phạm vi được phép. Ba câu còn lại trả hướng dẫn từ tài liệu mới; model có thể lược câu khuyên lấy máu buổi sáng hoặc rút gọn câu ưu tiên chỉ định riêng. Đây là kiểm chứng bốn câu cụ thể, không phải bảo đảm độ chính xác sinh câu trả lời; bảng Nhóm duyệt vẫn chưa được ký duyệt.

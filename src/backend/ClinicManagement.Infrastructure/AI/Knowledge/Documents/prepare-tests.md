@@ -2,12 +2,28 @@
 id: prepare-tests
 title: Chuẩn bị xét nghiệm và chẩn đoán hình ảnh
 category: preparation
-updated: 2026-11-08
+updated: 2026-11-08T22:16:28+07:00
 ---
 
-## Nhịn ăn trước xét nghiệm
+## Nhịn ăn trước xét nghiệm đường huyết lúc đói
 
-Xét nghiệm đường huyết lúc đói và mỡ máu thường cần nhịn ăn 8–12 giờ trước lấy máu, nên lấy máu buổi sáng. Không phải xét nghiệm nào cũng cần nhịn ăn; mỡ máu có thể được chỉ định không nhịn đói tùy mục đích. Nếu đã ăn khi được dặn nhịn, báo nhân viên trước lấy mẫu, không tự bỏ xét nghiệm. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
+Xét nghiệm đường huyết lúc đói: nhịn ăn ít nhất 8 giờ trước khi lấy máu, được uống nước lọc; nên lấy máu buổi sáng. Nếu đã ăn khi được dặn nhịn, báo nhân viên trước lấy mẫu, không tự bỏ xét nghiệm. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
+
+## Nhịn ăn trước xét nghiệm mỡ máu
+
+Xét nghiệm mỡ máu: nhịn ăn 10–12 giờ trước khi lấy máu, được uống nước lọc. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
+
+## Tổng phân tích máu
+
+Tổng phân tích tế bào máu ngoại vi: không cần nhịn ăn đặc biệt. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
+
+## Chức năng gan
+
+Xét nghiệm chức năng gan (AST, ALT): tránh uống rượu bia 24 giờ trước khi xét nghiệm. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
+
+## Chức năng thận
+
+Xét nghiệm chức năng thận (Ure, Creatinin): uống đủ nước, sinh hoạt bình thường. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
 
 ## Uống nước và lấy mẫu
 
@@ -19,7 +35,23 @@ Mẫu nước tiểu nên lấy giữa dòng, ưu tiên buổi sáng: nhận c�
 
 ## Siêu âm ổ bụng
 
-Siêu âm ổ bụng thường cần nhịn ăn khoảng 6–8 giờ, nhất là khi khảo sát gan mật. Chuẩn bị siêu âm tùy vùng khảo sát; không tự áp dụng việc uống nhiều nước hay giữ bàng quang cho mọi loại siêu âm. Báo nhân viên nếu không thể nhịn ăn theo yêu cầu. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
+Siêu âm ổ bụng tổng quát: nhịn ăn ít nhất 6 giờ (thường 6–8 giờ); uống khoảng 0,5–1 lít nước lọc và nhịn tiểu khoảng 1 giờ trước khi siêu âm để quan sát bàng quang. Siêu âm vùng khác có thể chuẩn bị khác; báo nhân viên nếu không thể nhịn ăn theo yêu cầu. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
+
+## Siêu âm tuyến giáp
+
+Siêu âm tuyến giáp: không cần chuẩn bị trước. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
+
+## Siêu âm tim
+
+Siêu âm Doppler tim màu: nghỉ ngơi 15 phút trước khi thực hiện. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
+
+## X-quang ngực
+
+Chụp X-quang ngực: tháo bỏ trang sức, vật kim loại vùng ngực và cổ; báo nhân viên nếu có thai hoặc nghi có thai. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
+
+## Điện tâm đồ
+
+Điện tâm đồ (ECG 12 chuyển đạo): nghỉ ngơi yên tĩnh 10 phút trước khi đo. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
 
 ## Siêu âm bàng quang và vùng chậu
 
