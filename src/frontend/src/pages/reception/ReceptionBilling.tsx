@@ -29,7 +29,8 @@ import {
 } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
 import { InvoiceReceiptModal } from '../../components/billing/InvoiceReceiptModal';
-import { DataTable, LoadingState, StatusBadge, PageHeader, StatCard, InlineError } from '../../components/common';
+import dayjs from 'dayjs';
+import { DataTable, LoadingState, StatusBadge, PageHeader, StatCard, InlineError, DatePicker } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
 import { ExpiryBadge } from '../../components/common/ExpiryBadge';
 import { getVisitStatusLabel } from '../../utils/visitStatusLabels';
@@ -559,7 +560,7 @@ export const ReceptionBilling: React.FC = () => {
                 </>
             ),
         },
-        { header: 'Ngày khám', accessor: 'visitDate' },
+        { header: 'Ngày khám', accessor: (v) => formatDateOnly(v.visitDate) },
         {
             header: 'Trạng thái',
             accessor: (v) => (
@@ -650,7 +651,7 @@ export const ReceptionBilling: React.FC = () => {
                     <Input className={styles.searchInput} prefix={<Search size={16} aria-hidden="true" />} placeholder="Mã HĐ, mã khám, tên hoặc SĐT bệnh nhân..." value={search} onChange={e => setSearch(e.target.value)} />
                     <Select className={styles.filterSelect} value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[{value:'',label:'Tất cả trạng thái'},{value:'1',label:'Chờ thanh toán'},{value:'2',label:'Đã thanh toán'},{value:'3',label:'Đã hủy'}]} />
                     <Select className={styles.filterSelect} value={sourceFilter} onChange={value => { setSourceFilter(value); setPage(1); }} options={[{value:'',label:'Tất cả nguồn thu'},{value:'1',label:'Lịch khám chuyên khoa'},{value:'2',label:'Gói khám sức khỏe'}]} />
-                    <div className={styles.dateRange}><Input type="date" className={styles.dateInput} value={fromDate} onChange={e => { setFromDate(e.target.value); setPage(1); }} title="Từ ngày" /><span>-</span><Input type="date" className={styles.dateInput} value={toDate} onChange={e => { setToDate(e.target.value); setPage(1); }} title="Đến ngày" /></div>
+                    <div className={styles.dateRange}><DatePicker className={styles.dateInput} value={fromDate ? dayjs(fromDate) : null} onChange={date => { setFromDate(date ? date.format('YYYY-MM-DD') : ''); setPage(1); }} placeholder="Từ ngày" format="DD/MM/YYYY" aria-label="Từ ngày" /><span>-</span><DatePicker className={styles.dateInput} value={toDate ? dayjs(toDate) : null} onChange={date => { setToDate(date ? date.format('YYYY-MM-DD') : ''); setPage(1); }} placeholder="Đến ngày" format="DD/MM/YYYY" aria-label="Đến ngày" /></div>
                     <Button htmlType="submit">Tìm</Button>
                 </form>
                 <div className={styles.tableCard}>{loading ? <LoadingState message="Đang tải danh sách hóa đơn..." /> : <div className={styles.tableScroll}><DataTable columns={invoiceColumns} data={invoices} keyExtractor={inv => inv.id} emptyText="Không tìm thấy hóa đơn nào phù hợp với bộ lọc." /></div>}

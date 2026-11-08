@@ -7,7 +7,8 @@ import {
 import { diagnosticApi } from '../../api/diagnosticApi';
 import type { DiagnosticCategory, DiagnosticOrderDto, DiagnosticOrderStatus, DiagnosticVerificationStatus, TechnicianDiagnosticStatsDto } from '../../types';
 import { Button, Card, Input, Select, Tag } from 'antd';
-import { PageHeader, MetricStrip, StatusBadge, DataTable, LoadingState, EmptyState, InlineError, Pagination } from '../../components/common';
+import dayjs from 'dayjs';
+import { PageHeader, MetricStrip, StatusBadge, DataTable, LoadingState, EmptyState, InlineError, Pagination, DatePicker } from '../../components/common';
 import { diagnosticCategoryLabels, diagnosticNotificationTime, diagnosticStatusLabels, diagnosticStatusTone } from '../../utils/diagnosticLabels';
 import { toLocalDateString } from '../../utils/formatters';
 import styles from './TechnicianDashboard.module.css';
@@ -140,7 +141,7 @@ export const TechnicianDashboard: React.FC = () => {
                         <Select aria-label="Trạng thái phiếu" className={styles.statusFilter} value={statusFilter} onChange={value => { setStatusFilter(value); setVerificationFilter(''); setPage(1); }} options={[
                             {value:'',label:'Tất cả trạng thái'}, {value:'Ordered',label:'Chờ thực hiện'}, {value:'InProgress',label:'Đang thực hiện'}, {value:'Completed',label:'Đã hoàn tất'}, {value:'Cancelled',label:'Đã hủy'}
                         ]} />
-                        <Input aria-label="Ngày chỉ định" type="date" className={styles.dateFilter} value={dateFilter} onChange={e => { setDateFilter(e.target.value); setPage(1); }} />
+                        <DatePicker aria-label="Ngày chỉ định" placeholder="Chọn ngày" format="DD/MM/YYYY" className={styles.dateFilter} value={dateFilter ? dayjs(dateFilter) : null} onChange={date => { setDateFilter(date ? date.format('YYYY-MM-DD') : ''); setPage(1); }} />
                         <Select aria-label="Loại dịch vụ" className={styles.categoryFilter} value={categoryFilter} onChange={setCategoryFilter} options={[{ value: '', label: 'Tất cả' }, ...Object.entries(diagnosticCategoryLabels).map(([value, label]) => ({ value, label }))]} />
                         {(statusFilter || verificationFilter || dateFilter || searchTerm || categoryFilter) && <Button onClick={() => { setStatusFilter(''); setVerificationFilter(''); setDateFilter(''); setSearchTerm(''); setCategoryFilter(''); setPage(1); }}>Xóa lọc</Button>}
                     </div>

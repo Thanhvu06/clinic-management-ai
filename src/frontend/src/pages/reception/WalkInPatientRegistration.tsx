@@ -4,7 +4,8 @@ import { getApiErrorMessage } from '../../utils/apiError';
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button, Card, Col, Input, Row, Select } from 'antd';
-import { PageHeader, StatusBadge, InlineError } from '../../components/common';
+import dayjs from 'dayjs';
+import { PageHeader, StatusBadge, InlineError, DatePicker } from '../../components/common';
 import { spacing } from '../../theme/tokens';
 import styles from './WalkInPatientRegistration.module.css';
 import {
@@ -443,7 +444,7 @@ export const WalkInPatientRegistration: React.FC = () => {
                         <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Số CCCD / CMND</label><Input type="text" placeholder="12 chữ số CCCD..." value={newIdentityCard} onChange={(e) => setNewIdentityCard(e.target.value)} /></div></Col>
                     </Row>
                     <Row gutter={[spacing.md, spacing.md]} className={styles.patientFormRow}>
-                        <Col xs={24} md={8}><div className={styles.formField}><label className={styles.fieldLabel}>Ngày sinh *</label><Input type="date" value={newDateOfBirth} onChange={(e) => setNewDateOfBirth(e.target.value)} required /></div></Col>
+                        <Col xs={24} md={8}><div className={styles.formField}><label className={styles.fieldLabel}>Ngày sinh *</label><DatePicker format="DD/MM/YYYY" placeholder="DD/MM/YYYY" className={styles.formSelect} value={newDateOfBirth ? dayjs(newDateOfBirth) : null} onChange={date => setNewDateOfBirth(date ? date.format('YYYY-MM-DD') : '')} /><input type="date" className={styles.hiddenDateInput} value={newDateOfBirth} onChange={(e) => setNewDateOfBirth(e.target.value)} tabIndex={-1} aria-hidden="true" /></div></Col>
                         <Col xs={24} md={8}><div className={styles.formField}><label className={styles.fieldLabel}>Giới tính *</label><select className={styles.nativeSelect} value={newGender} onChange={(e) => setNewGender(Number(e.target.value))}><option value={0}>Nam</option><option value={1}>Nữ</option><option value={2}>Khác</option></select></div></Col>
                         <Col xs={24} md={8}><div className={styles.formField}><label className={styles.fieldLabel}>Số điện thoại cá nhân<span className={styles.fieldHint}>(Tùy chọn nếu có SĐT khẩn cấp)</span></label><Input type="tel" placeholder="09xx xxx xxx" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} /></div></Col>
                     </Row>
