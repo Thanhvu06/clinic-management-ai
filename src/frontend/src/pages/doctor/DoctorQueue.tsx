@@ -6,18 +6,17 @@ import { isConsultationInProgress } from '../../utils/doctorQueueStatus';
 import { getVisitStatusLabel } from '../../utils/visitStatusLabels';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Flex, Segmented } from 'antd';
+import { Button, Flex, Input, Segmented } from 'antd';
 import {
-    Users, RefreshCw, Clock,
+    Users, RefreshCw, Calendar, Clock,
     CheckCircle2, PlayCircle, Eye, UserX, Stethoscope
 } from 'lucide-react';
 import { doctorApi } from '../../api/doctorApi';
 import type { DoctorQueueItemDto } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
-import dayjs from 'dayjs';
 import {
     PageHeader, FilterBar, StatusBadge, DataTable,
-    InlineError, LoadingState, EmptyState, DatePicker
+    InlineError, LoadingState, EmptyState
 } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
 import styles from './DoctorQueue.module.css';
@@ -289,12 +288,12 @@ export const DoctorQueue: React.FC = () => {
                 title="Hàng đợi khám"
                 actions={
                     <Flex align="center" gap="small">
-                        <DatePicker
-                            format="DD/MM/YYYY"
+                        <Input
+                            type="date"
                             className={styles.dateInput}
-                            allowClear={false}
-                            value={selectedDate ? dayjs(selectedDate) : null}
-                            onChange={(date) => setSelectedDate(date ? date.format('YYYY-MM-DD') : '')}
+                            prefix={<Calendar size={16} className={styles.icon2} />}
+                            value={selectedDate}
+                            onChange={(e) => setSelectedDate(e.target.value)}
                         />
                         <Button icon={<RefreshCw size={15} />} onClick={() => loadQueue(false)} disabled={loading} title="Tải lại danh sách">
                             {loading ? 'Đang tải...' : 'Làm mới'}

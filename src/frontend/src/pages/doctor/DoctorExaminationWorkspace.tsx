@@ -28,9 +28,9 @@ import type {
     DiagnosticServiceDto,
     DiagnosticOrderDto
 } from '../../types';
-import { useDialog } from '../../contexts/DialogContext'; import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
-import { LoadingState, InlineError, DataTable, EmptyState, StatusBadge, DatePicker } from '../../components/common';
-import dayjs from 'dayjs';
+import { useDialog } from '../../contexts/DialogContext';
+import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
+import { LoadingState, InlineError, DataTable, EmptyState, StatusBadge } from '../../components/common';
 import { DoctorExaminationSyncAction } from './DoctorExaminationHeader';
 import tabStyles from './DoctorExaminationWorkspace.module.css';
 import { formatVitalBodyMeasures } from './vitalHistoryFormat';
@@ -2012,12 +2012,13 @@ const DoctorExaminationContent: React.FC = () => {
                                 <label className={tabStyles.fieldLabel}>
                                     Ngày hẹn tái khám đề xuất *
                                 </label>
-                                <DatePicker
-                                    value={revisitDate ? dayjs(revisitDate) : null}
-                                    onChange={(date) => setRevisitDate(date ? date.format('YYYY-MM-DD') : '')}
-                                    disabledDate={(curr) => Boolean(minRevisitDate && curr && curr.format('YYYY-MM-DD') < minRevisitDate)}
-                                    format="DD/MM/YYYY"
-                                    className={tabStyles.formControl}
+                                <Input
+                                    type="date"
+                                    value={revisitDate}
+                                    onChange={(e) => setRevisitDate(e.target.value)}
+                                    min={minRevisitDate}
+                                    required
+                                    className={[tabStyles.formControl].join(' ')}
                                 />
                             </Form.Item>
                             <Form.Item className={tabStyles.formField}>

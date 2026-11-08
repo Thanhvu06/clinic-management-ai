@@ -5,8 +5,7 @@ import { billingApi } from '../../api/billingApi';
 import { diagnosticApi } from '../../api/diagnosticApi';
 import type { RevenueReportDto, SpecialtyFeeDto, DiagnosticServiceDto } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
-import dayjs from 'dayjs';
-import { PageHeader, DataTable, StatCard, StatusBadge, EmptyState, LoadingState, InlineError, DatePicker } from '../../components/common';
+import { PageHeader, DataTable, StatCard, StatusBadge, EmptyState, LoadingState, InlineError } from '../../components/common';
 import { toLocalDateString } from '../../utils/formatters';
 import styles from './AdminBilling.module.css';
 const recentRange = () => {
@@ -118,8 +117,8 @@ export const AdminBilling: React.FC = () => {
     const modalProps = (busy: boolean) => ({ footer: null, mask: { closable: !busy }, closable: !busy, keyboard: !busy, destroyOnHidden: true });
     const revenueContent = <div className={styles.tabContent}>
         <form className={styles.filterForm} onSubmit={event => { event.preventDefault(); void fetchRevenueReport(fromDate, toDate); }}>
-            <label className={styles.dateField} htmlFor="revenueFrom"><span className={styles.dateLabel}>Từ ngày</span>{typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent) ? <Input id="revenueFrom" type="date" className={styles.dateInput} value={fromDate} onChange={e => { setFromDate(e.target.value); setRangeError(''); }} /> : <DatePicker id="revenueFrom" format="DD/MM/YYYY" placeholder="Từ ngày" className={styles.dateInput} value={fromDate ? dayjs(fromDate) : null} onChange={date => { setFromDate(date ? date.format('YYYY-MM-DD') : ''); setRangeError(''); }} />}</label>
-            <label className={styles.dateField} htmlFor="revenueTo"><span className={styles.dateLabel}>Đến ngày</span>{typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent) ? <Input id="revenueTo" type="date" className={styles.dateInput} value={toDate} onChange={e => { setToDate(e.target.value); setRangeError(''); }} /> : <DatePicker id="revenueTo" format="DD/MM/YYYY" placeholder="Đến ngày" className={styles.dateInput} value={toDate ? dayjs(toDate) : null} onChange={date => { setToDate(date ? date.format('YYYY-MM-DD') : ''); setRangeError(''); }} />}</label>
+            <label className={styles.dateField} htmlFor="revenueFrom"><span className={styles.dateLabel}>Từ ngày</span><Input id="revenueFrom" type="date" className={styles.dateInput} value={fromDate} onChange={event => { setFromDate(event.target.value); setRangeError(''); }} /></label>
+            <label className={styles.dateField} htmlFor="revenueTo"><span className={styles.dateLabel}>Đến ngày</span><Input id="revenueTo" type="date" className={styles.dateInput} value={toDate} onChange={event => { setToDate(event.target.value); setRangeError(''); }} /></label>
             <Button htmlType="submit">Xem báo cáo</Button>
             <Button icon={<RefreshCw size={14} />} onClick={() => { const range = recentRange(); setFromDate(range.from); setToDate(range.to); void fetchRevenueReport(range.from, range.to); }}>30 ngày gần nhất</Button>
         </form>

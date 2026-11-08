@@ -75,6 +75,3 @@
 .nativeSelect[aria-invalid="true"] {
     border-color: var(--cc-color-danger);
 }
-.hiddenDateInput {
-    display: none;
-}

@@ -3,7 +3,6 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import { ReceptionBilling } from '../pages/reception/ReceptionBilling';
-import { DoctorQueue } from '../pages/doctor/DoctorQueue';
 import { DoctorExaminationPage } from '../pages/doctor/DoctorExaminationPage';
 import { PharmacyPrescriptions } from '../pages/pharmacy/PharmacyPrescriptions';
 import { billingApi } from '../api/billingApi';
@@ -125,30 +124,6 @@ describe('Manual Test UI Polish', () => {
         // visitDate '2026-11-08' must be formatted as '08/11/2026'
         expect(screen.getByText('08/11/2026')).toBeInTheDocument();
         expect(screen.queryByText('2026-11-08')).not.toBeInTheDocument();
-    });
-
-    it('displays DatePicker in DoctorQueue formatted as DD/MM/YYYY and sends yyyy-MM-dd to doctorApi.getQueue', async () => {
-        vi.mocked(doctorApi.getQueue).mockResolvedValue({
-            success: true,
-            message: '',
-            data: [],
-        });
-
-        const { container } = render(
-            <MemoryRouter>
-                <DoctorQueue />
-            </MemoryRouter>
-        );
-
-        await waitFor(() => expect(doctorApi.getQueue).toHaveBeenCalled());
-        const input = container.querySelector('.ant-picker input') as HTMLInputElement;
-        expect(input).toBeInTheDocument();
-
-        // Simulate choosing a date
-        fireEvent.change(input, { target: { value: '2026-11-15' } });
-        await waitFor(() => {
-            expect(doctorApi.getQueue).toHaveBeenCalledWith('2026-11-15');
-        });
     });
 
     it('removes leaked enum text (Trạng thái Issued) in DoctorExaminationWorkspace and uses Mã lượt khám in PharmacyPrescriptions modal', async () => {
