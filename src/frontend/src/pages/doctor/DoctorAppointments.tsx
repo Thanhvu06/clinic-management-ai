@@ -10,7 +10,7 @@ import type { ApiResponse } from '../../types';
 import { Button, Flex, Form, Input, Modal, Select, Typography } from 'antd';
 import { Search, Eye, XCircle, Clock, PlusCircle, RefreshCw, Send, Pill, Stethoscope } from 'lucide-react';
 import { useDialog } from '../../contexts/DialogContext';
-import { PageHeader, DataTable, StatusBadge, LoadingState, Pagination, InlineError, DatePicker } from '../../components/common';
+import { PageHeader, DataTable, StatusBadge, LoadingState, Pagination, InlineError } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
 import styles from './DoctorAppointments.module.css';
 import { getApiErrorMessage } from '../../utils/apiError';
@@ -165,14 +165,14 @@ export const DoctorAppointments: React.FC = () => {
         });
     };
 
-    const handleRevisit = async (values: { revisitDate: any; revisitNote?: string }) => {
+    const handleRevisit = async (values: { revisitDate: string; revisitNote?: string }) => {
         if (!modal.apt) return;
 
         showConfirm('Gửi đề xuất tái khám đến bệnh nhân?', async () => {
             setActionLoading(true);
             try {
                 const res = await axiosClient.post<any, ApiResponse<any>>(`/doctor/appointments/${modal.apt!.id}/revisit-requests`, {
-                    suggestedDate: typeof values.revisitDate === 'string' ? values.revisitDate : values.revisitDate?.format ? values.revisitDate.format('YYYY-MM-DD') : '',
+                    suggestedDate: values.revisitDate,
                     note: values.revisitNote || ''
                 });
                 if (res.success) {
@@ -431,7 +431,7 @@ export const DoctorAppointments: React.FC = () => {
                         {modal.view === 'revisit' && (
                             <Form form={revisitForm} layout="vertical" onFinish={handleRevisit}>
                                 <Form.Item name="revisitDate" label="Ngày hẹn tái khám đề nghị" rules={[{ required: true, message: 'Vui lòng chọn ngày tái khám' }]}>
-                                    <DatePicker className={styles.control1} format="DD/MM/YYYY" placeholder="DD/MM/YYYY" />
+                                    <Input type="date" className={styles.control1} />
                                 </Form.Item>
                                 <Form.Item name="revisitNote" label="Tin nhắn / lý do tái khám (tùy chọn)">
                                     <Input.TextArea rows={3} placeholder="Ví dụ: Tái khám sau khi uống hết thuốc..." />

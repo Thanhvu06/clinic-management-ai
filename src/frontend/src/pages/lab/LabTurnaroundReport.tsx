@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button, Select, Typography } from 'antd';
+import { Button, Input, Select, Typography } from 'antd';
 import { CheckCircle2, ClipboardList, Clock, RefreshCw, Timer } from 'lucide-react';
 import { diagnosticApi } from '../../api/diagnosticApi';
-import dayjs from 'dayjs';
-import { DataTable, EmptyState, FilterBar, InlineError, LoadingState, PageHeader, StatCard, DatePicker } from '../../components/common';
+import { DataTable, EmptyState, FilterBar, InlineError, LoadingState, PageHeader, StatCard } from '../../components/common';
 import type { DiagnosticCategory } from '../../types';
 import type {
     DiagnosticTurnaroundReportDto,
@@ -119,11 +118,11 @@ export const LabTurnaroundReport = () => {
         <FilterBar>
             <label className={styles.field}>
                 <span className={styles.fieldLabel}>Từ ngày</span>
-                <DatePicker format="DD/MM/YYYY" placeholder="Từ ngày" className={styles.dateInput} value={draftFrom ? dayjs(draftFrom) : null} disabledDate={current => Boolean(draftTo && current && current.format('YYYY-MM-DD') > draftTo)} onChange={date => setDraftFrom(date ? date.format('YYYY-MM-DD') : '')} />
+                <Input type="date" className={styles.dateInput} value={draftFrom} max={draftTo || undefined} onChange={event => setDraftFrom(event.target.value)} />
             </label>
             <label className={styles.field}>
                 <span className={styles.fieldLabel}>Đến ngày</span>
-                <DatePicker format="DD/MM/YYYY" placeholder="Đến ngày" className={styles.dateInput} value={draftTo ? dayjs(draftTo) : null} disabledDate={current => Boolean(draftFrom && current && current.format('YYYY-MM-DD') < draftFrom)} onChange={date => setDraftTo(date ? date.format('YYYY-MM-DD') : '')} />
+                <Input type="date" className={styles.dateInput} value={draftTo} min={draftFrom || undefined} onChange={event => setDraftTo(event.target.value)} />
             </label>
             <div className={styles.field}>
                 <span className={styles.fieldLabel} id="lab-tat-category-label">Loại dịch vụ</span>
