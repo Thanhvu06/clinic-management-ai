@@ -244,6 +244,12 @@ foreach (var ruleType in ClinicManagement.Infrastructure.Expiry.ExpiryWorker.Rul
 builder.Services.AddSingleton<ClinicManagement.Infrastructure.Expiry.ExpiryWorker>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ClinicManagement.Infrastructure.Expiry.ExpiryWorker>());
 builder.Services.AddHostedService<ClinicManagement.Infrastructure.AI.AiSessionCleanupWorker>();
+builder.Services.Configure<DemoTopUpOptions>(builder.Configuration.GetSection("DemoSeed"));
+if (builder.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("DemoSeed:Enabled"))
+{
+    builder.Services.AddSingleton<DevelopmentDemoTopUpWorker>();
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<DevelopmentDemoTopUpWorker>());
+}
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -361,6 +367,7 @@ using (var scope = app.Services.CreateScope())
             scope.ServiceProvider.GetRequiredService<IWebHostEnvironment>(),
             scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(MedicineImageSeeder)),
             app.Lifetime.ApplicationStopping);
+        await app.Services.GetRequiredService<DevelopmentDemoTopUpWorker>().RunOnceAsync(app.Lifetime.ApplicationStopping);
     }
 }
 
