@@ -72,12 +72,20 @@ public partial class BillingService
 
         var unpaidInvoices = await _dbContext.Invoices
             .Where(i => i.PatientVisitId.HasValue && visitIds.Contains(i.PatientVisitId.Value) && i.Status == InvoiceStatus.Unpaid)
-            .Select(i => new { VisitId = i.PatientVisitId!.Value, i.TotalAmount })
+            .OrderByDescending(i => i.CreatedAtUtc)
+            .ThenByDescending(i => i.Id)
+            .Select(i => new { VisitId = i.PatientVisitId!.Value, i.Id, i.InvoiceCode, i.TotalAmount })
             .ToListAsync(cancellationToken);
 
         var unpaidMap = unpaidInvoices
             .GroupBy(x => x.VisitId)
-            .ToDictionary(g => g.Key, g => new { Count = g.Count(), Total = g.Sum(x => x.TotalAmount) });
+            .ToDictionary(g => g.Key, g => new
+            {
+                Count = g.Count(),
+                Total = g.Sum(x => x.TotalAmount),
+                PendingInvoiceId = g.First().Id,
+                PendingInvoiceCode = g.First().InvoiceCode
+            });
 
         var userIds = visits.Where(v => v.Patient.UserId.HasValue).Select(v => v.Patient.UserId!.Value)
             .Concat(visits.Where(v => v.AssignedDoctor != null).Select(v => v.AssignedDoctor!.UserId))
@@ -147,6 +155,7 @@ public partial class BillingService
             }
 
             unpaidMap.TryGetValue(v.Id, out var unpaidInfo);
+            var hasUnbilledItems = unbilledCount > 0;
 
             // If no unbilled items left to bill, but unpaid invoice exists, reflect unpaid invoice amount
             if (unbilledCount == 0 && unpaidInfo != null)
@@ -165,6 +174,9 @@ public partial class BillingService
             result.Add(new UnbilledVisitDto
             {
                 HasPendingPayment = unbilledCount > 0 || unpaidInfo != null,
+                HasUnbilledItems = hasUnbilledItems,
+                PendingInvoiceId = unpaidInfo?.PendingInvoiceId,
+                PendingInvoiceCode = unpaidInfo?.PendingInvoiceCode,
                 VisitId = v.Id,
                 VisitCode = v.VisitCode,
                 PatientId = v.PatientId,
