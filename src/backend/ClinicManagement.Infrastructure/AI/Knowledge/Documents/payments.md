@@ -2,17 +2,17 @@
 id: payments
 title: Thanh toán tại quầy và hóa đơn
 category: billing
-updated: 2026-11-07
+updated: 2026-11-08
 ---
 
 ## Thanh toán tại quầy
 
-Thanh toán chi phí khám, cận lâm sàng và thuốc tại quầy theo hóa đơn và hướng dẫn nhân viên. Website hỗ trợ xem hóa đơn, không có chức năng thanh toán trực tuyến. Không gửi thông tin thẻ, tài khoản ngân hàng hoặc mã xác thực thanh toán vào khung chat. Xem bảng giá trên website; số tiền phải trả được xác định trên hóa đơn thực tế.
+Mở Hóa đơn của tôi để kiểm tra hóa đơn rồi xuất trình thông tin hóa đơn trực tiếp tại Quầy thu ngân / Lễ tân, thanh toán theo hướng dẫn nhân viên. Website chỉ xem hóa đơn, không thanh toán trực tuyến. Không gửi thông tin thẻ, tài khoản ngân hàng hay mã xác thực vào chat; số tiền theo hóa đơn thực tế. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
 
 ## Kiểm tra hóa đơn
 
-Bệnh nhân đăng nhập tài khoản để xem hóa đơn của chính mình và tình trạng đã thanh toán hoặc chưa thanh toán. Việc xem hóa đơn không tự xác nhận thanh toán; nhân viên quầy xử lý thu tiền. Nếu đã thanh toán mà trạng thái chưa phù hợp, mang thông tin biên nhận đến quầy để kiểm tra, không đưa thông tin giao dịch riêng tư vào chat.
+Đăng nhập, mở menu tài khoản → Hóa đơn của tôi, lọc Tất cả hóa đơn, Chờ thanh toán, Đã thanh toán hoặc Đã hủy. Bấm Xem phiếu tại hóa đơn cần đối chiếu để xem chi tiết. Chờ thanh toán là chưa được ghi nhận thu tiền; xem phiếu không tự đánh dấu thanh toán. Đã trả tiền mà trạng thái sai thì mang biên nhận đến quầy kiểm tra. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
 
 ## Phạm vi dịch vụ và thắc mắc chi phí
 
-Hệ thống hiện không triển khai bảo hiểm y tế và không có điều trị nội trú; không suy ra quyền lợi bảo hiểm hoặc viện phí nội trú từ chat. Nếu cần đối chiếu khoản thu, liên hệ quầy với hóa đơn. Để tra giá, xem bảng giá trên website; để xem thông tin cơ sở, mở trang thông tin cơ sở. Không có chính sách hoàn tiền hay giảm giá tự động được cam kết trong hướng dẫn này.
+Hệ thống không triển khai bảo hiểm y tế và không có điều trị nội trú. Đối chiếu khoản thu với quầy bằng hóa đơn, không suy ra quyền lợi bảo hiểm từ chat. Tra giá khám qua Chuyên khoa, giá thuốc qua Bảng giá thuốc; thông tin cơ sở qua Cơ sở khám. Không có cam kết hoàn tiền hay giảm giá tự động qua hội thoại. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.

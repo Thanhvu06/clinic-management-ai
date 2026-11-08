@@ -9,7 +9,7 @@ public static class KnowledgeQuestionPolicy
     public static bool IsEarlyGuidance(string message, IntentClassificationResult classification)
     {
         var text = KnowledgeText.Normalize(message);
-        return Regex.IsMatch(text, @"\b(?:huong dan|cach|nhu the nao|the nao|quy trinh|thu tuc|phai lam gi)\b") &&
+        return (Regex.IsMatch(text, @"\b(?:huong dan|cach|nhu the nao|the nao|quy trinh|thu tuc|phai lam gi)\b") || IsInterfaceNavigation(text)) &&
             !Regex.IsMatch(text, @"\b(?:cua (?:chinh )?(?:toi|em|con|minh|anh|chi|ban)|ma|so)\b") && !HasSelection(message, classification);
     }
 
@@ -21,13 +21,13 @@ public static class KnowledgeQuestionPolicy
         var text = KnowledgeText.Normalize(message);
         if (Regex.IsMatch(text, @"\b(?:gia kham|gia bao nhieu|chi phi|phi kham|gio lam|mo cua|dia chi|so dien thoai)\b")) return false;
         if (HasSymptoms(message)) return false;
-        var question = message.Contains('?') || Regex.IsMatch(text,
+        var question = message.Contains('?') || IsInterfaceNavigation(text) || Regex.IsMatch(text,
             @"\b(?:chuan bi|co can|can mang|giay to|quy trinh|thu tuc|huong dan|cach|the nao|bao lau|khi nao|duoc khong|khong a|la gi|tai sao|khong|ko|k|chua|sao|ra sao|o dau|ai|gi|nao|bao gio|a|ha|phai khong|duoc ko|duoc k|co phai)\b");
         if (!question) return false;
         if (intent == AiChatIntentTypes.FacilityInquiry)
             return Regex.IsMatch(text, @"\bo dau\b") && !HasSelection(message, classification);
         if (intent == AiChatIntentTypes.UnclearOrOutOfScope) return true;
-        var instructions = Regex.IsMatch(text, @"\b(?:nhu the nao|the nao|nhu nao|cach|quy trinh|thu tuc|huong dan|phai lam gi|lam sao)\b");
+        var instructions = IsInterfaceNavigation(text) || Regex.IsMatch(text, @"\b(?:nhu the nao|the nao|nhu nao|cach|quy trinh|thu tuc|huong dan|phai lam gi|lam sao)\b");
         if (!instructions && Regex.IsMatch(text, @"^(?:cho toi|giup toi|toi muon|toi can)\b.*\b(?:dat|huy|doi|xem)\b"))
             return false;
         var processQuestion = Regex.IsMatch(text,
@@ -44,6 +44,9 @@ public static class KnowledgeQuestionPolicy
         if (action) return guidance && !HasSelection(message, classification);
         return classification?.IsClear == false;
     }
+
+    private static bool IsInterfaceNavigation(string text) => Regex.IsMatch(text,
+        @"\b(?:o muc nao|muc nao|o dau tren web|tren web|tren website|menu|trang nao|bam vao dau|vao dau de)\b");
 
     private static bool HasSelection(string message, IntentClassificationResult? classification) =>
         SymptomSpecialtyRules.HasNamedSpecialty(message) || !string.IsNullOrWhiteSpace(classification?.ExtractedDoctorName) ||

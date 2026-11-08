@@ -2,17 +2,17 @@
 id: accounts
 title: Tài khoản và đăng nhập website
 category: account
-updated: 2026-11-07
+updated: 2026-11-08
 ---
 
 ## Đăng ký và đăng nhập
 
-Khách có thể xem thông tin công khai; các chức năng như đặt lịch và xem hồ sơ của mình cần đăng nhập tài khoản bệnh nhân. Dùng chức năng Đăng ký trên website, điền thông tin được biểu mẫu yêu cầu, sau đó đăng nhập. Không gửi thông tin đăng ký, mật khẩu hoặc mã xác thực qua chat. Nếu biểu mẫu báo lỗi, kiểm tra thông tin theo thông báo trên trang.
+Chọn Đăng ký, điền Họ và tên, Địa chỉ email, Số điện thoại và Mật khẩu theo biểu mẫu rồi bấm Đăng ký. Khi tạo thành công, vào Đăng nhập, nhập Email hoặc Số điện thoại cùng mật khẩu rồi bấm Đăng nhập. Đặt lịch, xem hồ sơ và chat cần tài khoản bệnh nhân đã đăng nhập; khách vẫn xem được thông tin công khai. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
 
 ## Quên mật khẩu hoặc lỗi đăng nhập
 
-Nếu quên mật khẩu, chọn Quên mật khẩu trên trang Đăng nhập rồi thực hiện biểu mẫu yêu cầu và đặt lại mật khẩu theo hướng dẫn hiện trên website. Nếu không nhận được hướng dẫn hoặc gặp lỗi, liên hệ cơ sở để được hỗ trợ. Chat không tự đặt lại mật khẩu hay gửi mã khôi phục. Không nhờ người lạ đăng nhập hộ và không chia sẻ mật khẩu. Khi gặp lỗi tạm thời có thể thử lại; không gửi ảnh chứa thông tin định danh vào chat.
+Tại Đăng nhập, bấm Quên mật khẩu?, nhập email tài khoản rồi Gửi mã đặt lại mật khẩu. Làm theo thông báo; khi biểu mẫu Đặt lại mật khẩu xuất hiện, kiểm tra mã, nhập mật khẩu mới và xác nhận rồi bấm Đặt lại mật khẩu. Không nhận được hướng dẫn thì liên hệ cơ sở. Chat không đặt lại mật khẩu hay gửi mã khôi phục. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
 
 ## Dùng tài khoản an toàn
 
-Đăng xuất sau khi dùng máy tính chung, giữ mật khẩu riêng và kiểm tra đang dùng đúng tài khoản trước khi xem lịch hẹn, hóa đơn hay kết quả. Tài khoản chỉ được truy cập dữ liệu theo quyền đã xác thực, không được xem hồ sơ người khác bằng cách đổi mã trên đường dẫn. Nếu nghi ngờ tài khoản bị dùng trái phép, liên hệ cơ sở để được hỗ trợ.
+Nếu biểu mẫu đăng ký/đăng nhập báo lỗi, kiểm tra từng trường theo thông báo rồi thử lại. Dùng đúng tài khoản trước khi xem hồ sơ, lịch hẹn, hóa đơn, kết quả; sau khi dùng máy chung, mở menu tài khoản và bấm Đăng xuất. Không chia sẻ mật khẩu, mã xác thực hay nhờ người lạ đăng nhập hộ; nghi bị dùng trái phép thì liên hệ cơ sở. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
