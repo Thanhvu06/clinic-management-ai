@@ -28,9 +28,9 @@ import type {
     DiagnosticServiceDto,
     DiagnosticOrderDto
 } from '../../types';
-import { useDialog } from '../../contexts/DialogContext';
-import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
-import { LoadingState, InlineError, DataTable, EmptyState, StatusBadge } from '../../components/common';
+import { useDialog } from '../../contexts/DialogContext'; import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
+import { LoadingState, InlineError, DataTable, EmptyState, StatusBadge, DatePicker } from '../../components/common';
+import dayjs from 'dayjs';
 import { DoctorExaminationSyncAction } from './DoctorExaminationHeader';
 import tabStyles from './DoctorExaminationWorkspace.module.css';
 import { formatVitalBodyMeasures } from './vitalHistoryFormat';
@@ -63,6 +63,7 @@ const DoctorExaminationContent: React.FC = () => {
     const [context, setContext] = useState<PatientClinicalContextDto | null>(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'encounter' | 'vitals' | 'diagnostics' | 'prescription' | 'history'>('encounter');
+    const handleViewDiagnosticResultsNow = () => { setActiveTab('diagnostics'); setTimeout(() => { document.getElementById('diagnostic-orders-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50); };
     // Medicine Catalog
     const [medicines, setMedicines] = useState<ActiveMedicine[]>([]);
     const [medicineSearch, setMedicineSearch] = useState('');
@@ -869,7 +870,7 @@ const DoctorExaminationContent: React.FC = () => {
                             <strong>Đã có kết quả CLS:</strong> Phiếu <code>{unreviewedDiagnosticOrder.orderCode}</code> đã có kết quả. Vui lòng chuyển sang tab Cận lâm sàng và bấm "Xác nhận đã xem kết quả" để hoàn tất ca khám.
                         </div>
                     </div>
-                    <Button type="primary" size="small" onClick={() => setActiveTab('diagnostics')}>
+                    <Button type="primary" size="small" onClick={handleViewDiagnosticResultsNow}>
                         Xem kết quả ngay
                     </Button>
                 </div>
@@ -1492,7 +1493,7 @@ const DoctorExaminationContent: React.FC = () => {
                     )}
 
                     {/* Diagnostic Orders List */}
-                    <Card className={[tabStyles.workspaceCard].join(' ')} >
+                    <Card id="diagnostic-orders-section" className={[tabStyles.workspaceCard].join(' ')} >
                         <div className={tabStyles.sectionHeader}>
                             <h3 className={tabStyles.sectionTitle}>
                                 Phiếu đã chỉ định ({diagnosticOrders.length})
@@ -2011,13 +2012,12 @@ const DoctorExaminationContent: React.FC = () => {
                                 <label className={tabStyles.fieldLabel}>
                                     Ngày hẹn tái khám đề xuất *
                                 </label>
-                                <Input
-                                    type="date"
-                                    value={revisitDate}
-                                    onChange={(e) => setRevisitDate(e.target.value)}
-                                    min={minRevisitDate}
-                                    required
-                                    className={[tabStyles.formControl].join(' ')}
+                                <DatePicker
+                                    value={revisitDate ? dayjs(revisitDate) : null}
+                                    onChange={(date) => setRevisitDate(date ? date.format('YYYY-MM-DD') : '')}
+                                    disabledDate={(curr) => Boolean(minRevisitDate && curr && curr.format('YYYY-MM-DD') < minRevisitDate)}
+                                    format="DD/MM/YYYY"
+                                    className={tabStyles.formControl}
                                 />
                             </Form.Item>
                             <Form.Item className={tabStyles.formField}>
@@ -2104,7 +2104,7 @@ const DoctorExaminationContent: React.FC = () => {
                                         onChange={(e) => setIssuePrescriptionCheck(e.target.checked)}
                                         className={tabStyles.issuePrescriptionCheckbox}
                                     />
-                                    <span>Chốt và phát hành đơn thuốc sang Dược sĩ (Trạng thái Issued)</span>
+                                    <span>Chốt và phát hành đơn thuốc sang Dược sĩ</span>
                                 </label>
                             </Form.Item>
                         )}

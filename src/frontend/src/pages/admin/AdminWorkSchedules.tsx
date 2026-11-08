@@ -4,7 +4,8 @@ import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { Plus, Clock, Edit, CheckCircle, XCircle, PlayCircle } from 'lucide-react';
 import { Alert, Button, Form, Input, Modal, Select, Space, Tag, Typography } from 'antd';
-import { PageHeader, FilterBar, DataTable, EmptyState, LoadingState, InlineError } from '../../components/common';
+import dayjs from 'dayjs';
+import { PageHeader, FilterBar, DataTable, EmptyState, LoadingState, InlineError, DatePicker } from '../../components/common';
 import styles from './AdminWorkSchedules.module.css';
 import { useDialog } from '../../contexts/DialogContext';
 
@@ -223,7 +224,7 @@ export const AdminWorkSchedules: React.FC = () => {
                 {formError && <Alert className={styles.scheduleFormError} type="error" title={formError} showIcon />}
                 <Form layout="vertical" onFinish={handleFormSubmit}>
                     <Form.Item label="Ngày làm việc (*)" htmlFor="scheduleWorkDate">
-                        <Input id="scheduleWorkDate" type="date" className={styles.scheduleDatePicker} value={modal.data.workDate || ''} onChange={event => setModal({ ...modal, data: { ...modal.data, workDate: event.target.value } })} />
+                        <DatePicker id="scheduleWorkDate" format="DD/MM/YYYY" placeholder="DD/MM/YYYY" className={styles.scheduleDatePicker} value={modal.data.workDate ? dayjs(modal.data.workDate) : null} onChange={date => setModal({ ...modal, data: { ...modal.data, workDate: date ? date.format('YYYY-MM-DD') : '' } })} />
                     </Form.Item>
                     <div className={styles.scheduleTimeFields}>
                         <Form.Item label="Từ giờ (*)" htmlFor="scheduleStartTime"><Input id="scheduleStartTime" type="time" required value={modal.data.startTime?.substring(0, 5) || ''}
