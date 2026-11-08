@@ -6,4 +6,5 @@ public sealed class DemoTopUpOptions
     public int TopUpIntervalMinutes { get; set; } = 60;
     public int MinUpcomingConfirmed { get; set; } = 12;
     public int MinPendingConfirmations { get; set; } = 3;
+    public int StaleAfterHours { get; set; } = 48;
 }

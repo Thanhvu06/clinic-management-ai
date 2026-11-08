@@ -333,6 +333,7 @@ export const ReceptionBilling: React.FC = () => {
                 setCreateModalOpen(false);
                 fetchKpi();
                 fetchInvoices();
+                fetchUnbilledVisits();
                 // Open newly created invoice receipt
                 setSelectedInvoice(res.data);
                 setDetailModalOpen(true);
@@ -352,6 +353,31 @@ export const ReceptionBilling: React.FC = () => {
         setPaymentRefCode('');
         setPaymentNote('');
         setPaymentModalOpen(true);
+    };
+
+    const handleOpenPaymentFromUnbilled = (visit: UnbilledVisitDto) => {
+        if (!visit.pendingInvoiceId) return;
+        const existing = invoices.find(inv => inv.id === visit.pendingInvoiceId);
+        if (existing) {
+            handleOpenPaymentModal(existing);
+            return;
+        }
+        handleOpenPaymentModal({
+            id: visit.pendingInvoiceId,
+            invoiceCode: visit.pendingInvoiceCode || String(visit.pendingInvoiceId),
+            patientId: visit.patientId,
+            patientName: visit.patientName,
+            patientPhone: visit.phoneNumber || '',
+            sourceType: 1,
+            sourceTypeName: 'Lịch khám chuyên khoa',
+            patientVisitId: visit.visitId,
+            visitCode: visit.visitCode,
+            status: InvoiceStatus.Unpaid,
+            statusName: 'Chờ thanh toán',
+            subtotal: visit.estimatedTotal,
+            totalAmount: visit.estimatedTotal,
+            createdAtUtc: visit.visitDate,
+        });
     };
 
     const handleProcessPayment = async (e: React.FormEvent) => {
@@ -378,6 +404,7 @@ export const ReceptionBilling: React.FC = () => {
                 setPaymentModalOpen(false);
                 fetchKpi();
                 fetchInvoices();
+                fetchUnbilledVisits();
                 // Load updated detail to show receipt
                 handleViewDetail(paymentInvoice.id);
             }
@@ -415,6 +442,7 @@ export const ReceptionBilling: React.FC = () => {
                     setCancelModalOpen(false);
                     fetchKpi();
                     fetchInvoices();
+                    fetchUnbilledVisits();
                 }
             } catch (err: any) {
                 showAlert(err?.message || 'Không thể hủy hóa đơn.', 'Lỗi hủy hóa đơn', 'error');
@@ -554,7 +582,43 @@ export const ReceptionBilling: React.FC = () => {
         {
             header: 'Thao tác',
             align: 'right',
-            accessor: (v) => (
+            accessor: (v) => v.pendingInvoiceId ? (
+                <div className={styles.actionBtnGroup}>
+                    {v.hasUnbilledItems ? (
+                        <>
+                            <span className={styles.pendingInvoiceNotice}>Có hóa đơn chờ thanh toán</span>
+                            <Button
+                                htmlType="button"
+                                className={styles.rowActionBtn}
+                                onClick={() => handleViewDetail(v.pendingInvoiceId!)}
+                                title="Xem hóa đơn chờ thanh toán"
+                            >
+                                <Eye size={13} /> Xem hóa đơn
+                            </Button>
+                        </>
+                    ) : (
+                        <>
+                            <Button
+                                htmlType="button"
+                                className={styles.rowActionBtn}
+                                onClick={() => handleViewDetail(v.pendingInvoiceId!)}
+                                title="Xem chi tiết & in phiếu thu"
+                            >
+                                <Eye size={13} /> Xem
+                            </Button>
+                            <Button
+                                htmlType="button"
+                                type="primary"
+                                className={styles.rowActionBtn}
+                                onClick={() => handleOpenPaymentFromUnbilled(v)}
+                                title="Thu tiền hóa đơn"
+                            >
+                                <CreditCard size={13} /> Thu tiền
+                            </Button>
+                        </>
+                    )}
+                </div>
+            ) : (
                 <Button
                     htmlType="button"
                     type="primary" className={styles.rowActionBtn}

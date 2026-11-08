@@ -15,7 +15,8 @@
 .mutedText { color: var(--cc-color-text-muted); }
 .amount { font-weight: 700; color: var(--cc-color-primary); white-space: nowrap; }
 .countPill { background: var(--cc-color-border-light); color: var(--cc-color-text-secondary); padding: var(--cc-space-xxs) var(--cc-space-xs); border-radius: var(--cc-radius-lg); font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
-.actionBtnGroup { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--cc-space-xs); }
+.actionBtnGroup { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--cc-space-xs); }
+.pendingInvoiceNotice { display: inline-flex; align-items: center; padding: var(--cc-space-xxs) var(--cc-space-xs); border-radius: var(--cc-radius-sm); background: var(--cc-color-warning-bg); color: var(--cc-color-warning); font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
 .rowActionBtn { white-space: nowrap; }
 .pagination { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--cc-space-sm); padding: var(--cc-space-md); border-top: 1px solid var(--cc-color-border); }
 .paginationActions { display: flex; gap: var(--cc-space-xs); }

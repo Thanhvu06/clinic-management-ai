@@ -2,6 +2,8 @@ using System.Data;
 using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
+using ClinicManagement.Infrastructure.Common;
+using ClinicManagement.Infrastructure.Pharmacy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -41,6 +43,8 @@ internal static class TwentyFourSevenDemoTopUp
             .Where(x => userIds.Contains(x.UserId) && x.IsActive).ToListAsync(ct);
         doctors = DoctorEmails.Select(email => doctors.Single(x => x.UserId == users.Single(u => u.Email == email).Id)).ToList();
         var actor = seedActor ?? await db.Users.Where(x => x.Email == "reception@cliniccare.local" && x.IsActive).Select(x => x.Id).SingleAsync(ct);
+        if (!initialSeed)
+            await CleanStaleDemoDataAsync(db, clock, options, actor, ct);
         await TwentyFourSevenDemoSeed.EnsurePatientsAsync(db, clock, ct);
         var emails = Enumerable.Range(1, 16).Select(x => $"patient.{x:D2}@cliniccare.local")
             .Concat(Enumerable.Range(1, 16).Select(x => $"patient.child.{x:D2}@cliniccare.local")).Append("patient@cliniccare.local").ToArray();
@@ -124,6 +128,147 @@ internal static class TwentyFourSevenDemoTopUp
         if (confirmed < targetConfirmed || pending < targetPending || !demoBooked)
             logger.LogWarning("Demo top-up thiếu nguồn hợp lệ: Confirmed {Confirmed}/{TargetConfirmed}, Pending {Pending}/{TargetPending}, lịch bệnh nhân demo {DemoBooked}.", confirmed, targetConfirmed, pending, targetPending, demoBooked);
     }
+
+    private static async Task CleanStaleDemoDataAsync(AppDbContext db, IDateTimeProvider clock,
+        DemoTopUpOptions options, Guid actor, CancellationToken ct)
+    {
+        const string reason = "Dọn dữ liệu demo cũ";
+        var staleHours = options.StaleAfterHours > 0 ? options.StaleAfterHours : 48;
+        var cutoffUtc = clock.UtcNow.AddHours(-staleHours);
+
+        var staleOrders = await db.DiagnosticOrders
+            .Include(o => o.Items)
+            .Where(o => (o.Status == DiagnosticOrderStatus.Ordered || o.Status == DiagnosticOrderStatus.InProgress) &&
+                o.OrderedAtUtc <= cutoffUtc)
+            .OrderBy(o => o.Id)
+            .ToListAsync(ct);
+
+        foreach (var order in staleOrders)
+        {
+            order.Status = DiagnosticOrderStatus.Cancelled;
+            order.CancelledAtUtc = clock.UtcNow;
+            var previousNote = order.Note?.Trim();
+            order.Note = string.IsNullOrEmpty(previousNote) ? reason
+                : $"{previousNote[..Math.Min(previousNote.Length, 980)]}\n{reason}";
+            foreach (var item in order.Items.Where(i => i.Status == DiagnosticItemStatus.Ordered || i.Status == DiagnosticItemStatus.InProgress))
+                item.Status = DiagnosticItemStatus.Cancelled;
+            AddAudit(db, clock, nameof(DiagnosticOrder), order.Id, order.OrderCode, reason);
+        }
+
+        var stalePrescriptions = await db.Prescriptions
+            .Include(p => p.Items)
+            .Where(p => (p.Status == PrescriptionStatus.Issued || p.Status == PrescriptionStatus.ReservedForPurchase) &&
+                p.CreatedAt <= cutoffUtc)
+            .OrderBy(p => p.Id)
+            .ToListAsync(ct);
+
+        var reservedPrescriptionIds = stalePrescriptions
+            .Where(p => p.Status == PrescriptionStatus.ReservedForPurchase)
+            .Select(p => p.Id)
+            .ToList();
+        if (reservedPrescriptionIds.Count > 0)
+        {
+            var reservations = await db.MedicineStockTransactions
+                .Where(t => t.PrescriptionId.HasValue && reservedPrescriptionIds.Contains(t.PrescriptionId.Value) &&
+                    (t.Type == MedicineStockTransactionType.Reservation || t.Type == MedicineStockTransactionType.ReservationCancelled))
+                .Select(t => new { PrescriptionId = t.PrescriptionId!.Value, t.MedicineId })
+                .Distinct()
+                .ToListAsync(ct);
+            var medicineIds = reservations.Select(r => r.MedicineId).Distinct().ToList();
+            var medicines = await db.Medicines.Where(m => medicineIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id, ct);
+            var allocator = new MedicineBatchAllocator(db, clock);
+            foreach (var reservation in reservations)
+                await allocator.Return(medicines[reservation.MedicineId], reservation.PrescriptionId, reason, actor, ct);
+        }
+
+        foreach (var prescription in stalePrescriptions)
+        {
+            prescription.Status = PrescriptionStatus.Expired;
+            var previousNotes = prescription.Notes?.Trim();
+            prescription.Notes = string.IsNullOrEmpty(previousNotes) ? reason : $"{previousNotes}\n{reason}";
+            AddAudit(db, clock, nameof(Prescription), prescription.Id, BusinessDisplay.PrescriptionCode(prescription, clock), reason);
+        }
+
+        var staleInvoices = await db.Invoices
+            .Include(i => i.Items)
+            .Include(i => i.HealthPackageRegistration)
+            .Where(i => i.Status == InvoiceStatus.Unpaid && i.CreatedAtUtc <= cutoffUtc)
+            .OrderBy(i => i.Id)
+            .ToListAsync(ct);
+
+        foreach (var invoice in staleInvoices)
+        {
+            invoice.Status = InvoiceStatus.Cancelled;
+            invoice.CancelledAtUtc = clock.UtcNow;
+            invoice.CancellationReason = reason;
+            foreach (var item in invoice.Items)
+                item.IsCancelled = true;
+            if (invoice.HealthPackageRegistration is { Status: not HealthPackageRegistrationStatus.Cancelled } registration)
+            {
+                registration.Status = HealthPackageRegistrationStatus.Cancelled;
+                registration.CancellationReason = reason;
+                registration.UpdatedAt = clock.UtcNow;
+                AddAudit(db, clock, nameof(HealthPackageRegistration), registration.Id, registration.RegistrationCode, reason);
+            }
+            AddAudit(db, clock, nameof(Invoice), invoice.Id, invoice.InvoiceCode, reason);
+        }
+
+        var staleVisits = await db.PatientVisits
+            .Include(v => v.Appointment)
+            .Where(v => v.Status != VisitStatus.Completed &&
+                v.Status != VisitStatus.Cancelled &&
+                v.Status != VisitStatus.NoShow &&
+                v.CheckedInAtUtc <= cutoffUtc)
+            .OrderBy(v => v.Id)
+            .ToListAsync(ct);
+
+        foreach (var visit in staleVisits)
+        {
+            visit.Status = VisitStatus.Cancelled;
+            visit.CancelledAtUtc = clock.UtcNow;
+            visit.UpdatedAtUtc = clock.UtcNow;
+            visit.CancellationReason = reason;
+            if (visit.Appointment is { } appointment &&
+                appointment.Status != AppointmentStatus.Completed &&
+                appointment.Status != AppointmentStatus.Cancelled &&
+                appointment.Status != AppointmentStatus.NoShow)
+            {
+                var oldStatus = appointment.Status;
+                appointment.Status = AppointmentStatus.Cancelled;
+                db.AppointmentHistories.Add(new AppointmentHistory
+                {
+                    AppointmentId = appointment.Id,
+                    OldStatus = oldStatus,
+                    NewStatus = AppointmentStatus.Cancelled,
+                    Action = AppointmentHistoryAction.Cancelled,
+                    Note = reason,
+                    PerformedByUserId = null,
+                    CreatedAt = clock.UtcNow
+                });
+                var slot = await db.AppointmentSlots.FindAsync([appointment.AppointmentSlotId], ct);
+                if (slot != null && !await db.Appointments.AnyAsync(a => a.Id != appointment.Id &&
+                        a.AppointmentSlotId == slot.Id &&
+                        AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status), ct))
+                    slot.IsBooked = false;
+                AddAudit(db, clock, nameof(Appointment), appointment.Id, appointment.AppointmentCode, reason);
+            }
+            AddAudit(db, clock, nameof(PatientVisit), visit.Id, visit.VisitCode, reason);
+        }
+
+        if (staleOrders.Count > 0 || stalePrescriptions.Count > 0 || staleInvoices.Count > 0 || staleVisits.Count > 0)
+            await db.SaveChangesAsync(ct);
+    }
+
+    private static void AddAudit(AppDbContext db, IDateTimeProvider clock, string entity, long id, string code, string reason) =>
+        db.SystemAuditLogs.Add(new SystemAuditLog
+        {
+            UserId = null,
+            Action = "AutomaticExpiry",
+            EntityName = entity,
+            EntityId = id.ToString(),
+            Description = $"Hệ thống: {reason} — {code}",
+            CreatedAt = clock.UtcNow
+        });
 
     private static Appointment CreateAppointment(AppointmentSlot slot, Doctor doctor, Specialty specialty, Patient patient,
         long facilityId, AppointmentStatus status, Guid actor, IDateTimeProvider clock, int variant)

@@ -91,6 +91,9 @@ public class CreateVisitInvoiceRequest
 public class UnbilledVisitDto
 {
     public bool HasPendingPayment { get; set; }
+    public bool HasUnbilledItems { get; set; }
+    public long? PendingInvoiceId { get; set; }
+    public string? PendingInvoiceCode { get; set; }
     public long VisitId { get; set; }
     public string VisitCode { get; set; } = string.Empty;
     public long PatientId { get; set; }
