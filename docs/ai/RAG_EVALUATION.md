@@ -517,3 +517,52 @@ Nguồn: prepare-tests — Siêu âm ổ bụng; prepare-tests — Siêu âm bà
 Nguồn: prepare-tests — X-quang ngực; prepare-tests — Siêu âm, chụp phim và an toàn
 
 Giới hạn quan sát được: câu “mỡ máu nhịn ăn mấy tiếng” trả gợi ý Nội tiết, không trả hướng dẫn 10–12 giờ và không có Sources. `KnowledgeQuestionPolicy.IsCandidate` hiện chưa nhận mẫu hỏi “mấy tiếng” trong câu không có dấu hỏi; thay nội dung tài liệu không sửa được cổng này. Không sửa policy/classifier vì nằm ngoài phạm vi được phép. Ba câu còn lại trả hướng dẫn từ tài liệu mới; model có thể lược câu khuyên lấy máu buổi sáng hoặc rút gọn câu ưu tiên chỉ định riêng. Đây là kiểm chứng bốn câu cụ thể, không phải bảo đảm độ chính xác sinh câu trả lời; bảng Nhóm duyệt vẫn chưa được ký duyệt.
+
+## Sửa cổng RAG cho câu hỏi số lượng “mấy” — 08/11/2026
+
+Lỗi ghi nhận ở lượt đồng bộ nội dung: “mỡ máu nhịn ăn mấy tiếng” không có dấu hỏi và không khớp regex từ hỏi, nên rơi sang gợi ý Nội tiết. Chỉ bổ sung các cụm chuẩn hóa `may gio`, `may tieng`, `may ngay`, `may phut`, `may lan`, `may lit`, `bao nhieu` vào regex từ hỏi trong `KnowledgeQuestionPolicy.IsCandidate`, giữ ranh giới từ và không thêm từ đơn `may`. Các điều kiện về triệu chứng, intent thao tác/tường minh, entity và sở hữu giữ nguyên.
+
+### RagEval trước/sau
+
+Đo lại thực tế trên cùng corpus 12 tài liệu/51 đoạn; baseline 156/60 câu trong/ngoài phạm vi, v2 36/10, combined 192/70. Cấu hình giữ nguyên: MinScore=0,45; MinQueryCoverage=0,50; MinTermIdf=1,25; MinCosine=0,20; TopK=4. Không sửa bộ câu hỏi, ngưỡng, model/dataset ML.NET hoặc mở đề ẩn.
+
+| Chế độ | Bộ | Hit@3 trước | Hit@3 sau | Từ chối đúng trước | Từ chối đúng sau |
+|---|---|---:|---:|---:|---:|
+| bm25 | baseline | 98.08% | 98.08% | 95.00% | 95.00% |
+| bm25 | v2 | 100.00% | 100.00% | 90.00% | 90.00% |
+| bm25 | combined | 98.44% | 98.44% | 94.29% | 94.29% |
+| end-to-end | baseline | 87.18% | 87.18% | 98.33% | 98.33% |
+| end-to-end | v2 | 88.89% | 88.89% | 90.00% | 90.00% |
+| end-to-end | combined | 87.50% | 87.50% | 97.14% | 97.14% |
+
+Cả ba bộ end-to-end giữ Hit@3 ≥85% và từ chối đúng ≥90%; số liệu tổng hợp trước/sau không đổi. `end-to-end` của tool gồm safety, classifier, candidate gate và retrieval, không sinh câu trả lời. Lỗi định tuyến cụ thể được kiểm chứng bằng test mới và API thật bên dưới. Log/JSON và TRX lưu tạm tại `%TEMP%/clinic-rag-question-may`, không commit.
+
+### Test và kiểm chứng phạm vi
+
+Thêm file mới `RagQuantityQuestionRoutingTests.cs` gồm 21 ca, không sửa test cũ:
+
+- Bốn câu chuẩn bị có dấu/không dấu đi qua service, trả nguồn `prepare-tests` và đúng evidence: mỡ máu 10–12 giờ, đường huyết ít nhất 8 giờ, nước siêu âm 0,5–1 lít. Dùng retriever/answerer thật ở chế độ offline, không gọi Ollama.
+- “máy đo huyết áp loại nào tốt” không trả câu trả lời/nguồn RAG; “tôi bị đau bụng mấy ngày nay” giữ gợi ý chuyên khoa; “đau ngực khó thở” giữ SafetyEmergency và 115.
+- Bảy cụm hỏi số lượng mở cổng khi không có dấu hỏi; từ đơn “máy”, “máy đo huyết áp” và cụm chưa trọn `may tiengkhac` không tự mở cổng.
+- Ba intent thao tác cùng các điều kiện intent tường minh, entity bác sĩ và sở hữu vẫn được giữ.
+
+21/21 test mới đạt. `dotnet build` đạt, 0 lỗi; còn cảnh báo có sẵn. EF báo không có pending model changes; không đổi schema hoặc thêm migration. `verify-ui`: không áp dụng vì không sửa frontend.
+
+### Chạy thử API Development
+
+Đã khởi động lại backend Development profile http trên cổng 5258; frontend cổng 5173 và Ollama cổng 11434 đều phản hồi. Đăng nhập bệnh nhân demo, mỗi câu gửi độc lập với context rỗng; không in/lưu mật khẩu hoặc token vào kết quả. Hai lượt đều HTTP 200:
+
+**mỡ máu nhịn ăn mấy tiếng** — outcome: KnowledgeAnswer; execution: ProviderAssisted; provider gọi: True; 4986.8 ms.
+
+> Bạn nên nhịn ăn từ 10-12 tiếng trước khi xét nghiệm mỡ máu, có thể uống nước lọc.
+
+Nguồn: prepare-tests — Nhịn ăn trước xét nghiệm mỡ máu; prepare-tests — Nhịn ăn trước xét nghiệm đường huyết lúc đói
+
+**tôi bị đau bụng mấy ngày nay** — outcome: null; execution: DeterministicFallback; provider gọi: False; 348.5 ms.
+
+> Dựa trên từ khóa triệu chứng bạn mô tả, bạn có thể khám: Tiêu hóa. Đây là gợi ý tham khảo, không phải chẩn đoán. Gợi ý này được tạo theo quy tắc từ khóa.
+
+Nguồn: không có.
+Chuyên khoa: SP11.
+
+Câu mỡ máu nay trả lời theo tài liệu chuẩn bị, không còn gợi ý Nội tiết trong lượt thử này. Câu đau bụng vẫn đi luồng triệu chứng, gợi ý Tiêu hóa (SP11), không gọi provider và không đính kèm nguồn RAG. Đây là hai quan sát API cụ thể; câu sinh có thể diễn đạt lại đơn vị/khoảng bằng “tiếng” hoặc dấu gạch nối. Số liệu RagEval là truy xuất trên tập phát triển, không phải bảo đảm mọi câu sinh ra đều chính xác.

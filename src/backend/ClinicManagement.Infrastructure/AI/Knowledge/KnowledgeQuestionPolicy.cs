@@ -22,7 +22,7 @@ public static class KnowledgeQuestionPolicy
         if (Regex.IsMatch(text, @"\b(?:gia kham|gia bao nhieu|chi phi|phi kham|gio lam|mo cua|dia chi|so dien thoai)\b")) return false;
         if (HasSymptoms(message)) return false;
         var question = message.Contains('?') || IsInterfaceNavigation(text) || Regex.IsMatch(text,
-            @"\b(?:chuan bi|co can|can mang|giay to|quy trinh|thu tuc|huong dan|cach|the nao|bao lau|khi nao|duoc khong|khong a|la gi|tai sao|khong|ko|k|chua|sao|ra sao|o dau|ai|gi|nao|bao gio|a|ha|phai khong|duoc ko|duoc k|co phai)\b");
+            @"\b(?:chuan bi|co can|can mang|giay to|quy trinh|thu tuc|huong dan|cach|the nao|bao lau|may gio|may tieng|may ngay|may phut|may lan|may lit|bao nhieu|khi nao|duoc khong|khong a|la gi|tai sao|khong|ko|k|chua|sao|ra sao|o dau|ai|gi|nao|bao gio|a|ha|phai khong|duoc ko|duoc k|co phai)\b");
         if (!question) return false;
         if (intent == AiChatIntentTypes.FacilityInquiry)
             return Regex.IsMatch(text, @"\bo dau\b") && !HasSelection(message, classification);
