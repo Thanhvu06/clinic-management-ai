@@ -9,7 +9,7 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
 {
     private static readonly string[] EmergencyPhrases =
     {
-        "đau ngực", "đau thắt ngực", "tức ngực", "đau tức ngực", "nặng ngực", "đè ép ngực", "đau ngực trái", "khó thở khi nằm",
+        "đau ngực", "đau tim", "đau thắt ngực", "tức ngực", "đau tức ngực", "nặng ngực", "đè ép ngực", "đau ngực trái", "khó thở khi nằm",
         "khó thở nặng", "khó thở", "không thở được", "không cầm máu", "ngất xỉu", "ngất", "bất tỉnh",
         "dấu hiệu đột quỵ", "méo miệng", "yếu liệt nửa người", "co giật", "chảy máu không cầm",
         "chảy máu nhiều", "sốc phản vệ", "dị ứng nặng", "tự tử", "muốn tự sát", "cấp cứu thai", "thai kỳ khẩn cấp",

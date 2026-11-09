@@ -19,6 +19,7 @@ interface DoctorDetail {
     academicTitle?: string;
     experienceYears: number;
     description?: string;
+    specialties?: Specialty[];
 }
 
 interface Specialty {
@@ -61,7 +62,7 @@ export const DoctorDetail: React.FC = () => {
                 setNotFound(!(docRes.success && docRes.data));
                 if (docRes.success && docRes.data) setDoctor(docRes.data);
 
-                if (specRes.success && specRes.data) setSpecialties(specRes.data);
+                setSpecialties(docRes.data?.specialties ?? (specRes.success ? specRes.data ?? [] : []));
 
                 if (availRes.success && availRes.data) {
                     setAvailability(availRes.data);
@@ -134,9 +135,12 @@ export const DoctorDetail: React.FC = () => {
                         <div className={styles.identity}>
                             <h1 className={styles.name}>{doctorName}</h1>
                             <div className={styles.meta}>
-                                {specialties.map(s => (
-                                    <Link key={s.id} to={`/specialties/${s.id}`}>{s.specialtyName}</Link>
-                                ))}
+                                <span>{specialties.map((s, index) => (
+                                    <React.Fragment key={s.id}>
+                                        {index > 0 && ' · '}
+                                        <Link to={`/specialties/${s.id}`}>{s.specialtyName}</Link>
+                                    </React.Fragment>
+                                ))}</span>
                                 <span>{doctor.experienceYears > 0 ? `${doctor.experienceYears} năm kinh nghiệm` : 'Chưa cập nhật kinh nghiệm'}</span>
                             </div>
                         </div>

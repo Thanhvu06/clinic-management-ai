@@ -19,6 +19,7 @@ public class DoctorBasicDto
     public long? SpecialtyId { get; set; }
     public string SpecialtyName { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public List<SpecialtyDto> Specialties { get; set; } = new();
 }
 
 public class RecommendedDoctorDto

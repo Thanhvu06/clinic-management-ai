@@ -44,6 +44,7 @@ const NAV_BY_ROLE: Record<string, NavEntry[]> = {
         { to: '/admin', icon: LayoutDashboard, label: 'Tổng quan' },
         { to: '/admin/facilities', icon: Building2, label: 'Mạng lưới cơ sở' },
         { to: '/admin/billing', icon: TrendingUp, label: 'Doanh thu & biểu phí' },
+        { to: '/lab/tat', icon: Timer, label: 'Báo cáo trả kết quả' },
         { to: '/admin/accounts', icon: ShieldAlert, label: 'Quản lý tài khoản' },
         { to: '/admin/specialties', icon: Stethoscope, label: 'Quản lý chuyên khoa' },
         { to: '/admin/doctors', icon: Users, label: 'Quản lý bác sĩ' },

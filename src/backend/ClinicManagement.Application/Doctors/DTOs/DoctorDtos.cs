@@ -9,6 +9,7 @@ public class DoctorDetailDto
     public string AcademicTitle { get; set; } = string.Empty;
     public int ExperienceYears { get; set; }
     public string Description { get; set; } = string.Empty;
+    public List<SpecialtyDto> Specialties { get; set; } = new();
 }
 
 public class AvailableSlotDto
