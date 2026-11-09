@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import { Tag } from 'antd';
 import type { PublicMedicineDto } from '../../../types';
 import { medicineSections } from './medicineSections';
@@ -8,7 +8,7 @@ export function MedicineArticle({ medicine }: { medicine: PublicMedicineDto }) {
     const sections = medicineSections(medicine);
     const [activeId, setActiveId] = useState(sections[0]?.id);
     const sectionIds = sections.map(item => item.id).join(',');
-    useEffect(() => {
+    useLayoutEffect(() => {
         const update = () => {
             const ids = sectionIds.split(',').filter(Boolean);
             let current = ids[0];
