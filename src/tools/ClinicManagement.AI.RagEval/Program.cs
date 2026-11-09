@@ -11,7 +11,7 @@ using Microsoft.Extensions.Options;
 
 var mode = args.FirstOrDefault() ?? "bm25";
 if (mode is not ("bm25" or "hybrid" or "end-to-end" or "end-to-end-hybrid" or "sweep"))
-    throw new ArgumentException("Usage: RagEval [bm25|hybrid|end-to-end|end-to-end-hybrid|sweep] [output.json] [--questions baseline|v2|combined|path.json]...");
+    throw new ArgumentException("Usage: RagEval [bm25|hybrid|end-to-end|end-to-end-hybrid|sweep] [output.json] [--questions baseline|v2|combined|path.json] [--csv path.csv]");
 var input = EvaluationInput.Parse(args.Skip(1).ToArray());
 var questions = await input.LoadAsync();
 var classifier = new VietnameseIntentClassifier();
@@ -47,7 +47,7 @@ if (mode == "sweep")
         var e2eHybrid = await RunOnce("end-to-end-hybrid", true, true, minScore, 0.5, minIdf, minCosine);
         sweepResults.Add(new
         {
-            questionFiles = input.QuestionFiles.Select(Path.GetFileName).ToArray(),
+            questionFiles = input.IsCsv ? Array.Empty<string>() : input.QuestionFiles.Select(Path.GetFileName).ToArray(),
             inScope = questions.Count(q => q.ExpectedDocId is not null), outside = questions.Count(q => q.ExpectedDocId is null),
             minScore, minQueryCoverage = 0.5, minTermIdf = minIdf, minCosine,
             bm25HitAt3 = Math.Round(pureBm25.HitAt3 * 100, 2),
@@ -114,7 +114,7 @@ async Task<(double HitAt1, double HitAt3, double CorrectRejection, object Report
             !AiMedicalScopeGuard.IsPrescriptionRequest(question.Text) &&
             KnowledgeQuestionPolicy.IsCandidate(question.Text, classification.Intent, false, classification);
         if (candidate) { candidates++; if (question.ExpectedDocId is not null) inScopeCandidates++; }
-        else if (useEndToEnd && question.ExpectedDocId is not null)
+        else if (!input.IsCsv && useEndToEnd && question.ExpectedDocId is not null)
             gateRejections.Add(new { question.Text, classification.Intent, classification.IsClear,
                 classification.ExtractedDoctorName, classification.ExtractedDate, classification.ExtractedTimePreference,
                 safety.IsEmergency });
@@ -128,7 +128,7 @@ async Task<(double HitAt1, double HitAt3, double CorrectRejection, object Report
         {
             outside++;
             if (ids.Length == 0) rejected++;
-            else falsePositives.Add(new { question.Text, sources = result.Hits.Select(h => h.Chunk.Source).ToArray() });
+            else if (!input.IsCsv) falsePositives.Add(new { question.Text, sources = result.Hits.Select(h => h.Chunk.Source).ToArray() });
         }
         else
         {
@@ -137,7 +137,7 @@ async Task<(double HitAt1, double HitAt3, double CorrectRejection, object Report
             if (rank == 0) hit1++;
             if (rank is >= 0 and < 3) hit3++;
             if (rank >= 0) reciprocal += 1.0 / (rank + 1);
-            if (candidate && rank is not (>= 0 and < 3))
+            if (!input.IsCsv && candidate && rank is not (>= 0 and < 3))
                 retrievalMisses.Add(new { question.Text, question.ExpectedDocId, returnedDocIds = ids });
         }
     }
@@ -146,22 +146,40 @@ async Task<(double HitAt1, double HitAt3, double CorrectRejection, object Report
     var sorted = samples.Order().ToArray();
     var h1 = (double)hit1 / inScope;
     var h3 = (double)hit3 / inScope;
+    var mrr = reciprocal / inScope;
     var rej = (double)rejected / outside;
-    var report = new
-    {
-        mode = currentMode, measuredAtUtc = DateTimeOffset.UtcNow, chatModel = options.Value.ChatModel, embeddingModel = options.Value.EmbeddingModel,
-        questionFiles = input.QuestionFiles.Select(Path.GetFileName).ToArray(),
-        minScore = options.Value.MinScore, minQueryCoverage = options.Value.MinQueryCoverage, minTermIdf = options.Value.MinTermIdf,
-        minCosine = options.Value.MinCosine, topK = options.Value.TopK, documents = catalog.Chunks.Select(c => c.Source.DocId).Distinct().Count(),
-        chunks = catalog.Chunks.Count, inScope, outside, candidates, candidateRate = (double)candidates / questions.Length,
-        inScopeCandidateRate = (double)inScopeCandidates / inScope, answerRate = (double)answers / questions.Length,
-        hitDenominator = $"all {inScope} in-scope questions, including gate rejections as misses", hitAt1 = h1, hitAt3 = h3,
-        mrr = reciprocal / inScope, correctRejection = rej,
-        averageMs = samples.Average(), p95Ms = sorted[(int)Math.Ceiling(sorted.Length * 0.95) - 1], embeddingCalls, hybridQueries,
-        gateRejections, retrievalMisses, falsePositives,
-        latencyIncludes = useEndToEnd ? "classification, safety, candidate gate and retrieval; all questions included; indexing and warm-up excluded"
-            : "retrieval only; indexing and warm-up excluded; rejected queries included"
-    };
+    var avgMs = samples.Average();
+    var p95Ms = sorted[(int)Math.Ceiling(sorted.Length * 0.95) - 1];
+    object report = input.IsCsv
+        ? new
+        {
+            mode = currentMode,
+            measuredAtUtc = DateTimeOffset.UtcNow,
+            n = questions.Length,
+            inScope,
+            outside,
+            hitAt1 = h1,
+            hitAt3 = h3,
+            mrr,
+            correctRejection = rej,
+            averageMs = avgMs,
+            p95Ms
+        }
+        : new
+        {
+            mode = currentMode, measuredAtUtc = DateTimeOffset.UtcNow, chatModel = options.Value.ChatModel, embeddingModel = options.Value.EmbeddingModel,
+            questionFiles = input.QuestionFiles.Select(Path.GetFileName).ToArray(),
+            minScore = options.Value.MinScore, minQueryCoverage = options.Value.MinQueryCoverage, minTermIdf = options.Value.MinTermIdf,
+            minCosine = options.Value.MinCosine, topK = options.Value.TopK, documents = catalog.Chunks.Select(c => c.Source.DocId).Distinct().Count(),
+            chunks = catalog.Chunks.Count, inScope, outside, candidates, candidateRate = (double)candidates / questions.Length,
+            inScopeCandidateRate = (double)inScopeCandidates / inScope, answerRate = (double)answers / questions.Length,
+            hitDenominator = $"all {inScope} in-scope questions, including gate rejections as misses", hitAt1 = h1, hitAt3 = h3,
+            mrr, correctRejection = rej,
+            averageMs = avgMs, p95Ms, embeddingCalls, hybridQueries,
+            gateRejections, retrievalMisses, falsePositives,
+            latencyIncludes = useEndToEnd ? "classification, safety, candidate gate and retrieval; all questions included; indexing and warm-up excluded"
+                : "retrieval only; indexing and warm-up excluded; rejected queries included"
+        };
     return (h1, h3, rej, report);
 }
 
