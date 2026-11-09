@@ -6,6 +6,7 @@ using ClinicManagement.Application.Specialties.DTOs;
 using ClinicManagement.Application.Specialties.Interfaces;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Persistence;
+using ClinicManagement.Infrastructure.Doctors;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClinicManagement.Infrastructure.Specialties;
@@ -105,6 +106,9 @@ public class SpecialtyService : ISpecialtyService
             })
             .ToListAsync();
 
+        var specialties = await PublicDoctorSpecialties.LoadAsync(_dbContext, items.Select(doctor => doctor.Id));
+        foreach (var doctor in items)
+            doctor.Specialties = specialties.GetValueOrDefault(doctor.Id) ?? [];
         return new PagedResult<DoctorBasicDto>(items, totalItems, page, pageSize);
     }
 

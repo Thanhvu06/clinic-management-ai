@@ -54,11 +54,15 @@ Khi môi trường là **Development**, `DemoSeed:Enabled=true` và `ClinicOpera
 | `TopUpIntervalMinutes` | `60` | Chu kỳ bổ sung sau lần khởi động; giới hạn 1–1440 phút. |
 | `MinUpcomingConfirmed` | `12` | Số lịch Confirmed tối thiểu trong 24 giờ tới của ba bác sĩ demo; giới hạn 0–100. |
 | `MinPendingConfirmations` | `3` | Số lịch Pending tối thiểu trong cùng khoảng thời gian; giới hạn 0–100. |
+| `DemoPatientDayStartHour` | `7` | Giờ Việt Nam bắt đầu được chọn cho bệnh nhân `patient@cliniccare.local`, tính từ giờ này. |
+| `DemoPatientDayEndHour` | `20` | Giờ Việt Nam kết thúc khung chọn; giờ bắt đầu lịch phải nhỏ hơn giá trị này. |
 | `StaleAfterHours` | `48` | Ngưỡng tuổi dữ liệu để dọn phiếu chỉ định đang xử lý, đơn thuốc chờ cấp và lượt khám chưa kết thúc. |
 
 Trước khi bổ sung, tác vụ dọn phiếu chỉ định đang xử lý, đơn thuốc chờ cấp và lượt khám chưa kết thúc đã quá ngưỡng `StaleAfterHours`. Hóa đơn chưa thanh toán (`Unpaid`) không bị dọn, kể cả khi đã quá 48 giờ; các dòng hóa đơn và đăng ký gói khám đi kèm cũng được giữ nguyên. Hóa đơn này vẫn có nút **Thu tiền** trong hàng đợi, không khiến lượt khám đã hoàn tất quay lại hàng đợi chờ lập hóa đơn.
 
-Top-up chỉ thêm phần còn thiếu, phân bổ cho các tài khoản bác sĩ `doctor@cliniccare.local`, `bacsi.02@cliniccare.local`, `bacsi.03@cliniccare.local`. Bệnh nhân `patient@cliniccare.local` được ưu tiên có một lịch sắp tới; hôm nay có ít nhất một lượt WaitingForDoctor cho BS Nguyễn Minh Khải. Thời gian dùng giờ Việt Nam từ clock nghiệp vụ. Lịch mới bắt đầu sau ít nhất 30 phút, nằm trong 24 giờ tới và tuân thủ điều kiện tuổi/giới tính chuyên khoa của dữ liệu demo.
+Top-up chỉ thêm phần còn thiếu, phân bổ cho các tài khoản bác sĩ `doctor@cliniccare.local`, `bacsi.02@cliniccare.local`, `bacsi.03@cliniccare.local`. Hôm nay có ít nhất một lượt WaitingForDoctor cho BS Nguyễn Minh Khải. Thời gian dùng giờ Việt Nam từ clock nghiệp vụ. Lịch mới bắt đầu sau ít nhất 30 phút và tuân thủ điều kiện tuổi/giới tính chuyên khoa của dữ liệu demo.
+
+Bệnh nhân `patient@cliniccare.local` chỉ được top-up bổ sung lịch có giờ bắt đầu trong khung mặc định **07:00 ≤ giờ bắt đầu < 20:00**. Hai khóa giờ nhận giá trị 0–23 cho giờ bắt đầu và 1–24 cho giờ kết thúc; nếu khung không hợp lệ thì dùng lại 7–20. Nếu không có slot hợp lệ trong 24 giờ tới, tác vụ tìm tiếp các slot đã tồn tại trước lượt top-up với lịch làm việc đang hoạt động, tối đa 7 ngày tính từ hiện tại; không có thì ghi warning. Phần tìm tiếp không tự sinh thêm ca hoặc slot ngoài cửa sổ bổ sung 24 giờ. Lịch ban ngày đã có trong cửa sổ này được giữ để tránh bổ sung trùng. Không sửa hoặc hủy lịch đêm và lịch sử Vắng mặt đã có. Các bệnh nhân demo khác vẫn được bổ sung 24/7 trong cửa sổ 24 giờ như trước. Seed khởi tạo CSDL mới giữ dữ liệu mẫu ban đầu trong 1–6 giờ tới; khung ban ngày áp dụng cho top-up sau seed.
 
 Chỉ chọn các danh tính bệnh nhân demo được seed sẵn. Ngoài bước dọn dữ liệu cũ nêu trên, không xóa/sửa lịch, lượt khám hoặc lịch sử đã có, không dùng lại cặp bệnh nhân–ngày đã có lịch/lượt khám, không lấy slot đã đặt, slot có lịch đang giữ chỗ, lịch nghỉ hoặc lịch làm việc ngừng hoạt động. Chỉ đánh dấu slot trống của lịch mới là đã đặt. Giao dịch Serializable và khóa trong worker giúp tránh các lượt top-up chồng nhau. Chạy lại ngay không sinh thêm khi các mức tối thiểu đã đủ.
 

@@ -28,7 +28,7 @@ public class DoctorService : IDoctorService
 
     public async Task<List<DoctorBasicDto>> GetAllActiveDoctorsAsync(long? facilityId = null)
     {
-        return await (from d in _dbContext.Doctors
+        var doctors = await (from d in _dbContext.Doctors
                       join u in _dbContext.Users on d.UserId equals u.Id
                       where d.IsActive && u.IsActive &&
                           (!facilityId.HasValue || _dbContext.StaffFacilityAssignments.Any(assignment =>
@@ -48,6 +48,10 @@ public class DoctorService : IDoctorService
                           SpecialtyName = primarySpec != null ? primarySpec.Name : string.Empty,
                           Description = d.Description ?? ""
                       }).ToListAsync();
+        var specialties = await PublicDoctorSpecialties.LoadAsync(_dbContext, doctors.Select(doctor => doctor.Id));
+        foreach (var doctor in doctors)
+            doctor.Specialties = specialties.GetValueOrDefault(doctor.Id) ?? [];
+        return doctors;
     }
 
     public async Task<DoctorDetailDto> GetDoctorByIdAsync(long doctorId)
@@ -67,6 +71,8 @@ public class DoctorService : IDoctorService
         if (doctor == null)
             throw new NotFoundException("Bác sĩ không tồn tại hoặc đã ngừng hoạt động.");
 
+        doctor.Specialties = (await PublicDoctorSpecialties.LoadAsync(_dbContext, [doctor.Id]))
+            .GetValueOrDefault(doctor.Id) ?? [];
         return doctor;
     }
 

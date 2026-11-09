@@ -16,7 +16,7 @@ beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(medicineApi.getPublicMedicine).mockResolvedValue({ success: true, message: '', data: medicine });
     vi.mocked(medicineApi.getPublicCategories).mockResolvedValue({ success: true, message: '', data: [{ id: 7, name: 'Nhóm mẫu', sortOrder: 1 }] });
-    vi.mocked(medicineApi.getPublicMedicines).mockResolvedValue({ success: true, message: '', data: { items: [medicine, ...Array.from({ length: 7 }, (_, i) => ({ ...medicine, id: 100 + i, name: `Thuốc liên quan ${i}` }))], page: 1, pageSize: 6, totalItems: 8, totalPages: 2 } });
+    vi.mocked(medicineApi.getPublicMedicines).mockResolvedValue({ success: true, message: '', data: { items: [medicine, ...Array.from({ length: 7 }, (_, i) => ({ ...medicine, id: 100 + i, name: `Thuốc liên quan ${i}`, unitPrice: 2500 }))], page: 1, pageSize: 6, totalItems: 8, totalPages: 2 } });
     vi.mocked(getPublicLocations).mockResolvedValue({ success: true, data: [{ id: 1, code: 'CS', name: 'Cơ sở mẫu', address: 'Địa chỉ nhà thuốc', city: '', openingHours: '08:00–17:00', phone: '0123 456', features: [], isActive: true }] });
 });
 afterEach(cleanup);

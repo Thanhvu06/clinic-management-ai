@@ -49,7 +49,7 @@ public static class SymptomSpecialtyRules
     private static readonly Rule[] NamedSpecialties =
     [
         new("SP01", "Nội tổng quát"), new("SP02", "Nhi", "Nhi khoa"), new("SP03", "Sản phụ khoa"),
-        new("SP04", "Da liễu"), new("SP05", "Tai mũi họng"), new("SP06", "Tim mạch"),
+        new("SP04", "Da liễu"), new("SP05", "Tai mũi họng"), new("SP06", "Tim mạch", "khám tim", "khoa tim", "bác sĩ tim", "bệnh tim"),
         new("SP07", "Cơ xương khớp"), new("SP08", "Thần kinh"), new("SP09", "Nội tiết"),
         new("SP10", "Nhãn khoa", "Mắt"), new("SP11", "Tiêu hóa")
     ];

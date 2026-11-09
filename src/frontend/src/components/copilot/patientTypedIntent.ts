@@ -58,6 +58,8 @@ export function extractBookingHint(text: string): string | null {
         .replace(/[^\p{L}\p{N}\s]/gu, ' ');
     const words = cleaned.trim().split(/\s+/).filter(word => word && !/\d/.test(word));
     const tokens = words.map(word => normalizeTypedText(word));
+    if (classifyPatientTypedIntent(text) === 'booking' &&
+        /\b(?:kham tim|khoa tim|bac si tim|benh tim)\b(?! mach\b)/.test(tokens.join(' '))) return 'Tim mạch';
 
     let start = -1;
     for (const anchor of HINT_ANCHORS) {

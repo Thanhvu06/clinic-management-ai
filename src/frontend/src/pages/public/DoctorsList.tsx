@@ -2,10 +2,12 @@ import { getApiErrorMessage } from '../../utils/apiError';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Search } from 'lucide-react';
+import { Input, Select } from 'antd';
 import axiosClient from '../../api/axiosClient';
 import styles from './PublicPages.module.css';
 import { LinkButton } from '../../components/common/LinkButton';
 import { formatDoctorName } from '../../utils/doctorNameHelper';
+import { InlineError } from '../../components/common/InlineError';
 
 interface Doctor {
     id: number;
@@ -15,12 +17,16 @@ interface Doctor {
     specialtyId?: number;
     specialtyName?: string;
     description?: string;
+    specialties?: Specialty[];
 }
 
 interface Specialty {
     id: number;
     specialtyName: string;
 }
+
+const doctorSpecialties = (doctor: Doctor): Specialty[] => doctor.specialties ??
+    (doctor.specialtyId && doctor.specialtyName ? [{ id: doctor.specialtyId, specialtyName: doctor.specialtyName }] : []);
 
 export const DoctorsList: React.FC = () => {
     const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -30,11 +36,13 @@ export const DoctorsList: React.FC = () => {
     const [selectedSpecialty, setSelectedSpecialty] = useState<string>('all');
     const [sortBy, setSortBy] = useState<'name' | 'exp'>('exp');
     const [error, setError] = useState<string | null>(null);
+    const [reloadKey, setReloadKey] = useState(0);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
                 setLoading(true);
+                setError(null);
                 const [docRes, specRes] = await Promise.all([
                     axiosClient.get<any, any>('/doctors'),
                     axiosClient.get<any, any>('/specialties')
@@ -48,6 +56,8 @@ export const DoctorsList: React.FC = () => {
 
                 if (specRes.success) {
                     setSpecialties(specRes.data || []);
+                } else {
+                    setError('Không thể tải danh sách chuyên khoa.');
                 }
             } catch (err: any) {
                 setError(getApiErrorMessage(err, 'Có lỗi xảy ra khi tải dữ liệu.'));
@@ -57,7 +67,7 @@ export const DoctorsList: React.FC = () => {
         };
 
         fetchData();
-    }, []);
+    }, [reloadKey]);
 
     const getDoctorInitials = (name?: string) => {
         if (!name) return 'BS';
@@ -72,12 +82,13 @@ export const DoctorsList: React.FC = () => {
                 const matchesSearch = 
                     d.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     (d.academicTitle && d.academicTitle.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                    (d.specialtyName && d.specialtyName.toLowerCase().includes(searchTerm.toLowerCase()));
+                    doctorSpecialties(d).some(s => s.specialtyName.toLowerCase().includes(searchTerm.toLowerCase()));
                 
                 const matchesSpecialty = 
                     selectedSpecialty === 'all' || 
                     d.specialtyId?.toString() === selectedSpecialty ||
-                    d.specialtyName === selectedSpecialty;
+                    d.specialtyName === selectedSpecialty ||
+                    doctorSpecialties(d).some(s => s.id.toString() === selectedSpecialty);
 
                 return matchesSearch && matchesSpecialty;
             })
@@ -104,7 +115,7 @@ export const DoctorsList: React.FC = () => {
                 <div className={styles.filterGroup}>
                     <div className={styles.searchBox}>
                         <Search className={styles.searchBoxIcon} size={18} />
-                        <input
+                        <Input
                             type="text"
                             placeholder="Tìm bác sĩ theo tên hoặc học hàm..."
                             value={searchTerm}
@@ -113,27 +124,22 @@ export const DoctorsList: React.FC = () => {
                         />
                     </div>
                     
-                    <select
+                    <Select
                         className={styles.selectFilter}
                         value={selectedSpecialty}
-                        onChange={(e) => setSelectedSpecialty(e.target.value)}
+                        onChange={setSelectedSpecialty}
                         aria-label="Lọc theo chuyên khoa"
-                    >
-                        <option value="all">Tất cả chuyên khoa</option>
-                        {specialties.map(s => (
-                            <option key={s.id} value={s.id.toString()}>{s.specialtyName}</option>
-                        ))}
-                    </select>
+                        options={[{ value: 'all', label: 'Tất cả chuyên khoa' },
+                            ...specialties.map(s => ({ value: s.id.toString(), label: s.specialtyName }))]}
+                    />
 
-                    <select
+                    <Select
                         className={styles.selectFilter}
                         value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value as 'name' | 'exp')}
+                        onChange={setSortBy}
                         aria-label="Sắp xếp bác sĩ"
-                    >
-                        <option value="exp">Kinh nghiệm nhiều nhất</option>
-                        <option value="name">Tên A-Z</option>
-                    </select>
+                        options={[{ value: 'exp', label: 'Kinh nghiệm nhiều nhất' }, { value: 'name', label: 'Tên A-Z' }]}
+                    />
                 </div>
                 
                 <div className={styles.resultCount}>
@@ -141,13 +147,9 @@ export const DoctorsList: React.FC = () => {
                 </div>
             </div>
 
-            {error && (
-                <div className={styles.surface6}>
-                    {error}
-                </div>
-            )}
-
-            {loading ? (
+            {error ? (
+                <InlineError message={error} onRetry={() => setReloadKey(key => key + 1)} />
+            ) : loading ? (
                 <div className={styles.grid4}>
                     {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
                         <div key={i} className={styles.skeletonCard} />
@@ -165,7 +167,7 @@ export const DoctorsList: React.FC = () => {
                                     <h2 className={styles.doctorName}>
                                         {formatDoctorName(doc.academicTitle, doc.fullName)}
                                     </h2>
-                                    {doc.specialtyName && <span className={styles.doctorSpecialty}>{doc.specialtyName}</span>}
+                                    <span className={styles.doctorSpecialty}>{doctorSpecialties(doc).map(s => s.specialtyName).join(' · ') || doc.specialtyName}</span>
                                 </div>
                             </div>
                             <span className={styles.doctorExp}>
@@ -177,7 +179,7 @@ export const DoctorsList: React.FC = () => {
                                 <LinkButton
                                     type="primary"
                                     block
-                                    to={`/patient/book?doctorId=${doc.id}${doc.specialtyId ? `&specialtyId=${doc.specialtyId}` : ''}`}
+                                    to={`/patient/book?doctorId=${doc.id}${selectedSpecialty !== 'all' ? `&specialtyId=${selectedSpecialty}` : doc.specialtyId ? `&specialtyId=${doc.specialtyId}` : ''}`}
                                 >
                                     Đặt lịch khám
                                 </LinkButton>

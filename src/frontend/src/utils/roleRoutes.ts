@@ -63,6 +63,7 @@ export const isPathAllowedForRole = (role?: string, path?: string | null): boole
     }
 
     // Role-specific sections
+    if (cleanPath === '/lab/tat') return role === 'LabSupervisor' || role === 'Admin';
     if (cleanPath === '/lab' || cleanPath.startsWith('/lab/')) return role === 'LabSupervisor';
     if (cleanPath.startsWith('/doctor')) return role === 'Doctor';
     if (cleanPath.startsWith('/patient')) return role === 'Patient';

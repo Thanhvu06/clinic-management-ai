@@ -66,7 +66,7 @@ function defaultParams(): DiagnosticTurnaroundReportParams {
     return { from: addDays(to, -(DEFAULT_RANGE_DAYS - 1)), to };
 }
 
-export const LabTurnaroundReport = () => {
+export const LabTurnaroundReport = ({ readOnly = false }: { readOnly?: boolean }) => {
     const [applied, setApplied] = useState<DiagnosticTurnaroundReportParams>(defaultParams);
     const [draftFrom, setDraftFrom] = useState(applied.from);
     const [draftTo, setDraftTo] = useState(applied.to);
@@ -187,7 +187,7 @@ export const LabTurnaroundReport = () => {
                     <div className={styles.table}>
                         <DataTable ariaLabel="Phiếu vượt chỉ tiêu" data={report.slowestOrders} keyExtractor={order => order.orderId}
                             emptyText="Không có phiếu vượt chỉ tiêu." columns={[
-                                { header: 'Mã phiếu', accessor: order => <Link className={styles.link} to={`/lab/orders/${order.orderId}`}>{order.orderCode}</Link> },
+                                { header: 'Mã phiếu', accessor: order => readOnly ? order.orderCode : <Link className={styles.link} to={`/lab/orders/${order.orderId}`}>{order.orderCode}</Link> },
                                 { header: 'Bệnh nhân', accessor: 'patientName' },
                                 { header: 'Dịch vụ', accessor: order => order.serviceNames.join(', ') },
                                 { header: 'Chỉ định lúc', accessor: order => diagnosticNotificationTime(order.orderedAtUtc) },

@@ -11,7 +11,7 @@ namespace ClinicManagement.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/lab-reports")]
-[Authorize(Roles = RoleNames.LabSupervisor)]
+[Authorize(Roles = RoleNames.LabSupervisor + "," + RoleNames.Admin)]
 public class LabReportsController(IDiagnosticWorkflowService workflowService, IDateTimeProvider dateTimeProvider) : ControllerBase
 {
     private const int DefaultRangeDays = 7;

@@ -164,7 +164,8 @@ public sealed class AiBookingWizardService(
         {
             var specialtyName = NormalizeHint(specialty.SpecialtyName);
             var core = string.Join(' ', specialtyName.Split(' ').Where(word => word != "khoa"));
-            return specialtyName.Length > 0 && (name == specialtyName || (core.Length > 0 && name == core));
+            return specialtyName.Length > 0 && (name == specialtyName || (core.Length > 0 && name == core) ||
+                specialty.SpecialtyCode == "SP06" && Regex.IsMatch(text, @"\b(?:kham tim|khoa tim|bac si tim|benh tim)\b"));
         }).ToList();
         return specialtyMatches.Count == 1
             ? fresh with { Stage = BookingWizardStage.Doctor, SpecialtyId = specialtyMatches[0].Id }
