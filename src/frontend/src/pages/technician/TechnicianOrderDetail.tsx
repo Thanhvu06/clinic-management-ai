@@ -7,8 +7,8 @@ import {
 } from 'lucide-react';
 import { Alert, Button, Card, Input, Modal, Select, Tag, Upload } from 'antd';
 import { DiagnosticAttachmentList } from '../../components/diagnostics/DiagnosticAttachmentList';
-import { DataTable, EmptyState, LoadingState, PageHeader, StatusBadge, InlineError } from '../../components/common';
-import { diagnosticCategoryLabels, diagnosticStatusLabels, diagnosticStatusTone, diagnosticResultFlagLabels, diagnosticFlagTone, previewDiagnosticFlag, isCriticalDiagnosticFlag, diagnosticNotificationTime, formatDelta } from '../../utils/diagnosticLabels';
+import { EmptyState, LoadingState, PageHeader, StatusBadge, InlineError } from '../../components/common';
+import { diagnosticCategoryLabels, diagnosticStatusLabels, diagnosticStatusTone, previewDiagnosticFlag, isCriticalDiagnosticFlag, diagnosticNotificationTime } from '../../utils/diagnosticLabels';
 import styles from './TechnicianOrderDetail.module.css';
 import { specimenStatusLabels, specimenRejectionLabels, specimenRejectionValues } from '../../utils/diagnosticLabels';
 import type { SpecimenRejectionReason } from '../../types/diagnostic';
@@ -17,6 +17,7 @@ import type { DiagnosticOrderDto, RecordDiagnosticResultRequest } from '../../ty
 import { useDialog } from '../../contexts/DialogContext';
 import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
 import { ClinicalPageErrorBoundary } from '../../components/diagnostics/ClinicalPageErrorBoundary';
+import { TechnicianParameterInputs, TechnicianSavedParameters } from './TechnicianParameterTables';
 const categoryIcons = { Laboratory: FlaskConical, Ultrasound: Waves, Imaging: Scan, Other: Stethoscope };
 const quickConclusions = ['Bình thường', 'Bất thường — đề nghị bác sĩ xem', 'Cần làm lại'];
 
@@ -65,6 +66,11 @@ const TechnicianOrderContent: React.FC = () => {
     const [verificationError, setVerificationError] = useState('');
     const [attachmentBusy, setAttachmentBusy] = useState<{ itemId: number; action: 'upload' | 'delete' } | null>(null);
     const attachmentLock = useRef(false);
+
+    const handleParameterValueChange = useCallback((itemId: number, parameterId: number, value: string) => {
+        setParameterValues(previous => ({ ...previous, [itemId]: { ...previous[itemId], [parameterId]: value } }));
+        setParameterErrors(previous => ({ ...previous, [itemId]: '' }));
+    }, []);
 
     const uploadAttachment = async (itemId: number, file: File) => {
         if (attachmentLock.current) {
@@ -483,14 +489,7 @@ const TechnicianOrderContent: React.FC = () => {
                                 </section>}
                                 {!!item.result?.values?.length && <div className={styles.parameterTable}>
                                     {item.result.values.some(value => value.isDeltaFailure) && <Alert type="warning" showIcon title="Có chỉ số lệch delta so với lần trước, kiểm tra mẫu/nhãn trước khi hoàn tất phiếu." />}
-                                    <DataTable ariaLabel={`Chỉ số đã lưu: ${item.serviceName}`} data={item.result.values} keyExtractor={value => value.parameterId} columns={[
-                                        { header: 'Chỉ số', accessor: value => `${value.parameterName} (${value.parameterCode})` },
-                                        { header: 'Kết quả', accessor: value => value.value },
-                                        { header: 'Đơn vị', accessor: 'unit' },
-                                        { header: 'Khoảng tham chiếu', accessor: 'referenceRangeText' },
-                                        { header: 'Đánh giá', accessor: value => <span className={styles[diagnosticFlagTone(value.flag)]}>{diagnosticResultFlagLabels[value.flag]}</span> },
-                                        { header: 'So với lần trước', accessor: value => <>{formatDelta(value)}{value.isDeltaFailure && <> <Tag color="warning">Lệch delta</Tag></>}</> },
-                                    ]} />
+                                    <TechnicianSavedParameters serviceName={item.serviceName} values={item.result.values} />
                                     {item.result.hasCriticalValue && item.result.criticalNotifiedAtUtc && <p className={styles.critical}>Đã báo bác sĩ lúc {diagnosticNotificationTime(item.result.criticalNotifiedAtUtc)}</p>}
                                 </div>}
                                 {order.status === 'InProgress' && item.result && <Button className={styles.resultToggle} aria-expanded={!collapsed} aria-controls={`result-form-${item.id}`} onClick={() => setExpandedResults(previous => ({ ...previous, [item.id]: !previous[item.id] }))}>{collapsed ? 'Xem/Sửa kết quả' : 'Thu gọn kết quả'}</Button>}
@@ -499,22 +498,7 @@ const TechnicianOrderContent: React.FC = () => {
                                         {hasParameters && order.status !== 'Completed' && <>
                                             {criticalPreview && <Alert type="error" showIcon title="Có giá trị nguy hiểm — hệ thống sẽ báo ngay cho bác sĩ chỉ định khi lưu." />}
                                             {parameterErrors[item.id] && <Alert type="error" showIcon title={parameterErrors[item.id]} />}
-                                            <div className={styles.parameterTable}><DataTable ariaLabel={`Nhập chỉ số: ${item.serviceName}`} data={parameters} keyExtractor={parameter => parameter.id} columns={[
-                                                { header: 'Chỉ số', accessor: parameter => `${parameter.name} (${parameter.code})` },
-                                                { header: 'Kết quả', accessor: parameter => <Input type="number" step="any" min={0} aria-label={`Kết quả ${parameter.name} (${parameter.code})`} disabled={savingItemId === item.id || verificationPending}
-                                                    value={parameterValues[item.id]?.[parameter.id] ?? ''} onChange={event => {
-                                                        setParameterValues(previous => ({ ...previous, [item.id]: { ...previous[item.id], [parameter.id]: event.target.value } }));
-                                                        setParameterErrors(previous => ({ ...previous, [item.id]: '' }));
-                                                    }} /> },
-                                                { header: 'Đơn vị', accessor: 'unit' },
-                                                { header: 'Khoảng tham chiếu', accessor: 'referenceRangeText' },
-                                                { header: 'Đánh giá', accessor: parameter => {
-                                                    const raw = parameterValues[item.id]?.[parameter.id] ?? '';
-                                                    if (!raw.trim() || !Number.isFinite(Number(raw))) return '—';
-                                                    const flag = previewDiagnosticFlag(Number(raw), parameter);
-                                                    return <span className={styles[diagnosticFlagTone(flag)]}>{diagnosticResultFlagLabels[flag]}</span>;
-                                                } },
-                                            ]} /></div>
+                                            <div className={styles.parameterTable}><TechnicianParameterInputs itemId={item.id} serviceName={item.serviceName} parameters={parameters} values={parameterValues[item.id]} disabled={savingItemId === item.id || verificationPending} onValueChange={handleParameterValueChange} /></div>
                                         </>}
                                         <div><label htmlFor={`result-text-${item.id}`} className={styles.fieldLabel}>{hasParameters ? 'Nhận xét (không bắt buộc)' : <>Kết quả chi tiết / Mô tả tổn thương <span className={styles.required}>*</span></>}</label>
                                             <Input.TextArea id={`result-text-${item.id}`} rows={3} disabled={order.status === 'Completed' || verificationPending} value={current.resultText} onChange={e => setItemResults(prev => ({...prev,[item.id]: { ...prev[item.id], resultText: e.target.value }}))} placeholder="Nhập chi tiết thông số xét nghiệm, mô tả hình ảnh siêu âm..." />

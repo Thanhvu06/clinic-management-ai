@@ -1,16 +1,17 @@
 import { getGenderLabel } from '../../utils/genderLabels';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Alert, Button, Input, Modal, Tag } from 'antd';
+import { Alert, Button, Input, Modal } from 'antd';
 import { diagnosticApi } from '../../api/diagnosticApi';
 import { useAuth } from '../../auth/AuthContext';
 import { useDialog } from '../../contexts/DialogContext';
-import { DataTable, EmptyState, InlineError, LoadingState, PageHeader } from '../../components/common';
+import { EmptyState, InlineError, LoadingState, PageHeader } from '../../components/common';
 import type { DiagnosticOrderDto } from '../../types';
-import { diagnosticNotificationTime, formatDelta, isCriticalDiagnosticFlag } from '../../utils/diagnosticLabels';
+import { diagnosticNotificationTime } from '../../utils/diagnosticLabels';
 import styles from './DiagnosticVerificationReview.module.css';
 import { DiagnosticResultPrint } from './DiagnosticResultPrint';
 import { DiagnosticAttachmentList } from '../../components/diagnostics/DiagnosticAttachmentList';
+import { VerificationParameterTable } from './VerificationParameterTable';
 export const VerificationResultPrint = () => {
     const { id } = useParams<{ id: string }>();
     const { user } = useAuth();
@@ -83,11 +84,7 @@ export const DiagnosticVerificationReview = () => {
             <h2>{item.serviceName} <span className={styles.muted}>({item.serviceCode})</span></h2>
             {item.specimenType && <div className={styles.specimen}><strong>Mẫu bệnh phẩm</strong><p>{item.specimenType} • {item.containerType || '—'}</p><p>Trạng thái mẫu: {item.specimenStatus === 'Received' ? 'Đã nhận mẫu' : item.specimenStatus === 'Rejected' ? 'Mẫu bị từ chối' : item.specimenStatus === 'Collected' ? 'Đã lấy mẫu' : 'Chờ lấy mẫu'}</p><p>Mã vạch: {item.specimenBarcode || '—'}</p>{item.collectedByUserName && <p>Người lấy: {item.collectedByUserName}</p>}{item.receivedByUserName && <p>Người nhận: {item.receivedByUserName}</p>}{item.rejectionNote && <p>Lý do từ chối: {item.rejectionNote}</p>}</div>}
             {item.result?.hasCriticalValue && <Alert type="error" showIcon title="Có giá trị nguy hiểm" />}
-            {item.result?.values?.length ? <div className={styles.table}><DataTable ariaLabel={`Chỉ số: ${item.serviceName}`} data={item.result.values} keyExtractor={value => value.parameterId} columns={[
-                { header: 'Chỉ số', accessor: value => `${value.parameterName} (${value.parameterCode})` }, { header: 'Kết quả', accessor: value => <span className={isCriticalDiagnosticFlag(value.flag) ? styles.critical : undefined}>{value.value}</span> },
-                { header: 'Đơn vị', accessor: 'unit' }, { header: 'Tham chiếu', accessor: 'referenceRangeText' }, { header: 'Cờ', accessor: value => <Tag className={isCriticalDiagnosticFlag(value.flag) ? styles.critical : undefined}>{value.flag === 'Normal' ? 'Bình thường' : `${value.flag.endsWith('High') ? 'H' : 'L'}${isCriticalDiagnosticFlag(value.flag) ? ' — NGUY HIỂM' : ''}`}</Tag> },
-                { header: 'So với lần trước', accessor: value => <>{formatDelta(value)}{value.isDeltaFailure && <> <Tag color="warning">Lệch delta</Tag></>}</> },
-            ]} /></div> : <p className={styles.resultText}>{item.result?.resultText || 'Chưa có kết quả.'}</p>}
+            {item.result?.values?.length ? <div className={styles.table}><VerificationParameterTable serviceName={item.serviceName} values={item.result.values} /></div> : <p className={styles.resultText}>{item.result?.resultText || 'Chưa có kết quả.'}</p>}
             {item.result?.conclusion && <p>Kết luận: {item.result.conclusion}</p>}<p className={styles.muted}>Người nhập: {item.result?.resultedByUserName || '—'}</p>
             {!!item.attachments?.length && <DiagnosticAttachmentList attachments={item.attachments} />}
         </section>)}

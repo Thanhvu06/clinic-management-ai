@@ -26,7 +26,7 @@ interface DataTableProps<T> {
 /**
  * Bảng chuẩn của hệ thống: antd Table có viền, tiêu đề cột tách rõ, chiều cao dòng theo token (44px).
  */
-export function DataTable<T>({
+function DataTableComponent<T>({
     columns,
     data,
     keyExtractor,
@@ -37,7 +37,7 @@ export function DataTable<T>({
     const accessibleTable = useMemo(() => ariaLabel
         ? (props: React.HTMLAttributes<HTMLTableElement>) => <table {...props} aria-label={ariaLabel} />
         : undefined, [ariaLabel]);
-    const tableColumns: TableColumnsType<T> = columns.map((col, idx) => ({
+    const tableColumns = useMemo<TableColumnsType<T>>(() => columns.map((col, idx) => ({
         key: idx,
         title: col.header,
         className: col.className,
@@ -51,21 +51,29 @@ export function DataTable<T>({
                 : col.accessor
                 ? (item[col.accessor] as unknown as React.ReactNode)
                 : null,
-    }));
+    })), [columns]);
+    const dataSource = useMemo(() => data ?? [], [data]);
+    const locale = useMemo(() => ({ emptyText }), [emptyText]);
+    const components = useMemo(() => accessibleTable ? { table: accessibleTable } : undefined, [accessibleTable]);
+    const onRow = useMemo(() => onRowClick
+        ? (item: T) => ({ onClick: () => onRowClick(item) })
+        : undefined, [onRowClick]);
 
     return (
         <Table<T>
             className={styles.dataTable}
-            components={accessibleTable ? { table: accessibleTable } : undefined}
+            components={components}
             columns={tableColumns}
-            dataSource={data ?? []}
+            dataSource={dataSource}
             rowKey={keyExtractor}
             bordered
             pagination={false}
             tableLayout="auto"
-            locale={{ emptyText }}
+            locale={locale}
             rowClassName={onRowClick ? styles.dataTableClickableRow : undefined}
-            onRow={onRowClick ? (item) => ({ onClick: () => onRowClick(item) }) : undefined}
+            onRow={onRow}
         />
     );
 }
+
+export const DataTable = React.memo(DataTableComponent) as typeof DataTableComponent;

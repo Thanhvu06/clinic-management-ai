@@ -2,23 +2,21 @@ import { ClinicalEditor } from './ClinicalEditor';
 import { getGenderLabel } from '../../utils/genderLabels';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { toLocalDateString, formatDateOnly, formatDisplayDate } from '../../utils/formatters';
-import { DiagnosticAttachmentList } from '../../components/diagnostics/DiagnosticAttachmentList';
 import { PrescriptionSafetyPanel } from '../../components/prescriptions/PrescriptionSafetyPanel';
 import { Icd10CodeInput } from '../../components/diagnoses/Icd10CodeInput';
 import { usePrescriptionSafety } from '../../hooks/usePrescriptionSafety';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Alert, Button, Card, Col, Form, Input, Modal, Row, Tag } from 'antd';
+import { Alert, Button, Card, Col, Form, Input, Modal, Row } from 'antd';
 import {
     Pill, History, Save, CheckCircle,
-    AlertCircle, Trash2, Search, Clock, Calendar,
+    AlertCircle, Search, Clock, Calendar,
     User, Phone, MapPin, RefreshCw, FlaskConical, Printer,
     Check, AlertTriangle
 } from 'lucide-react';
 import { doctorApi } from '../../api/doctorApi';
 import { diagnosticApi } from '../../api/diagnosticApi';
-import { diagnosticResultFlagLabels, diagnosticFlagTone, formatDelta, isCriticalDiagnosticFlag } from '../../utils/diagnosticLabels';
-import { specimenStatusLabels, specimenRejectionLabels } from '../../utils/diagnosticLabels';
+import { diagnosticFlagTone, isCriticalDiagnosticFlag } from '../../utils/diagnosticLabels';
 import type {
     PatientClinicalContextDto,
     SaveEncounterRequest,
@@ -30,16 +28,21 @@ import type {
 } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
 import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
-import { LoadingState, InlineError, DataTable, EmptyState, StatusBadge } from '../../components/common';
+import { LoadingState, InlineError, EmptyState, StatusBadge } from '../../components/common';
 import { DoctorExaminationSyncAction } from './DoctorExaminationHeader';
 import tabStyles from './DoctorExaminationWorkspace.module.css';
-import { formatVitalBodyMeasures } from './vitalHistoryFormat';
+
 import { formatDecimalVi } from '../../utils/formatDecimalVi';
 import { ClinicalPageErrorBoundary } from '../../components/diagnostics/ClinicalPageErrorBoundary';
 import { DiagnosticServiceOption } from './DiagnosticServiceOption';
-import { createPrescriptionItem, updatePrescriptionItem, type PrescriptionEditorItem } from './prescriptionQuantity';
+import { createPrescriptionItem, type PrescriptionEditorItem } from './prescriptionQuantity';
 import diagnosticStyles from './DiagnosticServiceOption.module.css';
 import { isDiagnosticServiceOrdered, useDiagnosticSelection } from './useDiagnosticSelection';
+import { DoctorVitalHistoryTable } from './DoctorVitalHistoryTable';
+import { DoctorDiagnosticItemsTable } from './DoctorDiagnosticItemsTable';
+import { DoctorPrescriptionTable } from './DoctorPrescriptionTable';
+import { useDangerMedicineIds } from './useDangerMedicineIds';
+import { categoryMap, statusBadge } from './diagnosticTableLabels';
 interface ActiveMedicine {
     id: number;
     code: string;
@@ -127,7 +130,7 @@ const DoctorExaminationContent: React.FC = () => {
     const [prescriptionRowVersion, setPrescriptionRowVersion] = useState<string | null>(null);
     const [savingPrescription, setSavingPrescription] = useState(false);
     const safety = usePrescriptionSafety(currentId, isVisit, prescriptionItems.map(item => item.medicineId), !loading && !!context);
-    const dangerMedicineIds = new Set(safety.result?.warnings.filter(warning => warning.level === 'Danger').flatMap(warning => warning.medicineIds) || []);
+    const dangerMedicineIds = useDangerMedicineIds(safety.result?.warnings);
     const [safetyModalOpen, setSafetyModalOpen] = useState(false);
     const [safetyOverrideReason, setSafetyOverrideReason] = useState('');
     const [safetyOverrideError, setSafetyOverrideError] = useState('');
@@ -603,18 +606,6 @@ const DoctorExaminationContent: React.FC = () => {
         setMedicineSearch('');
     };
 
-    const handleRemoveMedicine = (index: number) => {
-        setPrescriptionItems(prev => prev.filter((_, idx) => idx !== index));
-    };
-
-    const handleItemChange = (index: number, field: string, value: any) => {
-        setPrescriptionItems(prev => {
-            const updated = [...prev];
-            updated[index] = updatePrescriptionItem(updated[index], field, value);
-            return updated;
-        });
-    };
-
     // Handle Complete Consultation with Diagnostic Guards
     const handleOpenCompleteModal = () => {
         if (!diagnosis.trim()) {
@@ -791,28 +782,6 @@ const DoctorExaminationContent: React.FC = () => {
         if (catalogCategory === 'All') return diagnosticCatalog;
         return diagnosticCatalog.filter(s => s.category === catalogCategory);
     }, [diagnosticCatalog, catalogCategory]);
-
-    const categoryMap: Record<string, string> = {
-        Laboratory: 'Xét nghiệm',
-        Ultrasound: 'Siêu âm',
-        Imaging: 'CĐ Hình ảnh',
-        Other: 'Khác'
-    };
-
-    const statusBadge = (status: string) => {
-        switch (status) {
-            case 'Ordered':
-                return <StatusBadge status="Pending" label="Chờ thực hiện" />;
-            case 'InProgress':
-                return <StatusBadge status="InConsultation" label="Đang thực hiện" />;
-            case 'Completed':
-                return <StatusBadge status={status} label="Đã hoàn tất" />;
-            case 'Cancelled':
-                return <StatusBadge status={status} label="Đã hủy" />;
-            default:
-                return <StatusBadge status={status} label={status} />;
-        }
-    };
 
     if (loading) {
         return <LoadingState message="Đang nạp hồ sơ khám bệnh..." height="300px" />;
@@ -1369,27 +1338,7 @@ const DoctorExaminationContent: React.FC = () => {
                             <EmptyState title="Chưa có dữ liệu lịch sử sinh hiệu từ các lần khám trước." />
                         ) : (
                             <div className={tabStyles.vitalHistoryTableScroll}>
-                                <DataTable data={historyList} keyExtractor={(item) => historyList.indexOf(item)} columns={[
-                                    {
-                                        header: "Thời điểm đo", accessor: (item) => {
-                                            return <>
-                                                {formatDisplayDate(item.recordedAtUtc)} {new Date(item.recordedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                                            </>;
-                                        }
-                                    },
-                                    {
-                                        header: "Huyết áp (mmHg)", accessor: (item) => {
-                                            return <>
-                                                {item.bloodPressureSystolic && item.bloodPressureDiastolic ? `${item.bloodPressureSystolic}/${item.bloodPressureDiastolic}` : '--'}
-                                            </>;
-                                        }
-                                    },
-                                    { header: "Mạch (nhịp/phút)", accessor: (item) => { return <>{item.heartRate || '--'}</>; } },
-                                    { header: "Nhiệt độ (°C)", accessor: (item) => { return <>{item.temperature ? `${formatDecimalVi(item.temperature)}°C` : '--'}</>; } },
-                                    { header: "SpO2 (%)", accessor: (item) => { return <>{item.spO2 ? `${formatDecimalVi(item.spO2)}%` : '--'}</>; } },
-                                    { header: "BMI", accessor: formatVitalBodyMeasures },
-                                    { header: "Người đo", accessor: (item) => { return <>{item.recordedByUserName || '--'}</>; } }
-                                ]} />
+                                <DoctorVitalHistoryTable data={historyList} />
                             </div>
                         )}
                     </Card>
@@ -1598,81 +1547,7 @@ const DoctorExaminationContent: React.FC = () => {
                                                 </div>
                                             )}
 
-                                            <div className={tabStyles.dataTableScroll}><DataTable data={order.items} keyExtractor={(item) => item.id} columns={[
-                                                {
-                                                    header: "Dịch vụ chỉ định", accessor: (item) => {
-                                                        return <>
-                                                            <div className={tabStyles.itemTitle}>{item.serviceName}</div>
-                                                            {item.specimenStatus && item.specimenStatus !== 'NotRequired' && <span className={item.specimenStatus === 'Rejected' ? tabStyles.specimenRejected : tabStyles.specimenStatus}>
-                                                                {item.specimenStatus === 'Rejected' ? `Mẫu bị từ chối – đang lấy lại: ${item.rejectionReason ? specimenRejectionLabels[item.rejectionReason] : '—'}` : specimenStatusLabels[item.specimenStatus]}
-                                                            </span>}
-                                                            {item.result?.hasCriticalValue && <span className={tabStyles.criticalBadge}>Giá trị nguy hiểm</span>}
-                                                            <div className={tabStyles.secondaryCaption}>{item.serviceCode}</div>
-                                                        </>;
-                                                    }
-                                                },
-                                                {
-                                                    header: "Phân loại", accessor: (item) => {
-                                                        return <>
-                                                            {categoryMap[item.category] || item.category}
-                                                        </>;
-                                                    }
-                                                },
-                                                {
-                                                    header: "Trạng thái", accessor: (item) => {
-                                                        return <>
-                                                            {statusBadge(item.status)}
-                                                        </>;
-                                                    }
-                                                },
-                                                {
-                                                    header: "Kết quả đo / Trị số", accessor: (item) => {
-                                                        return <>
-                                                            {order.verificationStatus === 'Pending' ? <span className={tabStyles.emptyValue}>Đang chờ phòng xét nghiệm duyệt</span> : order.verificationStatus === 'Returned' ? <span className={tabStyles.emptyValue}>KTV đang sửa kết quả</span> : item.result?.values?.length ? (
-                                                                <div className={tabStyles.parameterTable}><DataTable ariaLabel={`Chỉ số: ${item.serviceName}`} data={item.result.values} keyExtractor={value => value.parameterId} columns={[
-                                                                    { header: 'Chỉ số', accessor: value => `${value.parameterName} (${value.parameterCode})` },
-                                                                    { header: 'Kết quả + đơn vị', accessor: value => <span className={tabStyles[diagnosticFlagTone(value.flag)]}>{value.value} {value.unit}</span> },
-                                                                    { header: 'Tham chiếu', accessor: 'referenceRangeText' },
-                                                                    { header: 'Đánh giá', accessor: value => <span className={tabStyles[diagnosticFlagTone(value.flag)]}>{diagnosticResultFlagLabels[value.flag]}</span> },
-                                                                    { header: 'Lần trước', accessor: value => <>{formatDelta(value)}{value.isDeltaFailure && <> <Tag color="warning">Lệch delta</Tag></>}</> },
-                                                                ]} /></div>
-                                                            ) : item.result ? (
-                                                                <div className={tabStyles.diagnosticResultText}>
-                                                                    {item.result.resultText || '--'} {item.result.unit}
-                                                                </div>
-                                                            ) : (
-                                                                <span className={tabStyles.emptyValue}>Chưa có</span>
-                                                            )}
-                                                            {!!item.attachments?.length && <DiagnosticAttachmentList attachments={item.attachments} compact />}
-                                                        </>;
-                                                    }
-                                                },
-                                                {
-                                                    header: "Chỉ số tham chiếu", accessor: (item) => {
-                                                        return <>
-                                                            {item.result?.referenceRange || '--'}
-                                                        </>;
-                                                    }
-                                                },
-                                                {
-                                                    header: "Kết luận / Nhận xét", accessor: (item) => {
-                                                        return <>
-                                                            {item.result ? (
-                                                                <div>
-                                                                    {item.result.conclusion && (
-                                                                        <div className={tabStyles.itemTitle}>{item.result.conclusion}</div>
-                                                                    )}
-                                                                    <div className={tabStyles.diagnosticResultMetadata}>
-                                                                        KTV: {item.result.resultedByUserName} • {new Date(item.result.resultedAtUtc).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                                                                    </div>
-                                                                </div>
-                                                            ) : (
-                                                                <span className={tabStyles.emptyValue}>--</span>
-                                                            )}
-                                                        </>;
-                                                    }
-                                                }
-                                            ]} /></div>
+                                            <div className={tabStyles.dataTableScroll}><DoctorDiagnosticItemsTable items={order.items} verificationStatus={order.verificationStatus} /></div>
                                         </div>
                                     </div>
                                     ))}
@@ -1755,100 +1630,7 @@ const DoctorExaminationContent: React.FC = () => {
                                 <EmptyState icon={<Pill size={36} className={tabStyles.emptyStateIcon} />} title="Chưa có thuốc nào trong đơn." description="Sử dụng ô tìm kiếm phía trên để thêm thuốc vào đơn." />
                             ) : (
                                 <div className={tabStyles.prescriptionTable}>
-                                    <div className={tabStyles.dataTableScroll}><DataTable data={prescriptionItems} keyExtractor={(item) => item.medicineId} columns={[
-                                        { header: "#", accessor: (item) => { const idx = prescriptionItems.indexOf(item); return <>{idx + 1}</>; } },
-                                        {
-                                            header: "Tên thuốc", accessor: (item) => {
-                                                return <>
-                                                    <div className={tabStyles.itemTitle}>{item.medicineName}</div>
-                                                    {dangerMedicineIds.has(item.medicineId) && <Tag color="error">Nguy hiểm</Tag>}
-                                                    <div className={tabStyles.secondaryCaption}>
-                                                        {item.medicineCode} • {item.unit}
-                                                    </div>
-                                                </>;
-                                            }
-                                        },
-                                        {
-                                            header: "Số lượng", width: '90px', accessor: (item) => {
-                                                const idx = prescriptionItems.indexOf(item); return <>
-                                                    <Input
-                                                        type="number"
-                                                        min="1"
-                                                        value={item.quantity}
-                                                        onChange={(e) => handleItemChange(idx, 'quantity', parseInt(e.target.value, 10) || 1)}
-                                                        className={[tabStyles.formControl].join(' ')}
-                                                    />
-                                                </>;
-                                            }
-                                        },
-                                        {
-                                            header: "Liều dùng", width: '90px', accessor: (item) => {
-                                                const idx = prescriptionItems.indexOf(item); return <>
-                                                    <Input
-                                                        type="text"
-                                                        value={item.dosage}
-                                                        onChange={(e) => handleItemChange(idx, 'dosage', e.target.value)}
-                                                        placeholder="1 viên"
-                                                        className={[tabStyles.formControl].join(' ')}
-                                                    />
-                                                </>;
-                                            }
-                                        },
-                                        {
-                                            header: "Tần suất", width: '220px', accessor: (item) => {
-                                                const idx = prescriptionItems.indexOf(item); return <>
-                                                    <Input
-                                                        type="text"
-                                                        value={item.frequency}
-                                                        onChange={(e) => handleItemChange(idx, 'frequency', e.target.value)}
-                                                        placeholder="Ngày 2 lần"
-                                                        className={[tabStyles.formControl].join(' ')}
-                                                    />
-                                                </>;
-                                            }
-                                        },
-                                        {
-                                            header: "Số ngày", width: '70px', accessor: (item) => {
-                                                const idx = prescriptionItems.indexOf(item); return <>
-                                                    <Input
-                                                        type="number"
-                                                        min="1"
-                                                        max="90"
-                                                        value={item.durationDays}
-                                                        onChange={(e) => handleItemChange(idx, 'durationDays', parseInt(e.target.value, 10) || 1)}
-                                                        className={[tabStyles.formControl].join(' ')}
-                                                    />
-                                                </>;
-                                            }
-                                        },
-                                        {
-                                            header: "Hướng dẫn uống", width: '230px', accessor: (item) => {
-                                                const idx = prescriptionItems.indexOf(item); return <>
-                                                    <Input
-                                                        type="text"
-                                                        value={item.instructions}
-                                                        onChange={(e) => handleItemChange(idx, 'instructions', e.target.value)}
-                                                        placeholder="Uống sau khi ăn 30 phút..."
-                                                        className={[tabStyles.formControl].join(' ')}
-                                                    />
-                                                </>;
-                                            }
-                                        },
-                                        {
-                                            header: "", width: '36px', accessor: (item) => {
-                                                const idx = prescriptionItems.indexOf(item); return <>
-                                                    <Button
-                                                        htmlType="button"
-                                                        onClick={() => handleRemoveMedicine(idx)}
-
-                                                        title="Xóa thuốc khỏi đơn" className={[tabStyles.iconActionButton, tabStyles.dangerText].join(' ')}
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </Button>
-                                                </>;
-                                            }
-                                        }
-                                    ]} /></div>
+                                    <div className={tabStyles.dataTableScroll}><DoctorPrescriptionTable prescriptionItems={prescriptionItems} dangerMedicineIds={dangerMedicineIds} setPrescriptionItems={setPrescriptionItems} /></div>
                                 </div>
                             )}
 
