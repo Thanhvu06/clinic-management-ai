@@ -10,6 +10,16 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 var mode = args.FirstOrDefault() ?? "bm25";
+if (mode == "merge-grades")
+{
+    try { await MergeGrades.RunAsync(MergeGradesOptions.Parse(args.Skip(1).ToArray()), Console.Out); }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("Grade merge failed. Check workbook structure, options and a new output path.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
 if (mode == "blind-answers")
 {
     try
@@ -26,7 +36,7 @@ if (mode == "blind-answers")
     return;
 }
 if (mode is not ("bm25" or "hybrid" or "end-to-end" or "end-to-end-hybrid" or "sweep"))
-    throw new ArgumentException("Usage: RagEval [bm25|hybrid|end-to-end|end-to-end-hybrid|sweep] [output.json] [--questions baseline|v2|combined|path.json] [--csv path.csv]; or blind-answers --csv path.csv --out-dir external-directory [--seed integer] [--retrieval hybrid|bm25]");
+    throw new ArgumentException("Usage: RagEval [bm25|hybrid|end-to-end|end-to-end-hybrid|sweep] [output.json] [--questions baseline|v2|combined|path.json] [--csv path.csv]; blind-answers (--csv path.csv|--xlsx path.xlsx) --out-dir external-directory [--seed integer] [--retrieval hybrid|bm25]; merge-grades --master master.xlsx --grader2 grader2.xlsx --out new.xlsx [--grader1 grader1.xlsx]");
 var input = EvaluationInput.Parse(args.Skip(1).ToArray());
 var questions = await input.LoadAsync();
 var classifier = new VietnameseIntentClassifier();
