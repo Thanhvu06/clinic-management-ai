@@ -1,3 +1,5 @@
+Ghi chú lịch sử: provider Gemini mô tả trong tài liệu này hiện đã tắt; đề tài NCKH chỉ dùng mô hình cục bộ.
+
 # Tài Liệu Kỹ Thuật: ClinicCare AI Action Assistant
 
 Tài liệu này mô tả kiến trúc, nguyên lý hoạt động, Action Parity Matrix đầy đủ 19 hành động, contract dữ liệu và quy trình tích hợp của **ClinicCare AI Action Assistant** — trợ lý y tế hội thoại định hướng hành động (Action-Oriented AI Assistant) dành riêng cho hệ thống phòng khám ClinicCare.

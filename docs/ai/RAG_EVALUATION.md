@@ -1,3 +1,5 @@
+Ghi chú lịch sử: provider Gemini mô tả trong tài liệu này hiện đã tắt; đề tài NCKH chỉ dùng mô hình cục bộ.
+
 # Kết quả đánh giá RAG phát triển
 
 ## Phạm vi và máy đo
@@ -334,7 +336,7 @@ Backend Development và `ollama serve`, đăng nhập bệnh nhân demo; mật k
 
 Đủ 29/29 lượt bệnh nhân nhận HTTP 200; đây là thành công HTTP, không phải tất cả câu trả lời đúng mục đích. Trong 8 lượt mới, 7 lượt `KnowledgeAnswer`; câu xem kết quả ở mục nào trên web bị handler `DiagnosticLookup`/`PatientReadResolved` bắt trước RAG và trả nội dung không hướng dẫn menu. Giữ nguyên hành vi C# ngoài phạm vi được mở khóa, không thay câu hỏi để che lỗi. Câu triệu chứng cấp cứu dùng `SafetyEmergency`, không gọi Ollama; câu giá dùng CSDL, triệu chứng đau đầu/chóng mặt vẫn gợi ý SP08. Khách hỏi hướng dẫn nhận HTTP 401. Sau phép thử đã tắt backend và Ollama, không còn listener tại 5258/11434.
 
-Các câu sinh có thể bỏ câu nhắc ưu tiên chỉ định riêng dù corpus có đủ; ví dụ câu nhịn ăn và đến sớm chỉ trả phần chính. Chưa có kiểm định độc lập về độ đầy đủ hoặc mọi mệnh đề do LLM sinh; 61 mục trong [RAG_CONTENT_REVIEW.md](RAG_CONTENT_REVIEW.md) vẫn chờ nhóm duyệt.
+Các câu sinh có thể bỏ câu nhắc ưu tiên chỉ định riêng dù corpus có đủ; ví dụ câu nhịn ăn và đến sớm chỉ trả phần chính. Chưa có kiểm định độc lập về độ đầy đủ hoặc mọi mệnh đề do LLM sinh; 61 mục (tại thời điểm đó) trong [RAG_CONTENT_REVIEW.md](RAG_CONTENT_REVIEW.md) vẫn chờ nhóm duyệt.
 
 Test mới: 9 ca nội dung/v2 (copy bộ v2, nguồn hợp lệ, uniqueness, E2E BM25 Hit@3/từ chối và 6 tình huống bằng chứng chuẩn bị) cùng 14 ca chọn file/bảo vệ output/dữ liệu không hợp lệ. Tổng **155 test RAG cũ + mới đạt**, không skip, chạy từ output riêng `App_Data/rag-v2-final-artifacts` để không ảnh hưởng lượt toàn bộ chạy song song. Project test chỉ thêm reference có alias tới RagEval, tránh trùng lớp Program toàn cục với API; không sửa test cũ. CLI chọn hai đường dẫn tường minh cho số liệu chất lượng/mẫu số giống alias `combined`; các trường hợp thiếu giá trị, chọn trùng, output trùng tên input/bản nguồn và file không tồn tại đều bị từ chối. Bộ mốc được kiểm tra không có diff; SHA256 bộ v2 là `e052bbdd7a50acc5eb7680e5c732f41d59d2bbc9482c230cb23b056962df661e`, trùng bản copy đã dùng đo trước sửa.
 
@@ -350,7 +352,7 @@ Theo mở khóa bổ sung, `KnowledgeQuestionPolicy.IsEarlyGuidance` nhận thê
 
 ### Đo chốt sau sửa điều hướng
 
-Giữ nguyên 216 câu mốc, 46 câu v2, corpus 12 tài liệu/43 đoạn, model và bốn ngưỡng. Chạy lại đủ bốn chế độ trên ba bộ. Bảng trước/sau nội dung và nguyên văn 8 câu phía trên giữ lịch sử lần đo trước mở khóa điều hướng; bảng dưới là chất lượng chốt. Latency một lượt tham khảo, máy có tải test khác, không suy thành benchmark độc lập.
+Giữ nguyên 216 câu mốc, 46 câu v2, corpus 12 tài liệu/43 đoạn (tại thời điểm đó), model và bốn ngưỡng. Chạy lại đủ bốn chế độ trên ba bộ. Bảng trước/sau nội dung và nguyên văn 8 câu phía trên giữ lịch sử lần đo trước mở khóa điều hướng; bảng dưới là chất lượng chốt. Latency một lượt tham khảo, máy có tải test khác, không suy thành benchmark độc lập.
 
 | Bộ | Chế độ | Trong/ngoài | Hit@1 | Hit@3 | MRR | Từ chối đúng | TB ms | p95 ms |
 |---|---|---:|---:|---:|---:|---:|---:|---:|

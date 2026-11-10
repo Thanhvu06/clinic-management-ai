@@ -1,3 +1,5 @@
+Ghi chú lịch sử: provider Gemini mô tả trong tài liệu này hiện đã tắt; đề tài NCKH chỉ dùng mô hình cục bộ.
+
 # Gate D runtime acceptance
 
 Gate D keeps normal push/PR CI deterministic. Gemini live execution is isolated in the manual-only workflow `.github/workflows/ai-live-canary.yml`.
