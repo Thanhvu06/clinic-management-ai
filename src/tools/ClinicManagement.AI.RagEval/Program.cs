@@ -15,8 +15,8 @@ if (mode == "blind-answers")
     try
     {
         var blindOptions = BlindAnswerOptions.Parse(args.Skip(1).ToArray());
-        using var runtime = await BlindAnswerRuntime.CreateAsync();
-        await BlindAnswerExport.RunAsync(blindOptions, runtime.AnswerAsync, Console.Out);
+        using var runtime = await BlindAnswerRuntime.CreateAsync(retrieval: blindOptions.Retrieval);
+        await BlindAnswerRun.RunAsync(blindOptions, runtime, Console.Out);
     }
     catch (Exception)
     {
@@ -26,7 +26,7 @@ if (mode == "blind-answers")
     return;
 }
 if (mode is not ("bm25" or "hybrid" or "end-to-end" or "end-to-end-hybrid" or "sweep"))
-    throw new ArgumentException("Usage: RagEval [bm25|hybrid|end-to-end|end-to-end-hybrid|sweep] [output.json] [--questions baseline|v2|combined|path.json] [--csv path.csv]; or blind-answers --csv path.csv --out-dir external-directory [--seed integer]");
+    throw new ArgumentException("Usage: RagEval [bm25|hybrid|end-to-end|end-to-end-hybrid|sweep] [output.json] [--questions baseline|v2|combined|path.json] [--csv path.csv]; or blind-answers --csv path.csv --out-dir external-directory [--seed integer] [--retrieval hybrid|bm25]");
 var input = EvaluationInput.Parse(args.Skip(1).ToArray());
 var questions = await input.LoadAsync();
 var classifier = new VietnameseIntentClassifier();
