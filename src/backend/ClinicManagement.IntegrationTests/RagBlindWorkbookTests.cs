@@ -61,8 +61,8 @@ public sealed class RagBlindWorkbookTests
             Assert.Equal(answers[stt][2], grading.Cell(row, 5).GetString());
             var keyRow = BlindAnswerWorkbook.SttRows(keySheet)[stt];
             Assert.Equal(keys[stt][1], keySheet.Cell(keyRow, 2).GetString());
-            Assert.Equal(double.Parse(keys[stt][2], CultureInfo.InvariantCulture), Math.Round(keySheet.Cell(keyRow, 3).GetDouble(), 3));
-            Assert.Equal(double.Parse(keys[stt][3], CultureInfo.InvariantCulture), Math.Round(keySheet.Cell(keyRow, 4).GetDouble(), 3));
+            Assert.Equal(keys[stt][2], keySheet.Cell(keyRow, 3).GetDouble().ToString("F3", CultureInfo.InvariantCulture));
+            Assert.Equal(keys[stt][3], keySheet.Cell(keyRow, 4).GetDouble().ToString("F3", CultureInfo.InvariantCulture));
         }
         AssertPreserved(input, full);
         foreach (var file in new[] { BlindAnswerWorkbook.Grader1File, BlindAnswerWorkbook.Grader2File })
