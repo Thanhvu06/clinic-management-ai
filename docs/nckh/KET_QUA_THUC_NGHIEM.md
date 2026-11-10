@@ -1,6 +1,6 @@
 # Tổng hợp kết quả thực nghiệm NCKH — ClinicCare AI
 
-Tài liệu này tổng hợp toàn bộ số liệu thực nghiệm của hệ thống trợ lý AI và mô-đun hỏi đáp tri thức phòng khám (RAG cục bộ) trong dự án **ClinicCare AI**. Mọi số liệu được trích dẫn trực tiếp từ các báo cáo thực nghiệm đã lưu trong kho mã nguồn (`docs/ai/HIDDEN_EVAL.md`, `docs/ai/RAG_EVALUATION.md`) hoặc từ các phép đo trực tiếp trên máy thật trong phiên làm việc này, tuyệt đối không ước lượng và không làm tròn số.
+Tài liệu này tổng hợp toàn bộ số liệu thực nghiệm của hệ thống trợ lý AI và mô-đun hỏi đáp tri thức phòng khám (RAG cục bộ) trong dự án **ClinicCare AI**. Mọi số liệu được trích dẫn trực tiếp từ các báo cáo thực nghiệm đã lưu trong kho mã nguồn (`docs/ai/HIDDEN_EVAL.md`, `docs/ai/RAG_EVALUATION.md`) hoặc từ các phép đo trực tiếp trên máy thật trong phiên làm việc này, không ước lượng; quy tắc định dạng hiển thị số của bảng mới được ghi rõ tại bảng.
 
 ---
 
@@ -154,6 +154,48 @@ Lệnh `merge-grades` ghép theo STT, không theo vị trí dòng. Cột **K–O
 | `end-to-end-hybrid` | chưa đo | chưa đo | chưa đo | chưa đo | chưa đo | chưa đo | chưa đo | chưa đo | chưa đo |
 
 ---
+
+### 3.3. So sánh BM25, dense và hybrid — bộ phát triển, mức tài liệu
+
+Đo thật ngày 10/11/2026 bằng `compare-retrieval --questions combined`, Ollama `bge-m3` bật, trên cùng **262 câu** (192 câu có tài liệu đúng, 70 câu ngoài phạm vi), **12 tài liệu / 51 đoạn**. Dense tính cosine trên toàn bộ đoạn, dùng lại index/cache embedding do runtime xây dựng, không lọc ứng viên bằng BM25. Giữ cấu hình hiện có: top-k = 4 đoạn, MinCosine = 0,20; hành vi BM25/hybrid và pipeline trả lời runtime không thay đổi. Đây là retrieval thuần, chưa qua gate/safety của chế độ end-to-end.
+
+| Chế độ | N | Có tài liệu đúng | Ngoài phạm vi | Hit@1 | Hit@3 | MRR | Từ chối đúng |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| BM25 | 262 | 192 | 70 | 0.8958333333 | 0.984375 | 0.9375 | 0.9428571429 (66/70) |
+| Dense | 262 | 192 | 70 | 0.8385416667 | 0.953125 | 0.8932291667 | 0 (0/70) |
+| Hybrid | 262 | 192 | 70 | 0.9375 | 0.984375 | 0.9592013889 | 0.9428571429 (66/70) |
+
+Hit@1, Hit@3 và MRR tính trên 192 câu có tài liệu đúng, sau khi gộp ID tài liệu trùng nhau trong top-4 đoạn; không phải đánh giá đúng đoạn hoặc độ đúng câu trả lời. Từ chối đúng là tỷ lệ không trả về đoạn nào trên 70 câu không có tài liệu đúng. Bảng hiển thị 10 chữ số có nghĩa như console; JSON giữ độ chính xác số thực của phép tính.
+
+Bộ JSON dev chưa có cột `Loại`: báo cáo xếp 192 câu có tài liệu vào `Trong phạm vi`, 70 câu còn lại vào loại cũ `Ngoài phạm vi`. Không suy diễn nhãn `Diễn đạt khác`, `Ngoài phạm vi gần`, `Ngoài phạm vi xa` hay `Khẩn cấp / an toàn`; bốn nhóm này có N=0, chỉ số không áp dụng là `null` trong JSON / `NA` trên console. Với CSV/Excel có nhãn, báo cáo tách đúng từng loại đầu vào.
+
+McNemar ghép cặp Hit@1 trên **192 câu có tài liệu đúng**; b = chế độ trái đúng/phải sai, c = trái sai/phải đúng:
+
+| Cặp trái–phải | b | c | p hai phía | Phương pháp |
+|---|---:|---:|---:|---|
+| BM25–Dense | 23 | 12 | 0.09096894798 | Chi-square hiệu chỉnh liên tục |
+| BM25–Hybrid | 3 | 11 | 0.05737304688 | Exact binomial |
+| Dense–Hybrid | 2 | 21 | 6.604194641E-05 | Exact binomial |
+
+Dùng exact binomial khi b+c < 25; còn lại dùng chi-square với hiệu chỉnh liên tục: χ² = max(0, |b−c|−1)²/(b+c), 1 bậc tự do. Đây là p-value thô, chưa hiệu chỉnh cho ba phép so sánh. Không kết luận chất lượng trên bộ ẩn từ kết quả bộ phát triển.
+
+**Lệnh người dùng tự chạy trên bộ ẩn** (phải build Release trước; các đường dẫn dưới đây chỉ là hướng dẫn, không được dùng trong lần đo dev này). JSON chỉ chứa số tổng hợp; `--output` phải trỏ đến file mới, không ghi đè:
+
+```powershell
+dotnet build "C:\Projects\clinic-management-ai\src\backend\ClinicManagement.sln" -c Release
+
+dotnet run --no-build -c Release --project "C:\Projects\clinic-management-ai\src\tools\ClinicManagement.AI.RagEval" -- compare-retrieval --xlsx "E:\NCKH\bo-cau-hoi-an\RAG_bo_cau_hoi_an_v1.xlsx" --output "E:\NCKH\bo-cau-hoi-an\compare-retrieval.json"
+
+dotnet run --no-build -c Release --project "C:\Projects\clinic-management-ai\src\tools\ClinicManagement.AI.RagEval" -- rq1-stats --xlsx "E:\NCKH\bo-cau-hoi-an\ket-qua\RAG_da_gop_diem.xlsx" --output "E:\NCKH\bo-cau-hoi-an\ket-qua\rq1-stats.json"
+```
+
+`compare-retrieval` cũng nhận `--questions baseline|v2|combined|path.json` hoặc `--csv path.csv`; chỉ chọn một nguồn. Lệnh `dense` nhận cùng tùy chọn để đo riêng dense. Mặc định nguồn câu hỏi là baseline. Công cụ dừng nếu không dựng/đọc được index bge-m3 hoặc hybrid bị rơi về BM25 do lỗi embedding, tránh gắn nhãn sai phép đo.
+
+**RQ1 sau khi gộp điểm:** nối các sheet theo STT từ dòng 4, bỏ `VD`; lấy Loại ở `Câu hỏi!D`, khóa A/B ở `Khóa!B`, độ trễ LLM/trích đoạn ở `Khóa!C–D`. Một câu đủ dữ liệu phải có bốn điểm nguyên 0/1/2 (`Phiếu chấm!F,G,K,L`) và bốn dấu an toàn `Đạt`/`Không đạt` (`H,I,M,N`); câu thiếu được đếm riêng và loại khỏi các thống kê. Điểm mỗi chế độ là trung bình hai người sau giải khóa. Không đọc nội dung câu hỏi, câu trả lời hay ghi chú để tính thống kê; không xuất chúng ra console/JSON.
+
+Wilcoxon bỏ cặp chênh lệch bằng 0, dùng hạng trung bình cho ties; n không bằng 0 ≤ 25 dùng phân phối exact của mọi phép đổi dấu trên midranks, còn lại xấp xỉ chuẩn có hiệu chỉnh ties, không hiệu chỉnh liên tục. Tất cả cặp bằng nhau cho p=1, r=0. Effect size r = |z|/√n, z lấy từ phương sai midranks kể cả khi p tính exact. Báo cả tổng và từng Loại; nhóm rỗng cho chỉ số không áp dụng là null/NA.
+
+Cờ không an toàn của một chế độ bật khi ít nhất một người chấm `Không đạt`; McNemar trên hai cờ dùng cùng quy tắc trên. Cohen's kappa và kappa trọng số tuyến tính (trọng số 1−|i−j|/2) gộp hai lượt A/B của mỗi câu, tức 2N cặp điểm hai người; kappa không xác định do biên hằng là null/NA. Độ trễ dùng các câu đủ điểm: trung vị lấy trung bình hai vị trí giữa, p95 dùng nearest rank. Mọi p-value hai phía, chưa hiệu chỉnh đa kiểm định. Công cụ dùng MathNet.Numerics 5.0.0 (MIT) cho hàm erfc; thuật toán thống kê được kiểm bằng dữ liệu giả có đáp án biết trước. Tham khảo định nghĩa [McNemar của statsmodels](https://www.statsmodels.org/stable/generated/statsmodels.stats.contingency_tables.mcnemar.html) và [Wilcoxon của SciPy](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.wilcoxon.html); ngưỡng chọn exact theo yêu cầu thí nghiệm ở đây.
 
 ## 4. Kết quả đo thời gian trả lời thực tế trên laptop (`POST /api/v1/ai/chat`)
 
