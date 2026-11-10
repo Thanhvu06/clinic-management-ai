@@ -4,7 +4,8 @@ using System.Text.Json;
 namespace ClinicManagement.AI.RagEval;
 
 public sealed record EvaluationQuestion(
-    [property: System.Text.Json.Serialization.JsonPropertyName("question")] string Text, string? ExpectedDocId);
+    [property: System.Text.Json.Serialization.JsonPropertyName("question")] string Text, string? ExpectedDocId,
+    string? Stt = null, string? Category = null, string? KeyIdeas = null);
 
 public sealed record EvaluationInput(string? OutputPath, IReadOnlyList<string> QuestionFiles, bool IsCsv = false)
 {
@@ -64,7 +65,7 @@ public sealed record EvaluationInput(string? OutputPath, IReadOnlyList<string> Q
         return new(output, files, isCsv);
     }
 
-    public async Task<EvaluationQuestion[]> LoadAsync()
+    public async Task<EvaluationQuestion[]> LoadAsync(bool requireBothScopes = true)
     {
         var questions = new List<EvaluationQuestion>();
         foreach (var file in QuestionFiles)
@@ -82,7 +83,7 @@ public sealed record EvaluationInput(string? OutputPath, IReadOnlyList<string> Q
                 throw new InvalidDataException("Invalid question set: " + file);
             questions.AddRange(rows);
         }
-        if (!questions.Any(q => q.ExpectedDocId is null) || !questions.Any(q => q.ExpectedDocId is not null))
+        if (requireBothScopes && (!questions.Any(q => q.ExpectedDocId is null) || !questions.Any(q => q.ExpectedDocId is not null)))
             throw new InvalidDataException("Evaluation requires both in-scope and out-of-scope questions.");
         return questions.ToArray();
     }
@@ -97,7 +98,9 @@ public sealed record EvaluationInput(string? OutputPath, IReadOnlyList<string> Q
         var headerIndex = -1;
         for (var i = 0; i < rows.Count; i++)
         {
-            if (rows[i].All(string.IsNullOrWhiteSpace)) continue;
+            var cells = rows[i].ToArray();
+            if (!new[] { "STT", "Người viết", "Câu hỏi", "Loại", "Tài liệu đúng" }
+                .All(name => FindColumnIndex(cells, name) >= 0)) continue;
             headerIndex = i;
             break;
         }
@@ -110,6 +113,7 @@ public sealed record EvaluationInput(string? OutputPath, IReadOnlyList<string> Q
         var questionCol = FindColumnIndex(header, "Câu hỏi");
         var typeCol = FindColumnIndex(header, "Loại");
         var docCol = FindColumnIndex(header, "Tài liệu đúng");
+        var ideasCol = FindColumnIndex(header, "Ý chính cần có");
         if (sttCol < 0 || authorCol < 0 || questionCol < 0 || typeCol < 0 || docCol < 0)
             throw new InvalidDataException("CSV header must contain STT, Người viết, Câu hỏi, Loại, Tài liệu đúng: " + sourceName);
 
@@ -136,15 +140,24 @@ public sealed record EvaluationInput(string? OutputPath, IReadOnlyList<string> Q
             var normalizedDoc = NormalizeDocId(rawDoc);
             var expectedDocId = normalizedCategory switch
             {
-                "trong phạm vi" => !string.IsNullOrWhiteSpace(normalizedDoc)
+                "trong phạm vi" or "diễn đạt khác" => !string.IsNullOrWhiteSpace(normalizedDoc)
                     ? normalizedDoc
                     : throw new InvalidDataException($"Row {r + 1} in {sourceName} is in-scope but missing expected document."),
-                "ngoài phạm vi" => null,
+                "ngoài phạm vi" or "ngoài phạm vi gần" or "ngoài phạm vi xa" => null,
                 "khẩn cấp / an toàn" => string.IsNullOrWhiteSpace(normalizedDoc) ? null : normalizedDoc,
                 _ => throw new InvalidDataException($"Row {r + 1} in {sourceName} has unsupported category: {category}")
             };
 
-            questions.Add(new EvaluationQuestion(questionText, expectedDocId));
+            var displayCategory = normalizedCategory switch
+            {
+                "trong phạm vi" => "Trong phạm vi",
+                "diễn đạt khác" => "Diễn đạt khác",
+                "ngoài phạm vi gần" => "Ngoài phạm vi gần",
+                "ngoài phạm vi xa" => "Ngoài phạm vi xa",
+                "ngoài phạm vi" => "Ngoài phạm vi",
+                _ => "Khẩn cấp / an toàn"
+            };
+            questions.Add(new EvaluationQuestion(questionText, expectedDocId, stt, displayCategory, GetCell(row, ideasCol)));
         }
 
         if (questions.Count == 0)

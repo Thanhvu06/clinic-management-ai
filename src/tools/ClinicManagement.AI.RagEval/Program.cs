@@ -10,8 +10,23 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 var mode = args.FirstOrDefault() ?? "bm25";
+if (mode == "blind-answers")
+{
+    try
+    {
+        var blindOptions = BlindAnswerOptions.Parse(args.Skip(1).ToArray());
+        using var runtime = await BlindAnswerRuntime.CreateAsync();
+        await BlindAnswerExport.RunAsync(blindOptions, runtime.AnswerAsync, Console.Out);
+    }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("Blind export failed. Check CSV/options, --out-dir outside the repository, and local Ollama models.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
 if (mode is not ("bm25" or "hybrid" or "end-to-end" or "end-to-end-hybrid" or "sweep"))
-    throw new ArgumentException("Usage: RagEval [bm25|hybrid|end-to-end|end-to-end-hybrid|sweep] [output.json] [--questions baseline|v2|combined|path.json] [--csv path.csv]");
+    throw new ArgumentException("Usage: RagEval [bm25|hybrid|end-to-end|end-to-end-hybrid|sweep] [output.json] [--questions baseline|v2|combined|path.json] [--csv path.csv]; or blind-answers --csv path.csv --out-dir external-directory [--seed integer]");
 var input = EvaluationInput.Parse(args.Skip(1).ToArray());
 var questions = await input.LoadAsync();
 var classifier = new VietnameseIntentClassifier();
@@ -105,6 +120,7 @@ async Task<(double HitAt1, double HitAt3, double CorrectRejection, object Report
     var gateRejections = new List<object>();
     var retrievalMisses = new List<object>();
     var falsePositives = new List<object>();
+    var byCategory = new Dictionary<string, CategoryMetrics>();
     foreach (var question in questions)
     {
         var watch = Stopwatch.StartNew();
@@ -124,6 +140,11 @@ async Task<(double HitAt1, double HitAt3, double CorrectRejection, object Report
         if (result.EmbeddingWasCalled) embeddingCalls++;
         if (result.HybridUsed) hybridQueries++;
         var ids = result.Hits.Select(h => h.Chunk.Source.DocId).Distinct().ToArray();
+        if (question.Category is { } category)
+        {
+            if (!byCategory.TryGetValue(category, out var metrics)) byCategory[category] = metrics = new();
+            metrics.Add(question, ids);
+        }
         if (question.ExpectedDocId is null)
         {
             outside++;
@@ -162,6 +183,7 @@ async Task<(double HitAt1, double HitAt3, double CorrectRejection, object Report
             hitAt3 = h3,
             mrr,
             correctRejection = rej,
+            byCategory,
             averageMs = avgMs,
             p95Ms
         }
@@ -174,7 +196,7 @@ async Task<(double HitAt1, double HitAt3, double CorrectRejection, object Report
             chunks = catalog.Chunks.Count, inScope, outside, candidates, candidateRate = (double)candidates / questions.Length,
             inScopeCandidateRate = (double)inScopeCandidates / inScope, answerRate = (double)answers / questions.Length,
             hitDenominator = $"all {inScope} in-scope questions, including gate rejections as misses", hitAt1 = h1, hitAt3 = h3,
-            mrr, correctRejection = rej,
+            mrr, correctRejection = rej, byCategory,
             averageMs = avgMs, p95Ms, embeddingCalls, hybridQueries,
             gateRejections, retrievalMisses, falsePositives,
             latencyIncludes = useEndToEnd ? "classification, safety, candidate gate and retrieval; all questions included; indexing and warm-up excluded"

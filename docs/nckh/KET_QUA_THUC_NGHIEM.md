@@ -121,7 +121,16 @@ dotnet run --project src/tools/ClinicManagement.AI.RagEval -- end-to-end "D:\ket
 
 # Chế độ 4: End-to-end Gate + Hybrid BM25 + bge-m3 (cần bật Ollama)
 dotnet run --project src/tools/ClinicManagement.AI.RagEval -- end-to-end-hybrid "D:\ket-qua-rag-an-e2e-hybrid.json" --csv "D:\bo-cau-hoi-an-rag.csv"
+
+# Phiếu chấm mù A/B: cần Ollama, qwen2.5:7b và bge-m3; thư mục kết quả phải ngoài repo
+dotnet run --project src/tools/ClinicManagement.AI.RagEval -- blind-answers --csv "E:\NCKH\bo-cau-hoi-an\bo-cau-hoi-an-rag.csv" --out-dir "E:\NCKH\bo-cau-hoi-an\ket-qua" --seed 20261110
 ```
+
+CSV chấp nhận năm loại `Trong phạm vi`, `Diễn đạt khác`, `Ngoài phạm vi gần`, `Ngoài phạm vi xa`, `Khẩn cấp / an toàn` và loại cũ `Ngoài phạm vi`. Hai loại đầu bắt buộc có `Tài liệu đúng`; hai loại ngoài phạm vi luôn tính là không có tài liệu; loại khẩn cấp dùng tài liệu nếu được điền. Cột `Ý chính cần có` không tham gia tính retrieval. Công cụ tự tìm dòng tiêu đề sau ghi chú và bỏ dòng `STT=VD`. Báo cáo retrieval bổ sung `byCategory`; chỉ số không có mẫu phù hợp trong từng loại là `null`.
+
+Chế độ `blind-answers` gọi pipeline chat runtime, gồm gate và kiểm tra an toàn đầu vào/đầu ra; bật Ollama dùng hybrid + `qwen2.5:7b`, tắt Ollama dùng BM25 + fallback `KnowledgeExtractive`. Session/audit và dữ liệu nghiệp vụ được cô lập trong cơ sở dữ liệu trống trong bộ nhớ, không dùng dữ liệu bệnh nhân; câu hỏi nghiệp vụ phụ thuộc CSDL nhận phản hồi runtime ứng với CSDL trống. Thời gian mỗi câu gồm toàn bộ lời gọi chat, không gồm dựng chỉ mục và warm-up. Seed chỉ tái lập phép gán A/B, không bảo đảm LLM sinh cùng văn bản hoặc cùng độ trễ. Bỏ `--seed` để tự sinh và ghi seed trong tổng kết console. Console chỉ có tiến độ, tổng số câu, seed và đường dẫn kết quả; hai CSV UTF-8 BOM giữ nguyên thứ tự STT. Chọn thư mục kết quả mới nếu đã có file để tránh ghi đè.
+
+Mở hai file xuất bằng Excel để giữ đúng ô có dấu phẩy/xuống dòng. Trong `phieu-cham.csv`, chỉ sao chép dữ liệu hai cột **Trả lời A–Trả lời B** (bỏ tiêu đề và STT) vào cột **D–E**, sheet **Phiếu chấm**, bắt đầu dòng **4**. Trong `khoa.csv`, chỉ sao chép dữ liệu ba cột **A là–Độ trễ LLM (ms)–Độ trễ trích đoạn (ms)** (bỏ tiêu đề và STT) vào cột **B–D**, sheet **Khóa**, bắt đầu dòng **4**. Đối chiếu STT để bảo đảm các dòng khớp; giữ sheet Khóa riêng khỏi người chấm cho đến khi hoàn tất chấm mù.
 
 | Chế độ | Tổng số câu (`N`) | Trong phạm vi | Ngoài phạm vi | Hit@1 | Hit@3 | MRR | Từ chối đúng | TB (ms) | p95 (ms) |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
