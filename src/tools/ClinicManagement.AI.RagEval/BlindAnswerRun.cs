@@ -11,10 +11,22 @@ public static class BlindAnswerRun
             throw new ArgumentException("Export retrieval must match the runtime retrieval mode.");
         var directory = ExternalOutputDirectory.Validate(options.OutputDirectory);
         var metadataPath = Path.Combine(directory, "chay-thu.json");
-        if (File.Exists(metadataPath))
-            throw new IOException("Run metadata already exists; choose a new --out-dir.");
+        var names = new List<string> { "phieu-cham.csv", "khoa.csv", "chay-thu.json" };
+        if (options.XlsxPath is not null)
+            names.AddRange([BlindAnswerWorkbook.FullFile, BlindAnswerWorkbook.Grader1File, BlindAnswerWorkbook.Grader2File]);
+        if (names.Any(name => File.Exists(Path.Combine(directory, name)) || Directory.Exists(Path.Combine(directory, name))))
+            throw new IOException("Output already exists; choose a new --out-dir.");
+        using var workbook = options.XlsxPath is null ? null : new BlindAnswerWorkbook(options.XlsxPath);
+        var answers = new List<BlindAnswerRow>();
         var measuredAtUtc = DateTimeOffset.UtcNow;
-        var result = await BlindAnswerExport.RunAsync(options, runtime.AnswerAsync, console, ct);
+        var result = await BlindAnswerExport.RunAsync(options, runtime.AnswerAsync, console, ct,
+            onAnswer: workbook is null ? null : answers.Add, loadedQuestions: workbook?.Questions);
+        if (workbook is not null)
+        {
+            workbook.Write(directory, answers);
+            foreach (var name in names.Where(name => name.EndsWith(".xlsx", StringComparison.Ordinal)))
+                await console.WriteLineAsync(Path.Combine(directory, name));
+        }
         var metadata = JsonSerializer.Serialize(new
         {
             seed = result.Seed,

@@ -122,8 +122,14 @@ dotnet run --project src/tools/ClinicManagement.AI.RagEval -- end-to-end "D:\ket
 # Chế độ 4: End-to-end Gate + Hybrid BM25 + bge-m3 (cần bật Ollama)
 dotnet run --project src/tools/ClinicManagement.AI.RagEval -- end-to-end-hybrid "D:\ket-qua-rag-an-e2e-hybrid.json" --csv "D:\bo-cau-hoi-an-rag.csv"
 
-# Phiếu chấm mù A/B: cần Ollama, qwen2.5:7b và bge-m3; thư mục kết quả phải ngoài repo
-dotnet run --project src/tools/ClinicManagement.AI.RagEval -- blind-answers --csv "E:\NCKH\bo-cau-hoi-an\bo-cau-hoi-an-rag.csv" --out-dir "E:\NCKH\bo-cau-hoi-an\ket-qua" --seed 20261110 --retrieval hybrid
+# Phải build Release trước khi chạy hai lệnh dưới; cần Ollama với qwen2.5:7b và bge-m3
+dotnet build src/backend/ClinicManagement.sln --configuration Release
+
+# 1. Sinh bản đầy đủ và hai file riêng cho người chấm từ Excel đã điền câu hỏi
+dotnet run --no-build --configuration Release --project src/tools/ClinicManagement.AI.RagEval -- blind-answers --xlsx "E:\NCKH\bo-cau-hoi-an\RAG_bo_cau_hoi_an_v1.xlsx" --out-dir "E:\NCKH\bo-cau-hoi-an\ket-qua" --seed 20261110 --retrieval hybrid
+
+# 2. Sau khi chấm: gộp điểm vào file mới; không ghi đè bản master hoặc file người chấm
+dotnet run --no-build --configuration Release --project src/tools/ClinicManagement.AI.RagEval -- merge-grades --master "E:\NCKH\bo-cau-hoi-an\ket-qua\RAG_ket_qua_day_du.xlsx" --grader1 "E:\NCKH\bo-cau-hoi-an\ket-qua\RAG_phieu_cham_NguoiCham1.xlsx" --grader2 "E:\NCKH\bo-cau-hoi-an\ket-qua\RAG_phieu_cham_NguoiCham2.xlsx" --out "E:\NCKH\bo-cau-hoi-an\ket-qua\RAG_da_gop_diem.xlsx"
 ```
 
 CSV chấp nhận năm loại `Trong phạm vi`, `Diễn đạt khác`, `Ngoài phạm vi gần`, `Ngoài phạm vi xa`, `Khẩn cấp / an toàn` và loại cũ `Ngoài phạm vi`. Hai loại đầu bắt buộc có `Tài liệu đúng`; hai loại ngoài phạm vi luôn tính là không có tài liệu; loại khẩn cấp dùng tài liệu nếu được điền. Cột `Ý chính cần có` không tham gia tính retrieval. Công cụ tự tìm dòng tiêu đề sau ghi chú và bỏ dòng `STT=VD`. Báo cáo retrieval bổ sung `byCategory`; chỉ số không có mẫu phù hợp trong từng loại là `null`.
@@ -134,7 +140,11 @@ Session/audit và dữ liệu nghiệp vụ vẫn được cô lập trong SQLit
 
 Thời gian mỗi câu gồm lời gọi chat, không gồm dựng chỉ mục và warm-up. LLM chạy trước nên độ trễ LLM gồm lần truy xuất của cặp; trích đoạn dùng lại kết quả trong bộ nhớ. Seed chỉ tái lập phép gán A/B, không bảo đảm LLM sinh cùng văn bản hoặc cùng độ trễ. Bỏ `--seed` để tự sinh và ghi seed trong tổng kết console. Console có tiến độ, tổng số câu, seed, chế độ retrieval và đường dẫn kết quả; hai CSV UTF-8 BOM giữ nguyên thứ tự STT. File `chay-thu.json` lưu `seed`, `retrieval`, `count`, `measuredAtUtc`, `model`, không chứa câu hỏi hay câu trả lời. Chọn thư mục kết quả mới nếu đã có file để tránh ghi đè.
 
-Mở hai file xuất bằng Excel để giữ đúng ô có dấu phẩy/xuống dòng. Trong `phieu-cham.csv`, chỉ sao chép dữ liệu hai cột **Trả lời A–Trả lời B** (bỏ tiêu đề và STT) vào cột **D–E**, sheet **Phiếu chấm**, bắt đầu dòng **4**. Trong `khoa.csv`, chỉ sao chép dữ liệu ba cột **A là–Độ trễ LLM (ms)–Độ trễ trích đoạn (ms)** (bỏ tiêu đề và STT) vào cột **B–D**, sheet **Khóa**, bắt đầu dòng **4**. Đối chiếu STT để bảo đảm các dòng khớp; giữ sheet Khóa riêng khỏi người chấm cho đến khi hoàn tất chấm mù.
+Mẫu trống trong repo: `docs/nckh/templates/RAG_bo_cau_hoi_an_mau.xlsx`. Điền câu hỏi từ dòng **4** của sheet **Câu hỏi**, cột **A–F** lần lượt là STT, Người viết, Câu hỏi, Loại, Tài liệu đúng, Ý chính cần có; dòng ví dụ `VD` được bỏ qua. `--xlsx` thay cho `--csv`, hai tùy chọn loại trừ nhau; chế độ CSV vẫn được giữ. File Excel gốc không bị sửa.
+
+Với `--xlsx`, thư mục kết quả có thêm ba workbook bên cạnh hai CSV và JSON hiện có. `RAG_ket_qua_day_du.xlsx` giữ đủ sáu sheet và tự điền **Phiếu chấm!D–E**, **Khóa!B–D** theo STT ở cột A từng sheet. Chỉ gửi `RAG_phieu_cham_NguoiCham1.xlsx` cho người chấm 1 và `RAG_phieu_cham_NguoiCham2.xlsx` cho người chấm 2: ba sheet **Khóa**, **Tính**, **Tổng hợp** đã bị xóa hẳn trong hai file này. Người chấm 1 điền **F–J**, người chấm 2 điền **K–O** trên sheet **Phiếu chấm**. Giữ bản đầy đủ và khóa riêng đến khi hoàn tất chấm mù.
+
+Lệnh `merge-grades` ghép theo STT, không theo vị trí dòng. Cột **K–O** lấy từ `--grader2`; cột **F–J** lấy từ `--grader1` nếu có, hoặc giữ điểm trong `--master` nếu không truyền. Tổng kết chỉ báo số lượt dòng có điểm/ghi chú đã chép và số STT có điểm không khớp (cộng cả hai người chấm), không in giá trị ô. Mọi file đầu ra phải là file mới, không ghi đè để tránh mất điểm đã chấm. Công thức, validation, conditional formatting, định dạng và freeze panes được giữ; workbook được đặt chế độ tự tính lại khi mở bằng Excel. Công cụ dùng ClosedXML 0.105.1, giấy phép MIT.
 
 | Chế độ | Tổng số câu (`N`) | Trong phạm vi | Ngoài phạm vi | Hit@1 | Hit@3 | MRR | Từ chối đúng | TB (ms) | p95 (ms) |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|

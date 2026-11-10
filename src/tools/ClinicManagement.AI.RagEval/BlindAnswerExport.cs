@@ -6,11 +6,12 @@ using ClinicManagement.Application.AI.DTOs;
 
 namespace ClinicManagement.AI.RagEval;
 
-public sealed record BlindAnswerOptions(string CsvPath, string OutputDirectory, int Seed, string Retrieval = "hybrid")
+public sealed record BlindAnswerOptions(string CsvPath, string OutputDirectory, int Seed, string Retrieval = "hybrid",
+    string? XlsxPath = null)
 {
     public static BlindAnswerOptions Parse(string[] args)
     {
-        string? csv = null, output = null;
+        string? csv = null, xlsx = null, output = null;
         string? retrieval = null;
         int? seed = null;
         for (var i = 0; i < args.Length; i++)
@@ -20,6 +21,7 @@ public sealed record BlindAnswerOptions(string CsvPath, string OutputDirectory, 
             switch (flag)
             {
                 case "--csv" when csv is null: csv = args[i]; break;
+                case "--xlsx" when xlsx is null: xlsx = args[i]; break;
                 case "--out-dir" when output is null: output = args[i]; break;
                 case "--seed" when seed is null:
                     seed = int.Parse(args[i], CultureInfo.InvariantCulture); break;
@@ -28,12 +30,15 @@ public sealed record BlindAnswerOptions(string CsvPath, string OutputDirectory, 
                 default: throw new ArgumentException("Unsupported or duplicate option.");
             }
         }
-        if (csv is null || output is null || !csv.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
-            throw new ArgumentException("blind-answers requires --csv and --out-dir.");
+        if ((csv is null) == (xlsx is null) || output is null ||
+            csv is not null && !csv.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) ||
+            xlsx is not null && !xlsx.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("blind-answers requires exactly one of --csv/--xlsx and --out-dir.");
         if (retrieval is not (null or "hybrid" or "bm25"))
             throw new ArgumentException("--retrieval must be hybrid or bm25.");
-        return new(Path.GetFullPath(csv), ExternalOutputDirectory.Validate(output),
-            seed ?? RandomNumberGenerator.GetInt32(int.MaxValue), retrieval ?? "hybrid");
+        return new(csv is null ? string.Empty : Path.GetFullPath(csv), ExternalOutputDirectory.Validate(output),
+            seed ?? RandomNumberGenerator.GetInt32(int.MaxValue), retrieval ?? "hybrid",
+            xlsx is null ? null : Path.GetFullPath(xlsx));
     }
 }
 
@@ -78,22 +83,25 @@ public static class ExternalOutputDirectory
 }
 
 public sealed record BlindExportResult(int Count, int Seed, string GradingPath, string KeyPath);
+public sealed record BlindAnswerRow(string Stt, string AnswerA, string AnswerB, string AIs, double LlmMs, double ExtractiveMs);
 
 public static class BlindAnswerExport
 {
     public static async Task<BlindExportResult> RunAsync(BlindAnswerOptions options,
         Func<string, bool, CancellationToken, Task<AiChatResponseDto>> answer,
-        TextWriter console, CancellationToken ct = default)
+        TextWriter console, CancellationToken ct = default, Action<BlindAnswerRow>? onAnswer = null,
+        IReadOnlyList<EvaluationQuestion>? loadedQuestions = null)
     {
         var directory = ExternalOutputDirectory.Validate(options.OutputDirectory);
         var gradingPath = Path.Combine(directory, "phieu-cham.csv");
         var keyPath = Path.Combine(directory, "khoa.csv");
         if (File.Exists(gradingPath) || File.Exists(keyPath))
             throw new IOException("Output files already exist; choose a new --out-dir.");
-        var input = EvaluationInput.Parse(["--csv", options.CsvPath]);
-        var questions = await input.LoadAsync(requireBothScopes: false);
+        var questions = loadedQuestions ?? (options.XlsxPath is null
+            ? await EvaluationInput.Parse(["--csv", options.CsvPath]).LoadAsync(requireBothScopes: false)
+            : BlindAnswerWorkbook.LoadQuestions(options.XlsxPath));
         if (questions.Any(q => string.IsNullOrWhiteSpace(q.Stt)) ||
-            questions.Select(q => q.Stt).Distinct(StringComparer.Ordinal).Count() != questions.Length)
+            questions.Select(q => q.Stt).Distinct(StringComparer.Ordinal).Count() != questions.Count)
             throw new InvalidDataException("Blind export requires unique, nonempty STT values.");
         var grading = new StringBuilder("STT,Trả lời A,Trả lời B\r\n");
         var key = new StringBuilder("STT,A là,Độ trễ LLM (ms),Độ trễ trích đoạn (ms)\r\n");
@@ -109,11 +117,13 @@ public static class BlindAnswerExport
             var extractive = await answer(question.Text, false, ct);
             var extractiveMs = watch.Elapsed.TotalMilliseconds;
             var llmIsA = random.Next(2) == 0;
-            grading.AppendLine(string.Join(',', Cell(question.Stt!),
-                Cell(VisibleText(llmIsA ? llm : extractive)), Cell(VisibleText(llmIsA ? extractive : llm))));
-            key.AppendLine(string.Join(',', Cell(question.Stt!), Cell(llmIsA ? "LLM" : "Trích đoạn"),
+            var row = new BlindAnswerRow(question.Stt!, VisibleText(llmIsA ? llm : extractive),
+                VisibleText(llmIsA ? extractive : llm), llmIsA ? "LLM" : "Trích đoạn", llmMs, extractiveMs);
+            grading.AppendLine(string.Join(',', Cell(row.Stt), Cell(row.AnswerA), Cell(row.AnswerB)));
+            key.AppendLine(string.Join(',', Cell(row.Stt), Cell(row.AIs),
                 llmMs.ToString("F3", CultureInfo.InvariantCulture), extractiveMs.ToString("F3", CultureInfo.InvariantCulture)));
-            await console.WriteLineAsync($"{++count}/{questions.Length}");
+            onAnswer?.Invoke(row);
+            await console.WriteLineAsync($"{++count}/{questions.Count}");
         }
         Directory.CreateDirectory(directory);
         await File.WriteAllTextAsync(gradingPath, grading.ToString(), new UTF8Encoding(true), ct);
