@@ -6,11 +6,12 @@ using ClinicManagement.Application.AI.DTOs;
 
 namespace ClinicManagement.AI.RagEval;
 
-public sealed record BlindAnswerOptions(string CsvPath, string OutputDirectory, int Seed)
+public sealed record BlindAnswerOptions(string CsvPath, string OutputDirectory, int Seed, string Retrieval = "hybrid")
 {
     public static BlindAnswerOptions Parse(string[] args)
     {
         string? csv = null, output = null;
+        string? retrieval = null;
         int? seed = null;
         for (var i = 0; i < args.Length; i++)
         {
@@ -22,13 +23,17 @@ public sealed record BlindAnswerOptions(string CsvPath, string OutputDirectory, 
                 case "--out-dir" when output is null: output = args[i]; break;
                 case "--seed" when seed is null:
                     seed = int.Parse(args[i], CultureInfo.InvariantCulture); break;
+                case "--retrieval" when retrieval is null:
+                    retrieval = args[i]; break;
                 default: throw new ArgumentException("Unsupported or duplicate option.");
             }
         }
         if (csv is null || output is null || !csv.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("blind-answers requires --csv and --out-dir.");
+        if (retrieval is not (null or "hybrid" or "bm25"))
+            throw new ArgumentException("--retrieval must be hybrid or bm25.");
         return new(Path.GetFullPath(csv), ExternalOutputDirectory.Validate(output),
-            seed ?? RandomNumberGenerator.GetInt32(int.MaxValue));
+            seed ?? RandomNumberGenerator.GetInt32(int.MaxValue), retrieval ?? "hybrid");
     }
 }
 
@@ -113,7 +118,7 @@ public static class BlindAnswerExport
         Directory.CreateDirectory(directory);
         await File.WriteAllTextAsync(gradingPath, grading.ToString(), new UTF8Encoding(true), ct);
         await File.WriteAllTextAsync(keyPath, key.ToString(), new UTF8Encoding(true), ct);
-        await console.WriteLineAsync($"Count: {count}; seed: {options.Seed}");
+        await console.WriteLineAsync($"Count: {count}; seed: {options.Seed}; retrieval: {options.Retrieval}");
         await console.WriteLineAsync(gradingPath);
         await console.WriteLineAsync(keyPath);
         return new(count, options.Seed, gradingPath, keyPath);
