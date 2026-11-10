@@ -1,3 +1,5 @@
+Ghi chú lịch sử: provider Gemini mô tả trong tài liệu này hiện đã tắt; đề tài NCKH chỉ dùng mô hình cục bộ.
+
 # ClinicCare AI Gate B — Vietnamese intent model pipeline
 
 This document records the reproducible offline model-training gate. It is an intent-classification evaluation, not a diagnostic or clinical-safety claim.

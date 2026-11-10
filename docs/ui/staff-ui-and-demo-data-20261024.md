@@ -1,3 +1,5 @@
+Ghi chú lịch sử: provider Gemini mô tả trong tài liệu này hiện đã tắt; đề tài NCKH chỉ dùng mô hình cục bộ.
+
 # Staff UI và dữ liệu Development — 24/10/2026
 
 ## Cách sửa các mục đã giao

@@ -1,6 +1,6 @@
 # ClinicCare AI - Hệ Thống Quản Lý Phòng Khám Đa Khoa Thông Minh
 
-ClinicCare AI là giải pháp phần mềm quản lý phòng khám đa khoa hiện đại, số hóa toàn diện quy trình tiếp đón, đặt lịch khám, khám chữa bệnh, kê đơn, cấp phát thuốc và tích hợp Trí tuệ nhân tạo (AI Gemini) hỗ trợ định tuyến chuyên khoa y tế chính xác và an toàn.
+ClinicCare AI là giải pháp phần mềm quản lý phòng khám đa khoa hiện đại, số hóa toàn diện quy trình tiếp đón, đặt lịch khám, khám chữa bệnh, kê đơn, cấp phát thuốc và tích hợp Trí tuệ nhân tạo hỗ trợ định tuyến chuyên khoa y tế chính xác và an toàn.
 
 ---
 
@@ -21,7 +21,7 @@ ClinicCare AI là giải pháp phần mềm quản lý phòng khám đa khoa hi�
   - Node.js: Node 24 LTS (xác định qua `.nvmrc` và `package.json engines`).
   - GitHub Actions CI/CD pipeline tự động kiểm thử và build.
 - **AI Integration:** 
-  - Google Gemini AI: `AiProviderOptions` mặc định dùng `gemini-3.6-flash`; `appsettings.Development.json` hiện ghi đè thành `gemini-1.5-flash` và tắt provider (`IsEnabled=false`). Model thực tế theo `AiProvider:ModelName` sau khi áp dụng cấu hình/User Secrets.
+  - AI của dự án chỉ chạy cục bộ gồm ML.NET (phân loại ý định, gợi ý chuyên khoa) và RAG (BM25 + bge-m3, sinh câu trả lời bằng Ollama qwen2.5:7b, dự phòng trích đoạn khi tắt Ollama). Mã provider đám mây cũ đang tắt mặc định và sẽ được gỡ khỏi mã nguồn.
   - Guardrails y tế nghiêm ngặt: không chẩn đoán, không kê đơn, lọc PII, đối chiếu whitelist chuyên khoa từ database, fallback chọn thủ công an toàn khi mất kết nối AI.
 - **Kiểm thử tự động:** 
   - xUnit, WebApplicationFactory (Integration Tests cho luồng đặt lịch, JWT, bảo mật dữ liệu, cấp phát thuốc).
@@ -126,10 +126,6 @@ clinic-management-ai/
 Mở Terminal tại thư mục dự án:
 ```bash
 cd src/backend/ClinicManagement.Api
-
-# Tùy chọn: Nếu muốn dùng Gemini AI thật, cấu hình User Secrets (không commit key):
-dotnet user-secrets set "AiProvider:ApiKey" "YOUR_API_KEY_HERE"
-dotnet user-secrets set "AiProvider:IsEnabled" "true"
 ```
 Hệ thống đã cấu hình sẵn chuỗi kết nối mặc định `Server=(localdb)\mssqllocaldb;Database=ClinicManagementDb;...` trong `appsettings.Development.json`. Backend tự động chạy migration EF Core. Dữ liệu mẫu chỉ được seed trong môi trường `Development` khi `DemoSeed:Enabled=true`; đặt thêm `DemoSeed:GenerateSlots=true` để sinh lịch/khung giờ và `DemoSeed:GenerateAppointments=true` để sinh lịch hẹn mẫu (cần bật GenerateSlots). Cấu hình Development hiện bật Enabled và tắt GenerateSlots.
 

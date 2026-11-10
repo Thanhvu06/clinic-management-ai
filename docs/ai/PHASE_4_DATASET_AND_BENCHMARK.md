@@ -1,3 +1,5 @@
+Ghi chú lịch sử: provider Gemini mô tả trong tài liệu này hiện đã tắt; đề tài NCKH chỉ dùng mô hình cục bộ.
+
 # ClinicCare AI Phase 5: Independent Dataset and Benchmark
 
 ## Scope and provenance

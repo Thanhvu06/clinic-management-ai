@@ -1,3 +1,5 @@
+Ghi chú lịch sử: provider Gemini mô tả trong tài liệu này hiện đã tắt; đề tài NCKH chỉ dùng mô hình cục bộ.
+
 # ClinicCare AI Phase 3.1 — Public catalog
 
 Phase 3.1 extends the existing read-only `clinic.search_knowledge` tool. It

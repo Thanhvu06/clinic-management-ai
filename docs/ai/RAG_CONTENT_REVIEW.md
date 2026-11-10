@@ -1,8 +1,8 @@
 # Danh sách duyệt nội dung RAG v2
 
-Cập nhật 08/11/2026 (giờ Việt Nam), đồng bộ hướng dẫn chuẩn bị với danh mục dịch vụ theo bảng nhóm đã chốt. Có **68 mục cần nhóm duyệt**; cột Nhóm duyệt chủ ý để trống. Đây là danh sách kiểm tra trước khi dùng trong báo cáo NCKH, không phải xác nhận chuyên môn. Một dòng có thể gộp các bước liên tiếp của cùng thao tác. Các quy tắc cũ được nhắc lại để nhóm kiểm tra tính nhất quán.
+Cập nhật 08/11/2026 (giờ Việt Nam), đồng bộ hướng dẫn chuẩn bị với danh mục dịch vụ theo bảng nhóm đã chốt. Có **68 mục cần nhóm duyệt** (trước đó là 61 mục (tại thời điểm đó)); cột Nhóm duyệt chủ ý để trống. Đây là danh sách kiểm tra trước khi dùng trong báo cáo NCKH, không phải xác nhận chuyên môn. Một dòng có thể gộp các bước liên tiếp của cùng thao tác. Các quy tắc cũ được nhắc lại để nhóm kiểm tra tính nhất quán.
 
-Mỗi mục corpus kết thúc bằng: “Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.” Kho có 12 tài liệu/51 đoạn, mỗi đoạn không quá 550 ký tự. Các khoảng thời gian/lượng nước là hướng dẫn phổ thông, cần chỉ định riêng cho trẻ nhỏ, người phải hạn chế nước hoặc chuẩn bị kỹ thuật khác. Số 115 là hướng dẫn cấp cứu, không phải số liên hệ của phòng khám.
+Mỗi mục corpus kết thúc bằng: “Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.” Kho có 12 tài liệu/51 đoạn (trước đó là 43 đoạn (tại thời điểm đó)), mỗi đoạn không quá 550 ký tự. Các khoảng thời gian/lượng nước là hướng dẫn phổ thông, cần chỉ định riêng cho trẻ nhỏ, người phải hạn chế nước hoặc chuẩn bị kỹ thuật khác. Số 115 là hướng dẫn cấp cứu, không phải số liên hệ của phòng khám.
 
 ## Bảng cần duyệt
 

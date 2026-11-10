@@ -80,6 +80,7 @@ Các phép đo cục bộ trong phiên làm việc này (mục 4 và mục 5) đ
 - **Ngày đo:** Đo ngày 07/11/2026 (giờ Việt Nam, dòng 5) và cập nhật đo chốt ngày 08/11/2026 (dòng 345, 351–368).
 - **Cấu hình máy:** Windows, AMD Ryzen 9 7945HX, RAM khả dụng báo bởi hệ thống 31,2 GiB, NVIDIA GeForce RTX 4060 Laptop GPU 8 GiB, .NET SDK 10.0.300, Ollama 0.40.15 (dòng 5).
 - **Tham số đánh giá:** MinScore = 0.45; MinQueryCoverage = 0.50; MinTermIdf = 1.25; MinCosine = 0.20; TopK = 4 (dòng 166, 408, 527).
+- **Quy mô kho tri thức (corpus):** 12 tài liệu, 51 đoạn theo heading cấp 2 (thời điểm đo bảng 3.1 là 43 đoạn (tại thời điểm đó)); 68 mục cần nhóm duyệt trong [RAG_CONTENT_REVIEW.md](../ai/RAG_CONTENT_REVIEW.md) (trước đó là 61 mục (tại thời điểm đó)).
 
 ### 3.1. Bảng đo chốt sau sửa điều hướng (trích nguyên văn `docs/ai/RAG_EVALUATION.md:355-368`)
 

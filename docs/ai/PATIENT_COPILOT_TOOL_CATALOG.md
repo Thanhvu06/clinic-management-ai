@@ -1,3 +1,5 @@
+Ghi chú lịch sử: provider Gemini mô tả trong tài liệu này hiện đã tắt; đề tài NCKH chỉ dùng mô hình cục bộ.
+
 # Patient Copilot Tool Catalog
 
 All tools use version 1.0. The registry is explicit and rejects duplicate or unknown names.
