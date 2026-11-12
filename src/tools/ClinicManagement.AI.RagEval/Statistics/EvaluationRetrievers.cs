@@ -20,7 +20,6 @@ public sealed class DenseEvaluationRetriever(IReadOnlyList<KnowledgeChunk> chunk
             query.Value[0].Length != vectors[0].Length || query.Value[0].Any(v => !float.IsFinite(v)) || query.Value[0].All(v => v == 0))
             throw new InvalidOperationException("Dense query embedding failed.");
         var ranked = chunks.Select((chunk, index) => new KnowledgeHit(chunk, Bm25KnowledgeIndex.Cosine(query.Value[0], vectors[index])))
-            .Where(hit => hit.Score >= Math.Clamp(options.MinCosine, 0, 1))
             .OrderByDescending(hit => hit.Score).ThenBy(hit => hit.Chunk.Id, StringComparer.Ordinal)
             .Take(Math.Clamp(options.TopK, 1, 10)).ToArray();
         return new(ranked, query.WasCalled);

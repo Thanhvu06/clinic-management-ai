@@ -52,8 +52,20 @@ public static class RetrievalComparison
 
     public static async Task WriteAsync(RetrievalComparisonResult report, string output, TextWriter console, CancellationToken ct = default)
     {
-        await StatisticsReport.SaveAsync(report, output, ct);
-        await console.WriteLineAsync($"Đánh giá mức tài liệu ({report.Documents} tài liệu); top-k={report.TopKChunks} đoạn; cosine >= {StatisticsReport.Number(report.MinCosine)}");
+        await StatisticsReport.SaveAsync(new
+        {
+            report.EvaluationLevel, report.Documents, report.Chunks, report.TopKChunks, report.MinCosine,
+            report.EmbeddingModel, report.CategoryPolicy,
+            denseRejectionPolicy = "không áp dụng: dense không có ngưỡng từ chối; correctRejection=null",
+            modes = report.Modes.Select(mode => new
+            {
+                mode.Mode, overall = Export(mode.Mode, mode.Overall),
+                byCategory = mode.ByCategory.ToDictionary(pair => pair.Key, pair => Export(mode.Mode, pair.Value))
+            }),
+            report.PairwiseHitAt1
+        }, output, ct);
+        await console.WriteLineAsync($"Đánh giá mức tài liệu ({report.Documents} tài liệu); top-k={report.TopKChunks} đoạn; hybrid cosine >= {StatisticsReport.Number(report.MinCosine)}");
+        await console.WriteLineAsync("Dense: không có ngưỡng từ chối; từ chối đúng không áp dụng (JSON: null).");
         await console.WriteLineAsync("Mode | Loại | N | InScope | Outside | Hit@1 | Hit@3 | MRR | CorrectRejection");
         foreach (var mode in report.Modes)
         {
@@ -65,6 +77,12 @@ public static class RetrievalComparison
         await console.WriteLineAsync("b=left correct/right wrong; c=left wrong/right correct; raw two-sided p-values.");
         await console.WriteLineAsync(output);
         async Task Row(string mode, string category, CategoryMetrics m) =>
-            await console.WriteLineAsync($"{mode} | {category} | {m.N} | {m.InScope} | {m.Outside} | {StatisticsReport.Number(m.HitAt1)} | {StatisticsReport.Number(m.HitAt3)} | {StatisticsReport.Number(m.Mrr)} | {StatisticsReport.Number(m.CorrectRejection)}");
+            await console.WriteLineAsync($"{mode} | {category} | {m.N} | {m.InScope} | {m.Outside} | {StatisticsReport.Number(m.HitAt1)} | {StatisticsReport.Number(m.HitAt3)} | {StatisticsReport.Number(m.Mrr)} | {(mode == "dense" ? "không áp dụng" : StatisticsReport.Number(m.CorrectRejection))}");
     }
+
+    private static object Export(string mode, CategoryMetrics metrics) => new
+    {
+        metrics.N, metrics.InScope, metrics.Outside, metrics.HitAt1, metrics.HitAt3, metrics.Mrr,
+        correctRejection = mode == "dense" ? null : metrics.CorrectRejection
+    };
 }

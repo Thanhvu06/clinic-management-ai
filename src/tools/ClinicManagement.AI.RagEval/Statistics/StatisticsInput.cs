@@ -6,9 +6,10 @@ namespace ClinicManagement.AI.RagEval;
 
 public sealed record StatisticsInput(EvaluationInput? Evaluation, string? Xlsx, string Output)
 {
+    public string Primary { get; init; } = "mean";
     public static StatisticsInput Parse(string[] args, string command)
     {
-        string? xlsx = null, output = null;
+        string? xlsx = null, output = null, primary = null;
         var selectors = new List<string>();
         var hasCsv = false;
         var hasQuestions = false;
@@ -19,6 +20,8 @@ public sealed record StatisticsInput(EvaluationInput? Evaluation, string? Xlsx, 
                 throw new ArgumentException("Missing statistics option value.");
             switch (flag)
             {
+                case "--primary" when command == "rq1-stats" && primary is null && args[i] is "grader1" or "grader2" or "mean":
+                    primary = args[i]; break;
                 case "--xlsx" when xlsx is null: xlsx = Path.GetFullPath(args[i]); break;
                 case "--output" when output is null: output = Path.GetFullPath(args[i]); break;
                 case "--csv" when !hasCsv:
@@ -35,7 +38,7 @@ public sealed record StatisticsInput(EvaluationInput? Evaluation, string? Xlsx, 
         output ??= Path.GetFullPath(command + ".json");
         if (!output.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Statistics output must be a JSON file.");
-        return new(xlsx is null ? EvaluationInput.Parse(selectors.ToArray()) : null, xlsx, output);
+        return new(xlsx is null ? EvaluationInput.Parse(selectors.ToArray()) : null, xlsx, output) { Primary = primary ?? "mean" };
     }
 
     public async Task<IReadOnlyList<EvaluationQuestion>> LoadQuestionsAsync() => Xlsx is null

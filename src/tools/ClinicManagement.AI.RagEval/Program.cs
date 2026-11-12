@@ -10,6 +10,27 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 var mode = args.FirstOrDefault() ?? "bm25";
+if (mode is "llm-judge" or "disagreements")
+{
+    try
+    {
+        if (mode == "disagreements") await Disagreements.RunAsync(args.Skip(1).ToArray(), Console.Out);
+        else
+        {
+            var judgeOptions = JudgeOptions.Parse(args.Skip(1).ToArray());
+            judgeOptions.EnsureNewOutputs();
+            using var sources = await CorpusJudgeSources.CreateAsync();
+            using var judge = new LocalJudgeClient(judgeOptions.Model);
+            await JudgeRun.RunAsync(judgeOptions, judge, sources, Console.Out);
+        }
+    }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("Grading tool failed. Check workbook structure, options, new output files and local Ollama models.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
 if (mode is "dense" or "compare-retrieval" or "rq1-stats")
 {
     try
@@ -17,7 +38,7 @@ if (mode is "dense" or "compare-retrieval" or "rq1-stats")
         var statisticsInput = StatisticsInput.Parse(args.Skip(1).ToArray(), mode);
         StatisticsReport.EnsureNew(statisticsInput.Output);
         if (mode == "rq1-stats")
-            await Rq1Statistics.WriteAsync(Rq1Statistics.Read(statisticsInput.Xlsx!), statisticsInput.Output, Console.Out);
+            await Rq1Statistics.WriteAsync(Rq1Statistics.Read(statisticsInput.Xlsx!, statisticsInput.Primary), statisticsInput.Output, Console.Out);
         else
         {
             var selectedQuestions = await statisticsInput.LoadQuestionsAsync();
