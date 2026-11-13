@@ -53,15 +53,19 @@ public sealed class CorpusJudgeSources : IJudgeSources, IDisposable
         return new(await EvaluationRetrievers.CreateAsync(handler, cacheRoot, ct), documents);
     }
 
-    public async Task<string> GetAsync(string question, string? expectedDocument, CancellationToken ct = default)
+    public async Task<string> GetAsync(string question, string? expectedDocument, CancellationToken ct = default) =>
+        (await GetMaterialAsync(question, expectedDocument, ct)).Text;
+
+    internal async Task<(string Text, bool? HasDocuments)> GetMaterialAsync(string question, string? expectedDocument, CancellationToken ct)
     {
         var full = string.Empty;
         if (!string.IsNullOrWhiteSpace(expectedDocument) && !_documents.TryGetValue(expectedDocument, out full))
             throw new InvalidDataException("Unknown expected document.");
         var retrieval = await _retrievers.Modes["hybrid"].RetrieveAsync(question, ct);
         if (retrieval.Hits.Count > 0 && !retrieval.HybridUsed) throw new InvalidOperationException("Hybrid embedding failed.");
-        return "TÀI LIỆU ĐÚNG (TOÀN VĂN):\n" + full + "\nTOP-4 ĐOẠN HYBRID:\n" +
+        var text = "TÀI LIỆU ĐÚNG (TOÀN VĂN):\n" + full + "\nTOP-4 ĐOẠN HYBRID:\n" +
             string.Join("\n\n", retrieval.Hits.Select(hit => $"[{hit.Chunk.Id}] {hit.Chunk.Source.Title} / {hit.Chunk.Source.Heading}\n{hit.Chunk.Text}"));
+        return (text, full.Length > 0 || retrieval.Hits.Count > 0);
     }
 
     public void Dispose() => _retrievers.Dispose();
