@@ -22,10 +22,12 @@ public static class JudgeDiagnose
     {
         public int Scored { get; private set; }
         public int Blank { get; private set; }
-        public void Add(int? score)
+        public int CitationUnverified { get; private set; }
+        public void Add(Side grade)
         {
-            if (score.HasValue) Scored++;
+            if (grade.Score.HasValue) Scored++;
             else Blank++;
+            if (grade.Diagnostics?.CitationUnverified == true) CitationUnverified++;
         }
     }
 
@@ -39,9 +41,11 @@ public static class JudgeDiagnose
         public int RetrySamples { get; private set; }
         public double? AverageRetries => RetrySamples == 0 ? null : (double)_retryTotal / RetrySamples;
 
+        public int CitationUnverified { get; private set; }
         public void Add(Side side)
         {
-            Blank++;
+            if (side.Score is null) Blank++;
+            if (side.Diagnostics?.CitationUnverified == true) CitationUnverified++;
             if (side.CitationError) CitationErrorFlagged++;
             if (side.Diagnostics?.RetryCount is not int count) return;
             RetrySamples++;
@@ -53,7 +57,7 @@ public static class JudgeDiagnose
     {
         var (checkpointPath, masterPath, output) = Parse(args);
         StatisticsReport.EnsureNew(output);
-        var grades = ReadCheckpoint(checkpointPath);
+        var (grades, version) = ReadCheckpoint(checkpointPath);
         var master = ReadMaster(masterPath, grades.Keys);
         var byCategory = QuestionCategories.All.ToDictionary(name => name, _ => new CategoryCounts(new(), new()));
         var byRetrieval = NewScores("Có tài liệu", "Trả rỗng", Unknown);
@@ -66,8 +70,8 @@ public static class JudgeDiagnose
         {
             var metadata = master[row];
             var category = byCategory[metadata.Category];
-            Add(grade.A, category.A, byMode[metadata.ModeA], byRetrieval[metadata.Retrieval]);
-            Add(grade.B, category.B, byMode[metadata.ModeB], byRetrieval[metadata.Retrieval]);
+            Add(grade.A, category.A, byMode[metadata.ModeA], byRetrieval[Retrieval(grade.A, metadata)]);
+            Add(grade.B, category.B, byMode[metadata.ModeB], byRetrieval[Retrieval(grade.B, metadata)]);
         }
 
         await StatisticsReport.SaveAsync(new { questions = grades.Count, byCategory, byRetrieval, byMode, byFailure, totalFailures }, output, ct);
@@ -76,16 +80,23 @@ public static class JudgeDiagnose
             await console.WriteLineAsync($"{name} | {count.A.Scored} | {count.A.Blank} | {count.B.Scored} | {count.B.Blank}");
         await PrintScores("Retrieval", byRetrieval);
         await PrintScores("Chế độ", byMode);
-        await console.WriteLineAsync("Lỗi cuối | Ô trống | Ô có cờ lỗi trích dẫn | Ô có số retry | Retry trung bình");
+        await console.WriteLineAsync("Lỗi cuối | Ô trống | Ô citation_unverified | Ô có cờ lỗi trích dẫn | Ô có số retry | Retry trung bình");
         foreach (var (name, count) in byFailure.Append(new("Tổng", totalFailures)))
-            await console.WriteLineAsync($"{name} | {count.Blank} | {count.CitationErrorFlagged} | {count.RetrySamples} | {StatisticsReport.Number(count.AverageRetries)}");
+            await console.WriteLineAsync($"{name} | {count.Blank} | {count.CitationUnverified} | {count.CitationErrorFlagged} | {count.RetrySamples} | {StatisticsReport.Number(count.AverageRetries)}");
+
+        string Retrieval(Side grade, MasterRow metadata) => grade.Diagnostics?.RetrievalHasDocuments switch
+        {
+            true => "Có tài liệu",
+            false => "Trả rỗng",
+            _ => version == 2 ? Unknown : metadata.Retrieval
+        };
 
         void Add(Side grade, ScoreCounts category, ScoreCounts mode, ScoreCounts retrieval)
         {
-            category.Add(grade.Score);
-            mode.Add(grade.Score);
-            retrieval.Add(grade.Score);
-            if (grade.Score.HasValue) return;
+            category.Add(grade);
+            mode.Add(grade);
+            retrieval.Add(grade);
+            if (grade.Score.HasValue && grade.Diagnostics?.CitationUnverified != true) return;
             var name = grade.Diagnostics?.FinalFailure is JudgeFailureKind failure ? failures[(int)failure] : Unknown;
             byFailure[name].Add(grade);
             totalFailures.Add(grade);
@@ -93,9 +104,9 @@ public static class JudgeDiagnose
 
         async Task PrintScores(string heading, Dictionary<string, ScoreCounts> counts)
         {
-            await console.WriteLineAsync($"{heading} | Có điểm | Trống");
+            await console.WriteLineAsync($"{heading} | Có điểm | Trống | Citation_unverified");
             foreach (var (name, count) in counts)
-                await console.WriteLineAsync($"{name} | {count.Scored} | {count.Blank}");
+                await console.WriteLineAsync($"{name} | {count.Scored} | {count.Blank} | {count.CitationUnverified}");
         }
     }
 
@@ -107,7 +118,7 @@ public static class JudgeDiagnose
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
         for (var i = 0; i < args.Length; i += 2)
         {
-            if (args[i] is not ("--checkpoint" or "--master") || i + 1 >= args.Length ||
+            if (args[i] is not ("--checkpoint" or "--master" or "--output") || i + 1 >= args.Length ||
                 args[i + 1].StartsWith("--", StringComparison.Ordinal) || !values.TryAdd(args[i], args[i + 1]))
                 throw new ArgumentException("Invalid judge-diagnose options.");
         }
@@ -115,10 +126,13 @@ public static class JudgeDiagnose
             !checkpoint.EndsWith(".jsonl", StringComparison.OrdinalIgnoreCase) || !master.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Use --checkpoint and --master.");
         checkpoint = Path.GetFullPath(checkpoint);
-        return (checkpoint, Path.GetFullPath(master), Path.Combine(Path.GetDirectoryName(checkpoint)!, "judge-diagnose.json"));
+        var output = values.TryGetValue("--output", out var name) ? Path.GetFullPath(name) :
+            Path.Combine(Path.GetDirectoryName(checkpoint)!, Path.GetFileName(checkpoint) == "judge-checkpoint-v2.jsonl" ? "judge-diagnose-v2.json" : "judge-diagnose.json");
+        if (!output.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Use a JSON output.");
+        return (checkpoint, Path.GetFullPath(master), output);
     }
 
-    private static Dictionary<int, CheckpointRow> ReadCheckpoint(string path)
+    private static (Dictionary<int, CheckpointRow> Rows, int Version) ReadCheckpoint(string path)
     {
         // A newline commits the row. The projection leaves judge notes and other content fields unread by the report.
         using var stream = File.OpenRead(path);
@@ -128,7 +142,7 @@ public static class JudgeDiagnose
         var headerEnd = bytes.IndexOf((byte)'\n');
         if (headerEnd < 0) throw new InvalidDataException("Missing checkpoint header.");
         var header = JsonSerializer.Deserialize<JudgeCheckpointHeader>(bytes[..headerEnd], JsonOptions);
-        if (header is not { Version: 1, Runs: > 0 } || header.Id == Guid.Empty)
+        if (header is not { Version: 1 or 2, Runs: > 0 } || header.Id == Guid.Empty)
             throw new InvalidDataException("Invalid checkpoint header.");
         var rows = new Dictionary<int, CheckpointRow>();
         var position = headerEnd + 1;
@@ -143,7 +157,7 @@ public static class JudgeDiagnose
             rows[row.Row] = row;
             position += end + 1;
         }
-        return rows;
+        return (rows, header.Version);
     }
 
     private static bool Valid(Side? side, int runs) => side is not null &&
@@ -151,7 +165,9 @@ public static class JudgeDiagnose
         (side.RunsCompleted == runs ? side.Score is >= 0 and <= 2 : side.Score is null) &&
         (side.Diagnostics is not { } diagnostics ||
             diagnostics.RetryCount >= 0 && diagnostics.RetryCount <= 2L * runs &&
-            (diagnostics.FinalFailure is not JudgeFailureKind failure || side.Score is null && Enum.IsDefined(failure)));
+            (diagnostics.CitationUnverified != true || side.Score.HasValue) &&
+            (diagnostics.FinalFailure is not JudgeFailureKind failure ||
+                (side.Score is null || diagnostics.CitationUnverified == true) && Enum.IsDefined(failure)));
 
     private static Dictionary<int, MasterRow> ReadMaster(string path, IEnumerable<int> gradeRows)
     {

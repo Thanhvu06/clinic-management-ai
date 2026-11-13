@@ -7,7 +7,7 @@ internal sealed record JudgeGrade(int? Score, string? Safety, string Note, int F
 {
     public bool IsValid(int runs) => RunsCompleted >= 0 && RunsCompleted <= runs && Fabrications >= 0 &&
         Note is not null && (RunsCompleted == runs
-            ? Score is >= 0 and <= 2 && Safety is "Đạt" or "Không đạt" && !CitationError
+            ? Score is >= 0 and <= 2 && Safety is "Đạt" or "Không đạt" && (!CitationError || Diagnostics?.CitationUnverified == true)
             : Score is null && Safety is null);
 }
 
@@ -17,7 +17,7 @@ internal sealed record JudgeCheckpointRow(int Row, JudgeGrade A, JudgeGrade B, d
 }
 
 internal sealed record JudgeCheckpointHeader(int Version, Guid Id, string InputSha256, string OutputFile,
-    string Model, int Runs, int Seed, DateTimeOffset StartedAtUtc);
+    string Model, int Runs, int Seed, DateTimeOffset StartedAtUtc, int Context = 8192);
 
 internal sealed class JudgeCheckpointException(string message) : IOException(message);
 
@@ -48,8 +48,8 @@ internal sealed class JudgeCheckpoint : IDisposable
         {
             if (File.Exists(options.Checkpoint))
                 throw new JudgeCheckpointException("Judge checkpoint already exists. Use --resume or a different output directory.");
-            var initial = new JudgeCheckpointHeader(1, Guid.NewGuid(), inputSha256, Path.GetFileName(options.Output),
-                options.Model, options.Runs, options.Seed, DateTimeOffset.UtcNow);
+            var initial = new JudgeCheckpointHeader(options.V2 ? 2 : 1, Guid.NewGuid(), inputSha256, Path.GetFileName(options.Output),
+                options.Model, options.Runs, options.Seed, DateTimeOffset.UtcNow, options.Context);
             JudgeOutputFiles.Publish(options.Checkpoint, path =>
             {
                 using var writer = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
@@ -68,7 +68,7 @@ internal sealed class JudgeCheckpoint : IDisposable
             var headerEnd = bytes.IndexOf((byte)'\n');
             if (headerEnd < 0) throw new JudgeCheckpointException("Judge checkpoint header is incomplete.");
             var header = Read<JudgeCheckpointHeader>(bytes[..headerEnd]);
-            if (header.Version != 1 || header.Id == Guid.Empty || header.InputSha256 != inputSha256 ||
+            if (header.Version != (options.V2 ? 2 : 1) || header.Context != options.Context || header.Id == Guid.Empty || header.InputSha256 != inputSha256 ||
                 header.OutputFile != Path.GetFileName(options.Output) || header.Model != options.Model ||
                 header.Runs != options.Runs || options.SeedSpecified && header.Seed != options.Seed)
                 throw new JudgeCheckpointException("Judge checkpoint parameters differ (input SHA-256, output, model, runs or seed).");
@@ -83,7 +83,7 @@ internal sealed class JudgeCheckpoint : IDisposable
                 if (!inputRows.Contains(row.Row) || row.A is null || row.B is null ||
                     !row.A.IsValid(header.Runs) || !row.B.IsValid(header.Runs) ||
                     !double.IsFinite(row.ElapsedMs) || row.ElapsedMs < 0 ||
-                    rows.TryGetValue(row.Row, out var previous) && previous.IsComplete(header.Runs))
+                    rows.TryGetValue(row.Row, out var previous) && (options.V2 || previous.IsComplete(header.Runs)))
                     throw new JudgeCheckpointException("Invalid judge checkpoint row.");
                 rows[row.Row] = row;
                 position += end + 1;

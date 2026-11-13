@@ -32,8 +32,10 @@ public static class JudgePrompt
         return string.Join('\n', lines);
     }
 
-    public static string Build(string question, string ideas, string category, string rubric, string sources, string answer) =>
-        Instructions + "\nTHANG CHẤM NGUYÊN VĂN:\n" + rubric + "\n<TAI_LIEU_GOC>\n" + sources + "\n</TAI_LIEU_GOC>\n" +
+    public static string Build(string question, string ideas, string category, string rubric, string sources, string answer, bool? hasDocuments = null) =>
+        Instructions + (hasDocuments == false ? "\nKHÔNG CÓ TÀI LIỆU NGUỒN. Mọi mệnh đề phải dùng support=\"không có trong tài liệu\" và evidence rỗng.\n" : "") +
+        "\nTHANG CHẤM NGUYÊN VĂN:\n" + rubric + "\n<TAI_LIEU_GOC>\n" +
+        (hasDocuments == false ? "KHÔNG CÓ TÀI LIỆU NGUỒN" : sources) + "\n</TAI_LIEU_GOC>\n" +
         "CÂU HỎI (chuỗi JSON): " + Data(question) + "\nÝ CHÍNH CẦN CÓ (chuỗi JSON): " + Data(ideas) +
         "\nLOẠI CÂU HỎI: " + category + "\nCÂU TRẢ LỜI DUY NHẤT CẦN CHẤM (chuỗi JSON): " + Data(answer) +
         "\nKhông sửa hay bổ sung câu trả lời đang chấm. quote phải xuất hiện nguyên văn trong duy nhất câu trả lời này; evidence phải xuất hiện nguyên văn trong TAI_LIEU_GOC. Nếu không thấy một ý trong câu trả lời thì present=false, quote rỗng.\nSCHEMA:\n" +

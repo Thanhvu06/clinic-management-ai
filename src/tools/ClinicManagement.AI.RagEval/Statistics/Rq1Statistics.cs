@@ -18,6 +18,7 @@ public sealed record Rq1Result(int IncompleteRows, string Methods, Rq1Group Over
 {
     public string Primary { get; init; } = "mean";
     public IReadOnlyDictionary<string, Rq1Selection> AllSources { get; init; } = new Dictionary<string, Rq1Selection>();
+    public JudgeSensitivity? AiSensitivity { get; init; }
 }
 
 public static class Rq1Statistics
@@ -70,7 +71,8 @@ public static class Rq1Statistics
             "otherwise tie-corrected normal without continuity correction. r=abs(z)/sqrt(nonzero n), using the same normal z even for exact p. " +
             "Kappa pools A/B ratings (2N); expected agreement=1 yields null. Latencies use complete cases; p95 is nearest rank. Raw two-sided p-values. " +
             "All three score sources use the same complete cases. Fabrication notes count positive A:/B: bịa:n headers from J/O after decoding; unlabeled notes are reported separately.",
-            allSources[primary].Overall, allSources[primary].ByCategory) { Primary = primary, AllSources = allSources };
+            allSources[primary].Overall, allSources[primary].ByCategory)
+            { Primary = primary, AllSources = allSources, AiSensitivity = JudgeSensitivity.Read(workbook) };
     }
 
     private static bool HasFabrication(string notes, string side) => Regex.Matches(notes, @"(?im)^\s*([AB]):\s*([^|\r\n]*)")
@@ -132,6 +134,7 @@ public static class Rq1Statistics
             foreach (var (category, group) in selection.ByCategory) await Row(category, group);
         }
         await console.WriteLineAsync(report.Methods);
+        if (report.AiSensitivity is not null) await report.AiSensitivity.WriteAsync(console);
         await console.WriteLineAsync(output);
         async Task Row(string category, Rq1Group g)
         {

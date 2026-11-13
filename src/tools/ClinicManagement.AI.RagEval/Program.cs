@@ -32,8 +32,11 @@ if (mode is "llm-judge" or "disagreements")
         {
             var judgeOptions = JudgeOptions.Parse(args.Skip(1).ToArray());
             using var sources = await CorpusJudgeSources.CreateAsync();
-            using var judge = new LocalJudgeClient(judgeOptions.Model);
-            await JudgeRun.RunAsync(judgeOptions, judge, sources, Console.Out);
+            using var judge = new LocalJudgeClient(judgeOptions.Model, context: judgeOptions.Context);
+            if (judgeOptions.MeasurePrompt)
+                await JudgeRun.MeasurePromptsAsync(judgeOptions, judge, sources, Console.Out);
+            else
+                await JudgeRun.RunAsync(judgeOptions, judge, sources, Console.Out);
         }
     }
     catch (JudgeCheckpointException error)
