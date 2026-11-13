@@ -7,16 +7,22 @@ using ClinicManagement.Application.AI.DTOs;
 namespace ClinicManagement.AI.RagEval;
 
 public sealed record BlindAnswerOptions(string CsvPath, string OutputDirectory, int Seed, string Retrieval = "hybrid",
-    string? XlsxPath = null)
+    string? XlsxPath = null, bool DevProvenance = false)
 {
     public static BlindAnswerOptions Parse(string[] args)
     {
         string? csv = null, xlsx = null, output = null;
         string? retrieval = null;
         int? seed = null;
+        var provenance = false;
         for (var i = 0; i < args.Length; i++)
         {
             var flag = args[i];
+            if (flag == "--dev-provenance" && !provenance)
+            {
+                provenance = true;
+                continue;
+            }
             if (++i >= args.Length) throw new ArgumentException("Missing option value.");
             switch (flag)
             {
@@ -36,9 +42,11 @@ public sealed record BlindAnswerOptions(string CsvPath, string OutputDirectory, 
             throw new ArgumentException("blind-answers requires exactly one of --csv/--xlsx and --out-dir.");
         if (retrieval is not (null or "hybrid" or "bm25"))
             throw new ArgumentException("--retrieval must be hybrid or bm25.");
+        if (provenance && csv is null)
+            throw new ArgumentException("--dev-provenance requires a dev CSV.");
         return new(csv is null ? string.Empty : Path.GetFullPath(csv), ExternalOutputDirectory.Validate(output),
             seed ?? RandomNumberGenerator.GetInt32(int.MaxValue), retrieval ?? "hybrid",
-            xlsx is null ? null : Path.GetFullPath(xlsx));
+            xlsx is null ? null : Path.GetFullPath(xlsx), provenance);
     }
 }
 
@@ -90,7 +98,8 @@ public static class BlindAnswerExport
     public static async Task<BlindExportResult> RunAsync(BlindAnswerOptions options,
         Func<string, bool, CancellationToken, Task<AiChatResponseDto>> answer,
         TextWriter console, CancellationToken ct = default, Action<BlindAnswerRow>? onAnswer = null,
-        IReadOnlyList<EvaluationQuestion>? loadedQuestions = null)
+        IReadOnlyList<EvaluationQuestion>? loadedQuestions = null,
+        Action<BlindAnswerRow, AiChatResponseDto, AiChatResponseDto>? onResponses = null)
     {
         var directory = ExternalOutputDirectory.Validate(options.OutputDirectory);
         var gradingPath = Path.Combine(directory, "phieu-cham.csv");
@@ -123,6 +132,7 @@ public static class BlindAnswerExport
             key.AppendLine(string.Join(',', Cell(row.Stt), Cell(row.AIs),
                 llmMs.ToString("F3", CultureInfo.InvariantCulture), extractiveMs.ToString("F3", CultureInfo.InvariantCulture)));
             onAnswer?.Invoke(row);
+            onResponses?.Invoke(row, llm, extractive);
             await console.WriteLineAsync($"{++count}/{questions.Count}");
         }
         Directory.CreateDirectory(directory);
@@ -134,7 +144,7 @@ public static class BlindAnswerExport
         return new(count, options.Seed, gradingPath, keyPath);
     }
 
-    private static string Cell(string text) => "\"" + text.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"";
+    internal static string Cell(string text) => "\"" + text.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"";
     private static string VisibleText(AiChatResponseDto response) =>
         string.IsNullOrEmpty(response.Message) ? response.Reply ?? string.Empty : response.Message;
 }
