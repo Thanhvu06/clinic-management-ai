@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace ClinicManagement.AI.RagEval;
 
 internal sealed record JudgeGrade(int? Score, string? Safety, string Note, int Fabrications, bool Uncertain,
-    int RunsCompleted, bool CitationError = false)
+    int RunsCompleted, bool CitationError = false, JudgeGradeDiagnostics? Diagnostics = null)
 {
     public bool IsValid(int runs) => RunsCompleted >= 0 && RunsCompleted <= runs && Fabrications >= 0 &&
         Note is not null && (RunsCompleted == runs

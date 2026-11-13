@@ -10,6 +10,19 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 var mode = args.FirstOrDefault() ?? "bm25";
+if (mode == "judge-diagnose")
+{
+    try
+    {
+        await JudgeDiagnose.RunAsync(args.Skip(1).ToArray(), Console.Out);
+    }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("Judge diagnosis failed. Check the checkpoint, matching master, and new judge-diagnose.json output.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
 if (mode is "llm-judge" or "disagreements")
 {
     try
