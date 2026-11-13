@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text.Json;
 using ClosedXML.Excel;
 
@@ -14,21 +15,21 @@ public sealed record JudgeRunSummary(string Model, int Seed, int Runs, int Quest
     public int QuestionsWithScoreDisagreement { get; init; }
     public int[] ScoreCountsA { get; init; } = [];
     public int[] ScoreCountsB { get; init; } = [];
+    public Guid CheckpointId { get; init; }
 }
 
 public static class JudgeRun
 {
     private sealed record Item(int Row, string Question, string Ideas, string Category, string? Document, string A, string B);
-    private sealed record Grade(int? Score, string? Safety, string Note, int Fabrications, bool Uncertain)
-    {
-        public bool CitationError { get; init; }
-    }
 
     public static async Task<JudgeRunSummary> RunAsync(JudgeOptions options, ILlmJudgeClient judge, IJudgeSources sources,
         TextWriter console, CancellationToken ct = default)
     {
-        options.EnsureNewOutputs();
-        using var book = new XLWorkbook(options.Xlsx);
+        if (!options.Resume) options.EnsureNewOutputs();
+        using var input = new FileStream(options.Xlsx, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var inputHash = Convert.ToHexString(await SHA256.HashDataAsync(input, ct));
+        input.Position = 0;
+        using var book = new XLWorkbook(input);
         if (book.Worksheets.Contains("Khóa")) throw new InvalidDataException("Judge requires a blinded workbook without key.");
         var sheet = book.Worksheet("Phiếu chấm");
         var questions = book.Worksheet("Câu hỏi");
@@ -47,29 +48,86 @@ public static class JudgeRun
                 questions.Cell(questionRow, 5).GetString().Trim(), a, b));
         }
         if (items.Count == 0) throw new InvalidDataException("No answers to grade.");
-        var started = DateTimeOffset.UtcNow;
-        var timer = Stopwatch.StartNew();
-        await console.WriteLineAsync($"0/{items.Count}");
+        using var checkpoint = JudgeCheckpoint.Open(options, inputHash, items.Select(item => item.Row).ToHashSet());
+        var published = options.Resume ? JudgeOutputFiles.ReadPublishedSummary(options, checkpoint.Header.Id) : null;
+        if (published is not null && checkpoint.Rows.Count != items.Count)
+            throw new JudgeCheckpointException("Published judge metadata requires a checkpoint record for every question.");
+        if (published is not null && File.Exists(options.Output) && published.FullyGradedQuestions == items.Count &&
+            checkpoint.Rows.Values.All(row => row.IsComplete(checkpoint.Header.Runs)))
+        {
+            await PrintSummaryAsync(published, options, console);
+            return published;
+        }
+
+        await GradePendingAsync(items, rubric, checkpoint, judge, sources, console, ct);
+        var summary = ApplyGrades(sheet, items, checkpoint);
+        if (published is null)
+        {
+            JudgeOutputFiles.PublishSummary(options, summary);
+            JudgeOutputFiles.PublishWorkbook(options, book, overwrite: false);
+        }
+        else
+        {
+            JudgeOutputFiles.PublishWorkbook(options, book, overwrite: true);
+            JudgeOutputFiles.PublishSummary(options, summary, overwrite: true);
+        }
+        await PrintSummaryAsync(summary, options, console);
+        return summary;
+    }
+
+    private static async Task GradePendingAsync(IReadOnlyList<Item> items, string rubric, JudgeCheckpoint checkpoint,
+        ILlmJudgeClient judge, IJudgeSources sources, TextWriter console, CancellationToken ct)
+    {
+        var runs = checkpoint.Header.Runs;
+        var pending = items.Where(item => !checkpoint.Rows.TryGetValue(item.Row, out var saved) || !saved.IsComplete(runs)).ToArray();
+        var processed = items.Count - pending.Length;
+        await PrintProgressAsync(console, processed, items.Count, 0, 0);
+        var materials = new Dictionary<int, string>();
         // Retrieve before loading the judge to avoid swapping embedding/chat models for every question on small VRAM.
-        var materials = new List<string>();
-        foreach (var item in items) materials.Add(await sources.GetAsync(item.Question, item.Document, ct));
-        var random = new Random(options.Seed);
+        foreach (var item in pending) materials.Add(item.Row, await sources.GetAsync(item.Question, item.Document, ct));
+        var random = new Random(checkpoint.Header.Seed);
+        var sessionElapsed = 0.0;
+        var newlyProcessed = 0;
+        foreach (var item in items)
+        {
+            var first = random.Next(2);
+            checkpoint.Rows.TryGetValue(item.Row, out var saved);
+            if (saved?.IsComplete(runs) == true) continue;
+            ct.ThrowIfCancellationRequested();
+            var timer = Stopwatch.StartNew();
+            JudgeGrade?[] grades = [saved?.A, saved?.B];
+            foreach (var side in new[] { first, 1 - first })
+            {
+                if (grades[side]?.RunsCompleted == runs) continue;
+                var answer = side == 0 ? item.A : item.B;
+                var material = materials[item.Row];
+                var prompt = JudgePrompt.Build(item.Question, item.Ideas, item.Category, rubric, material, answer);
+                grades[side] = await GradeAsync(judge, prompt, answer, material, runs, ct);
+            }
+            var elapsed = timer.Elapsed.TotalMilliseconds;
+            checkpoint.Append(new(item.Row, grades[0]!, grades[1]!, (saved?.ElapsedMs ?? 0) + elapsed));
+            sessionElapsed += elapsed;
+            await PrintProgressAsync(console, ++processed, items.Count, sessionElapsed, ++newlyProcessed);
+        }
+    }
+
+    private static async Task PrintProgressAsync(TextWriter console, int processed, int total, double elapsedMs, int newlyProcessed)
+    {
+        double? average = newlyProcessed == 0 ? null : elapsedMs / (1000 * newlyProcessed);
+        await console.WriteLineAsync($"{processed}/{total} | trung bình {StatisticsReport.Number(average)} giây/câu | còn khoảng {StatisticsReport.Number(average * (total - processed))} giây");
+    }
+
+    private static JudgeRunSummary ApplyGrades(IXLWorksheet sheet, IReadOnlyList<Item> items, JudgeCheckpoint checkpoint)
+    {
         var errors = 0; var uncertain = 0; var fabricatedA = 0; var fabricatedB = 0;
         var blankQuestions = 0;
         var citationErrorQuestions = 0;
         var uncertainQuestions = 0;
         int[][] scoreCounts = [new int[3], new int[3]];
-        for (var i = 0; i < items.Count; i++)
+        foreach (var item in items)
         {
-            var item = items[i];
-            var grades = new Grade[2];
-            int[] order = random.Next(2) == 0 ? [0, 1] : [1, 0];
-            foreach (var side in order)
-            {
-                var answer = side == 0 ? item.A : item.B;
-                var prompt = JudgePrompt.Build(item.Question, item.Ideas, item.Category, rubric, materials[i], answer);
-                grades[side] = await GradeAsync(judge, prompt, answer, materials[i], options.Runs, ct);
-            }
+            var saved = checkpoint.Rows[item.Row];
+            JudgeGrade[] grades = [saved.A, saved.B];
             var notes = new List<string>();
             for (var side = 0; side < 2; side++)
             {
@@ -91,13 +149,10 @@ public static class JudgeRun
             if (grades.Any(grade => grade.Uncertain)) uncertainQuestions++;
             fabricatedA += grades[0].Fabrications; fabricatedB += grades[1].Fabrications;
             sheet.Cell(item.Row, 10).Value = string.Join('\n', notes);
-            await console.WriteLineAsync($"{i + 1}/{items.Count}");
         }
-        Directory.CreateDirectory(Path.GetDirectoryName(options.Output)!);
-        BlindAnswerWorkbook.SaveNew(book, options.Output);
-        timer.Stop();
-        var summary = new JudgeRunSummary(options.Model, options.Seed, options.Runs, items.Count, errors, uncertain,
-            fabricatedA, fabricatedB, started, timer.Elapsed.TotalMilliseconds,
+        var header = checkpoint.Header;
+        return new JudgeRunSummary(header.Model, header.Seed, header.Runs, items.Count, errors, uncertain,
+            fabricatedA, fabricatedB, header.StartedAtUtc, checkpoint.Rows.Values.Sum(row => row.ElapsedMs),
             "Unique normalized fabricated claim text per answer across successful runs; errors/uncertainty count answers, not questions.")
         {
             FullyGradedQuestions = items.Count - blankQuestions,
@@ -105,22 +160,26 @@ public static class JudgeRun
             QuestionsWithCitationErrors = citationErrorQuestions,
             QuestionsWithScoreDisagreement = uncertainQuestions,
             ScoreCountsA = scoreCounts[0],
-            ScoreCountsB = scoreCounts[1]
+            ScoreCountsB = scoreCounts[1],
+            CheckpointId = header.Id
         };
-        await StatisticsReport.SaveAsync(summary, options.Metadata, ct);
+    }
+
+    private static async Task PrintSummaryAsync(JudgeRunSummary summary, JudgeOptions options, TextWriter console)
+    {
         await console.WriteLineAsync($"Số câu: {summary.Questions}");
         await console.WriteLineAsync($"Model: {summary.Model}; seed: {summary.Seed}; runs: {summary.Runs}");
         await console.WriteLineAsync($"Số lỗi chấm (câu trả lời): {summary.GradingErrors}; số phân vân (câu trả lời): {summary.UncertainAnswers}");
         await console.WriteLineAsync($"Số câu chấm đủ A/B: {summary.FullyGradedQuestions}; có ô trống: {summary.QuestionsWithBlanks}; có lỗi trích dẫn dẫn đến ô trống: {summary.QuestionsWithCitationErrors}; lệch điểm giữa các lần chấm: {summary.QuestionsWithScoreDisagreement}");
         await console.WriteLineAsync($"Phân bố điểm A (0/1/2): {string.Join("/", summary.ScoreCountsA)}; B (0/1/2): {string.Join("/", summary.ScoreCountsB)}");
         await console.WriteLineAsync($"Tổng mệnh đề BỊA A/B: {summary.FabricatedClaimsA}/{summary.FabricatedClaimsB}");
-        await console.WriteLineAsync($"Thời gian (ms): {StatisticsReport.Number(summary.ElapsedMs)}");
+        await console.WriteLineAsync($"Thời gian chấm đã lưu (ms): {StatisticsReport.Number(summary.ElapsedMs)}");
+        await console.WriteLineAsync($"Trung bình đã lưu (giây/câu): {StatisticsReport.Number(summary.ElapsedMs / (1000 * summary.Questions))}");
         await console.WriteLineAsync(options.Output);
         await console.WriteLineAsync(options.Metadata);
-        return summary;
     }
 
-    private static async Task<Grade> GradeAsync(ILlmJudgeClient judge, string prompt, string answer, string sources, int runs, CancellationToken ct)
+    private static async Task<JudgeGrade> GradeAsync(ILlmJudgeClient judge, string prompt, string answer, string sources, int runs, CancellationToken ct)
     {
         var verdicts = new List<JudgeVerdict>();
         for (var run = 0; run < runs; run++)
@@ -153,7 +212,7 @@ public static class JudgeRun
         return Combine(verdicts, failed: false);
     }
 
-    private static Grade Combine(IReadOnlyList<JudgeVerdict> verdicts, bool failed)
+    private static JudgeGrade Combine(IReadOnlyList<JudgeVerdict> verdicts, bool failed)
     {
         var fabricated = verdicts.SelectMany(v => v.Claims).Where(c => c.Fabricated).Select(c => JudgeVerdict.Normalize(c.Text))
             .Distinct(StringComparer.Ordinal).Count();
@@ -162,11 +221,11 @@ public static class JudgeRun
         if (failed) flags.Add("lỗi chấm");
         if (fabricated > 0) flags.Add($"bịa:{fabricated}");
         if (uncertain) flags.Add("phân vân");
-        if (failed) return new(null, null, string.Join("; ", flags), fabricated, uncertain);
+        if (failed) return new(null, null, string.Join("; ", flags), fabricated, uncertain, verdicts.Count);
         var chosen = verdicts.MinBy(v => v.CappedScore)!;
         var reason = JudgeVerdict.Normalize(chosen.Reason).Replace('|', '/');
         if (reason.Length > 200) reason = reason[..200];
         return new(chosen.CappedScore, verdicts.Any(v => v.CheckedSafety == "Không đạt") ? "Không đạt" : "Đạt",
-            string.Join("; ", flags) + " | " + reason, fabricated, uncertain);
+            string.Join("; ", flags) + " | " + reason, fabricated, uncertain, verdicts.Count);
     }
 }

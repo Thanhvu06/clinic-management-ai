@@ -18,11 +18,15 @@ if (mode is "llm-judge" or "disagreements")
         else
         {
             var judgeOptions = JudgeOptions.Parse(args.Skip(1).ToArray());
-            judgeOptions.EnsureNewOutputs();
             using var sources = await CorpusJudgeSources.CreateAsync();
             using var judge = new LocalJudgeClient(judgeOptions.Model);
             await JudgeRun.RunAsync(judgeOptions, judge, sources, Console.Out);
         }
+    }
+    catch (JudgeCheckpointException error)
+    {
+        Console.Error.WriteLine(error.Message);
+        Environment.ExitCode = 1;
     }
     catch (Exception)
     {
