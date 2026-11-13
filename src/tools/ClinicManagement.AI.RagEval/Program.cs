@@ -10,6 +10,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 var mode = args.FirstOrDefault() ?? "bm25";
+if (mode is "dev-groups" or "dev-overlap" or "dev-split" or "dev-plant")
+{
+    Environment.ExitCode = await DevCalibrationCommands.RunAsync(mode, args.Skip(1).ToArray(), Console.Out, Console.Error);
+    return;
+}
 if (mode == "judge-diagnose")
 {
     try
