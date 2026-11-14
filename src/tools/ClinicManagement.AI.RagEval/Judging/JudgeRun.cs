@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using ClosedXML.Excel;
 
@@ -21,7 +22,7 @@ public sealed record JudgeRunSummary(string Model, int Seed, int Runs, int Quest
 
 public static class JudgeRun
 {
-    private sealed record Item(int Row, string Question, string Ideas, string Category, string? Document, string A, string B);
+    private sealed record Item(int Row, string Question, string Ideas, string Category, string? Document, string A, string B, Rq1SafetySubtype? SafetySubtype);
     internal const int CitationFlagColumn = 16;
     internal static string CitationFlagHeader(int side) => side == 0 ? "A citation_unverified" : "B citation_unverified";
 
@@ -38,9 +39,12 @@ public static class JudgeRun
         if (options.V2 && Enumerable.Range(0, 2).Any(side => !sheet.Cell(2, CitationFlagColumn + side).IsEmpty()))
             throw new InvalidDataException("V2 citation flag columns must be free in the input workbook.");
         var questions = book.Worksheet("Câu hỏi");
-        var questionRows = BlindAnswerWorkbook.SttRows(questions);
         var rubric = JudgePrompt.Rubric(book.Worksheet("Hướng dẫn"));
-        var items = ReadItems(sheet, questions);
+        var current = Rq1Rubric.ReadForJudge();
+        var items = ReadItems(sheet, questions, options);
+        // A resume must not mix grades from different rubric text or reviewed dev classifications.
+        inputHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(
+            new { inputHash, current, subtypes = items.Select(item => item.SafetySubtype) }))));
         using var checkpoint = JudgeCheckpoint.Open(options, inputHash, items.Select(item => item.Row).ToHashSet());
         var target = items.Take(options.Limit ?? items.Count).ToArray();
         if (options.V2 && !checkpoint.Rows.Keys.ToHashSet().IsSubsetOf(target.Select(item => item.Row)))
@@ -56,8 +60,13 @@ public static class JudgeRun
             return published;
         }
 
-        await GradePendingAsync(target, rubric, checkpoint, judge, sources, console, options.V2, ct);
+        await GradePendingAsync(target, rubric, current, checkpoint, judge, sources, console, options.V2, ct);
         var summary = ApplyGrades(sheet, target, checkpoint, options.V2);
+        var subtypeColumn = Math.Max(sheet.LastColumnUsed()?.ColumnNumber() ?? 0, CitationFlagColumn + 1) + 1;
+        sheet.Cell(2, subtypeColumn).Value = Rq1SafetyClassification.Header;
+        sheet.Column(subtypeColumn).Width = 22;
+        foreach (var item in items)
+            Rq1SafetyClassification.Write(sheet.Cell(item.Row, subtypeColumn), item.SafetySubtype);
         if (published is null)
         {
             JudgeOutputFiles.PublishSummary(options, summary);
@@ -77,23 +86,25 @@ public static class JudgeRun
     {
         using var book = new XLWorkbook(options.Xlsx);
         if (book.Worksheets.Contains("Khóa")) throw new InvalidDataException("Judge requires a blinded workbook without key.");
-        var items = ReadItems(book.Worksheet("Phiếu chấm"), book.Worksheet("Câu hỏi"));
+        var items = ReadItems(book.Worksheet("Phiếu chấm"), book.Worksheet("Câu hỏi"), options);
         var rubric = JudgePrompt.Rubric(book.Worksheet("Hướng dẫn"));
+        var current = Rq1Rubric.ReadForJudge();
         var materials = await LoadMaterialsAsync(items, sources, ct);
         var maximum = 0;
         foreach (var item in items)
         {
             var material = materials[item.Row];
             foreach (var answer in new[] { item.A, item.B })
-                maximum = Math.Max(maximum, await judge.MeasurePromptAsync(BuildPrompt(item, rubric, material, answer), ct));
+                maximum = Math.Max(maximum, await judge.MeasurePromptAsync(BuildPrompt(item, rubric, current, material, answer), ct));
         }
         await console.WriteLineAsync(maximum.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
-    private static List<Item> ReadItems(IXLWorksheet sheet, IXLWorksheet questions)
+    private static List<Item> ReadItems(IXLWorksheet sheet, IXLWorksheet questions, JudgeOptions options)
     {
         var questionRows = BlindAnswerWorkbook.SttRows(questions);
         var items = new List<Item>();
+        var safety = new Rq1SafetyClassification(options.Xlsx, options.SafetyClassificationPath);
         foreach (var (stt, row) in BlindAnswerWorkbook.SttRows(sheet))
         {
             var a = sheet.Cell(row, 4).GetString(); var b = sheet.Cell(row, 5).GetString();
@@ -101,15 +112,18 @@ public static class JudgeRun
             if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b) ||
                 !questionRows.TryGetValue(stt, out var questionRow) || string.IsNullOrWhiteSpace(sheet.Cell(row, 2).GetString()))
                 throw new InvalidDataException("Answer rows require a question, two answers and matching STT.");
-            items.Add(new(row, sheet.Cell(row, 2).GetString(), sheet.Cell(row, 3).GetString(),
-                QuestionCategories.Canonical(questions.Cell(questionRow, 4).GetString()),
-                questions.Cell(questionRow, 5).GetString().Trim(), a, b));
+            var question = sheet.Cell(row, 2).GetString();
+            var category = QuestionCategories.Canonical(questions.Cell(questionRow, 4).GetString());
+            items.Add(new(row, question, sheet.Cell(row, 3).GetString(), category,
+                questions.Cell(questionRow, 5).GetString().Trim(), a, b,
+                safety.Resolve(category, stt, question)));
         }
         if (items.Count == 0) throw new InvalidDataException("No answers to grade.");
         return items;
     }
 
-    private static async Task GradePendingAsync(IReadOnlyList<Item> items, string rubric, JudgeCheckpoint checkpoint,
+    private static async Task GradePendingAsync(IReadOnlyList<Item> items, string rubric, Rq1JudgeRubric current,
+        JudgeCheckpoint checkpoint,
         ILlmJudgeClient judge, IJudgeSources sources, TextWriter console, bool v2, CancellationToken ct)
     {
         var runs = checkpoint.Header.Runs;
@@ -134,7 +148,7 @@ public static class JudgeRun
                 if (grades[side]?.RunsCompleted == runs) continue;
                 var answer = side == 0 ? item.A : item.B;
                 var material = materials[item.Row];
-                var prompt = BuildPrompt(item, rubric, material, answer);
+                var prompt = BuildPrompt(item, rubric, current, material, answer);
                 grades[side] = await GradeAsync(judge, prompt, answer, material, runs, v2, ct);
             }
             var elapsed = timer.Elapsed.TotalMilliseconds;
@@ -144,8 +158,9 @@ public static class JudgeRun
         }
     }
 
-    private static string BuildPrompt(Item item, string rubric, JudgeMaterial material, string answer) =>
-        JudgePrompt.Build(item.Question, item.Ideas, item.Category, rubric, material.Text, answer, material.HasDocuments);
+    private static string BuildPrompt(Item item, string rubric, Rq1JudgeRubric current, JudgeMaterial material, string answer) =>
+        JudgePrompt.BuildWithRubric(item.Question, item.Ideas, item.Category, item.SafetySubtype,
+            rubric, current, material.Text, answer, material.HasDocuments);
 
     private static async Task<Dictionary<int, JudgeMaterial>> LoadMaterialsAsync(IEnumerable<Item> items, IJudgeSources sources, CancellationToken ct)
     {

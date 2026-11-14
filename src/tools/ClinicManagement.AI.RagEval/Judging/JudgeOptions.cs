@@ -13,6 +13,7 @@ public sealed record JudgeOptions(string Xlsx, string Output, string Model, int 
     public bool MeasurePrompt { get; init; }
     public int? Limit { get; init; }
     public int Context { get; init; } = 8192;
+    public string? SafetyClassificationPath { get; init; }
 
     public static JudgeOptions Parse(string[] args)
     {
@@ -30,7 +31,7 @@ public sealed record JudgeOptions(string Xlsx, string Output, string Model, int 
             }
             if (flag == "--v2" && !v2) { v2 = true; continue; }
             if (flag == "--measure-prompt" && !measure) { measure = true; continue; }
-            if (flag is not ("--xlsx" or "--out" or "--model" or "--runs" or "--seed" or "--limit" or "--context") || ++i >= args.Length ||
+            if (flag is not ("--xlsx" or "--out" or "--model" or "--runs" or "--seed" or "--limit" or "--context" or "--safety-classification") || ++i >= args.Length ||
                 args[i].StartsWith("--", StringComparison.Ordinal) || !values.TryAdd(flag, args[i]))
                 throw new ArgumentException("Invalid judge options.");
         }
@@ -50,7 +51,8 @@ public sealed record JudgeOptions(string Xlsx, string Output, string Model, int 
         return new(Path.GetFullPath(input), Path.GetFullPath(output), model, runs, seed)
         {
             Resume = resume,
-            SeedSpecified = seedSpecified, V2 = v2, Limit = limit, Context = context, MeasurePrompt = measure
+            SeedSpecified = seedSpecified, V2 = v2, Limit = limit, Context = context, MeasurePrompt = measure,
+            SafetyClassificationPath = values.GetValueOrDefault("--safety-classification")
         };
     }
 

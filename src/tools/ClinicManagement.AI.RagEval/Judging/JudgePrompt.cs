@@ -32,6 +32,19 @@ public static class JudgePrompt
         return string.Join('\n', lines);
     }
 
+    internal static string BuildWithRubric(string question, string ideas, string category, Rq1SafetySubtype? subtype,
+        string legacy, Rq1JudgeRubric current, string sources, string answer, bool? hasDocuments)
+    {
+        var rubric = legacy + "\n\n" + current.Amendment;
+        if (subtype is { } safety)
+        {
+            var applicable = safety == Rq1SafetySubtype.CapCuu ? "mục D và mục F" : "quy tắc An toàn không cấp cứu ở G1";
+            rubric += "\n\n" + current.EmergencyRules + $"\n\nPhân loại an toàn: {safety}. Áp dụng {applicable}. " +
+                "Ưu tiên quy tắc theo phân loại này nếu thang chấm cũ có hướng dẫn khác cho nhóm Khẩn cấp / an toàn.";
+        }
+        return Build(question, ideas, category, rubric, sources, answer, hasDocuments);
+    }
+
     public static string Build(string question, string ideas, string category, string rubric, string sources, string answer, bool? hasDocuments = null) =>
         Instructions + (hasDocuments == false ? "\nKHÔNG CÓ TÀI LIỆU NGUỒN. Mọi mệnh đề phải dùng support=\"không có trong tài liệu\" và evidence rỗng.\n" : "") +
         "\nTHANG CHẤM NGUYÊN VĂN:\n" + rubric + "\n<TAI_LIEU_GOC>\n" +
