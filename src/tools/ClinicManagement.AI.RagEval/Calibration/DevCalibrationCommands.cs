@@ -13,7 +13,7 @@ public static class DevCalibrationCommands
         {
             "dev-overlap" => "dev-overlap --hidden-eval workbook.xlsx --retained new.json",
             "dev-split" => "dev-split --retained overlap.json --out-dir external-directory",
-            "dev-plant" => "dev-plant --out-dir external-directory (dev-kiem.csv and dev-kiem/dev-nguon.json required)",
+            "dev-plant" => "dev-plant --out-dir external-directory [--output new.xlsx] [--compare first.xlsx] (dev-kiem.csv and dev-kiem/dev-nguon.json required)",
             _ => "dev-groups"
         };
         if (args is ["--help"])
@@ -41,8 +41,9 @@ public static class DevCalibrationCommands
                     await SplitAsync(split["--retained"], split["--out-dir"], output);
                     break;
                 case "dev-plant":
-                    var plant = Parse(args, "--out-dir");
-                    await DevPlantRun.RunAsync(ExternalOutputDirectory.Validate(plant["--out-dir"]), output);
+                    var plant = Parse(args, ["--out-dir"], ["--output", "--compare"]);
+                    await DevPlantRun.RunAsync(ExternalOutputDirectory.Validate(plant["--out-dir"]),
+                        plant.GetValueOrDefault("--output"), plant.GetValueOrDefault("--compare"), output);
                     break;
             }
             return 0;
@@ -126,17 +127,21 @@ public static class DevCalibrationCommands
         writer.Write(content);
     }
 
-    private static Dictionary<string, string> Parse(string[] args, params string[] required)
+    private static Dictionary<string, string> Parse(string[] args, params string[] required) => Parse(args, required, []);
+
+    private static Dictionary<string, string> Parse(string[] args, string[] required, string[] optional)
     {
-        if (args.Length != required.Length * 2)
-            throw new ArgumentException("Missing calibration options.");
+        if (args.Length % 2 != 0)
+            throw new ArgumentException("Missing calibration option value.");
         var options = new Dictionary<string, string>(StringComparer.Ordinal);
         for (var i = 0; i < args.Length; i += 2)
         {
-            if (!required.Contains(args[i]) || args[i + 1].StartsWith("--", StringComparison.Ordinal) ||
+            if ((!required.Contains(args[i]) && !optional.Contains(args[i])) || args[i + 1].StartsWith("--", StringComparison.Ordinal) ||
                 !options.TryAdd(args[i], args[i + 1]))
                 throw new ArgumentException("Unsupported or duplicate calibration option.");
         }
+        if (!required.All(options.ContainsKey))
+            throw new ArgumentException("Missing calibration options.");
         return options;
     }
 }

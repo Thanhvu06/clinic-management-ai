@@ -1,10 +1,20 @@
+using System.Text.Json.Serialization;
 using ClinicManagement.Application.AI.DTOs;
 using ClinicManagement.Application.AI.Knowledge;
 using ClinicManagement.Infrastructure.AI.Knowledge;
 
 namespace ClinicManagement.AI.RagEval;
 
-public sealed record DevAnswer(string Code, string Side, string Mode, string Text, string[] SourceIds, string? ExactSourceId);
+public sealed record DevAnswer(string Code, string Side, string Mode, string Text, string[] SourceIds, string? ExactSourceId)
+{
+    public string? Outcome { get; init; }
+    public ReplayPassage[]? Passages { get; init; }
+    [JsonIgnore]
+    public bool IsExtractive => Outcome is null ? ExactSourceId is not null : Outcome == "KnowledgeExtractive";
+    [JsonIgnore]
+    public bool HasContent => !string.IsNullOrWhiteSpace(Text) && (Outcome is null
+        ? SourceIds.Length > 0 : Outcome is "KnowledgeAnswer" or "KnowledgeExtractive");
+}
 
 internal sealed class DevBlindProvenance
 {
@@ -15,16 +25,20 @@ internal sealed class DevBlindProvenance
     public void Add(BlindAnswerRow row, AiChatResponseDto llm, AiChatResponseDto extractive)
     {
         var llmIsA = row.AIs == "LLM";
-        AddAnswer(row.Stt, llmIsA ? "A" : "B", "LLM", llmIsA ? row.AnswerA : row.AnswerB, llm);
-        AddAnswer(row.Stt, llmIsA ? "B" : "A", "Trích đoạn", llmIsA ? row.AnswerB : row.AnswerA, extractive);
+        AddAnswer(row.Stt, llmIsA ? "A" : "B", "LLM", llmIsA ? row.AnswerA : row.AnswerB, llm, llmIsA ? row.PassagesA : row.PassagesB);
+        AddAnswer(row.Stt, llmIsA ? "B" : "A", "Trích đoạn", llmIsA ? row.AnswerB : row.AnswerA, extractive, llmIsA ? row.PassagesB : row.PassagesA);
     }
 
-    private void AddAnswer(string code, string side, string mode, string text, AiChatResponseDto response)
+    private void AddAnswer(string code, string side, string mode, string text, AiChatResponseDto response, ReplayPassage[]? passages)
     {
         var cited = _chunks.Where(chunk => response.Sources.Contains(chunk.Source)).ToArray();
         var exact = response.DialogueOutcome == "KnowledgeExtractive" && text.Length > 0
             ? cited.FirstOrDefault(chunk => chunk.Text.StartsWith(text, StringComparison.Ordinal)) : null;
-        Answers.Add(new(code, side, mode, text, cited.Select(chunk => chunk.Id).ToArray(), exact?.Id));
+        Answers.Add(new(code, side, mode, text, cited.Select(chunk => chunk.Id).ToArray(), exact?.Id)
+        {
+            Outcome = response.DialogueOutcome,
+            Passages = passages
+        });
     }
 
     public static async Task<EvaluationQuestion[]> LoadDevCsvAsync(string path)

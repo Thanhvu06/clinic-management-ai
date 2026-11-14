@@ -1,10 +1,9 @@
 using System.Text.Json;
-using ClinicManagement.Application.AI.Knowledge;
 using ClinicManagement.Infrastructure.AI.Knowledge;
 
 namespace ClinicManagement.AI.RagEval;
 
-public sealed record DevVariant(DevAnswer Answer, string Edited, string Kind, string Position);
+public sealed record DevVariant(DevAnswer Answer, string Edited, string Kind, string Position, string? OriginalSentence = null);
 
 public sealed class DevPlantSelection
 {
@@ -25,221 +24,306 @@ public sealed class DevPlantSelection
     }
 }
 
+internal sealed record DevPlantResult(DevAnswer[] Originals, DevVariant[] Variants, DevControl[] Controls,
+    int Eligible, IReadOnlyDictionary<string, EvaluationQuestion> Questions)
+{
+    public IEnumerable<DevVariant> Plants => Variants.Where(v => v.Kind is not (DevPlantRun.UnsafeKind or DevPlantRun.ParaphraseKind));
+}
+
 internal sealed class DevPlantRun
 {
     public static IReadOnlyList<string> Positions { get; } = ["Đầu", "Giữa", "Cuối"];
-    private const string NumberKind = "Sai số liệu";
-    private const string NegationKind = "Phủ định / đảo nghĩa";
-    private const string ConditionKind = "Đổi đối tượng / điều kiện";
-    private const string AddedTrueKind = "Ngoài nguồn / dự kiến đúng y khoa";
-    private const string AddedFalseKind = "Ngoài nguồn / dự kiến sai y khoa";
-    private const string UnsafeKind = "Không an toàn";
-    private const string ParaphraseKind = "Diễn đạt lại đúng nguồn";
-    private static readonly (string Kind, int Target)[] Targets =
+    internal const string NumberKind = "Sai số liệu";
+    internal const string NegationKind = "Phủ định / đảo nghĩa";
+    internal const string ConditionKind = "Đổi đối tượng / điều kiện";
+    internal const string AddedTrueKind = "Ngoài nguồn / dự kiến đúng y khoa";
+    internal const string AddedFalseKind = "Ngoài nguồn / dự kiến sai y khoa";
+    internal const string UnsafeKind = "Không an toàn";
+    internal const string ParaphraseKind = "Diễn đạt lại đúng nguồn";
+    internal static IReadOnlyList<(string Kind, int Target)> Targets { get; } =
     [
         (NumberKind, 25), (NegationKind, 15), (ConditionKind, 20), (AddedTrueKind, 20), (AddedFalseKind, 20),
         (UnsafeKind, 25), (ParaphraseKind, 60)
     ];
 
     private readonly IReadOnlyDictionary<string, EvaluationQuestion> _questions;
-    private readonly IReadOnlyDictionary<string, KnowledgeChunk> _chunks;
+    private readonly IReadOnlyDictionary<DevAnswer, ReplayPassage[]> _passages;
     private readonly DevAnswer[] _answers;
+    private readonly DevAnswer[] _shuffled;
+    private readonly DevAnswer[] _eligible;
     private readonly DevPlantModel _model;
-    private readonly Random _random = new(DevQuestions.Seed);
     private readonly DevPlantSelection _selection = new();
 
-    private DevPlantRun(EvaluationQuestion[] questions, DevAnswer[] answers, DevPlantModel model)
+    internal DevPlantRun(EvaluationQuestion[] questions, DevAnswer[] answers, DevPlantModel model,
+        IReadOnlyDictionary<string, string> corpus, int seed)
     {
         _questions = questions.ToDictionary(q => q.Stt!, StringComparer.Ordinal);
-        _chunks = new MarkdownKnowledgeCatalog().Chunks.ToDictionary(chunk => chunk.Id, StringComparer.Ordinal);
-        _answers = answers;
+        _answers = answers.OrderBy(a => a.Code, StringComparer.Ordinal).ThenBy(a => a.Side, StringComparer.Ordinal).ToArray();
         _model = model;
         if (answers.Length != questions.Length * 2 || answers.Select(a => (a.Code, a.Side)).Distinct().Count() != answers.Length ||
-            answers.Any(a => !_questions.ContainsKey(a.Code) || a.Side is not ("A" or "B") || a.Mode is not ("LLM" or "Trích đoạn") ||
-                a.SourceIds.Any(id => !_chunks.ContainsKey(id)) || a.ExactSourceId is { } exact &&
-                (!a.SourceIds.Contains(exact) || !_chunks[exact].Text.StartsWith(a.Text, StringComparison.Ordinal))) ||
+            answers.Any(a => !_questions.ContainsKey(a.Code) || a.Side is not ("A" or "B") || a.Mode is not ("LLM" or "Trích đoạn")) ||
             answers.GroupBy(a => a.Code).Any(group => group.Select(a => a.Mode).Distinct().Count() != 2))
-            throw new InvalidDataException("Dev check answers do not match the dev CSV or corpus.");
-        _random.Shuffle(_answers);
+            throw new InvalidDataException("Dev answers do not match the dev CSV.");
+
+        _passages = _answers.ToDictionary(a => a, a => RecordedPassages(a, corpus));
+        _shuffled = (DevAnswer[])_answers.Clone();
+        new Random(seed).Shuffle(_shuffled);
+        _eligible = _shuffled.Where(a => a.HasContent).ToArray();
     }
 
-    public static async Task RunAsync(string directory, TextWriter output)
+    public static async Task RunAsync(string directory, string? outputName, string? compareName, TextWriter output)
     {
-        var path = Path.Combine(directory, "dev-kiem-plant.xlsx");
+        var path = WorkbookPath(directory, outputName ?? "dev-kiem-plant.xlsx");
         StatisticsReport.EnsureNew(path);
-        var questions = await DevBlindProvenance.LoadDevCsvAsync(Path.Combine(directory, "dev-kiem.csv"));
-        var answersPath = Path.Combine(directory, "dev-kiem", DevBlindProvenance.FileName);
-        var answers = JsonSerializer.Deserialize<DevAnswer[]>(await File.ReadAllTextAsync(answersPath), StatisticsReport.JsonOptions)
-            ?? throw new InvalidDataException("Missing dev check answers.");
+        var comparePath = compareName is null ? null : WorkbookPath(directory, compareName);
+        if (comparePath is not null && !File.Exists(comparePath))
+            throw new FileNotFoundException("The comparison workbook is missing.");
+
+        var check = await DevBlindProvenance.LoadDevCsvAsync(Path.Combine(directory, "dev-kiem.csv"));
+        var answers = await LoadAnswersAsync(directory, "dev-kiem");
+        var corpus = new MarkdownKnowledgeCatalog().Chunks.ToDictionary(c => c.Id, c => c.Text, StringComparer.Ordinal);
         using var model = new DevPlantModel();
-        var run = new DevPlantRun(questions, answers, model);
-        await run.GenerateAsync(path, output);
+        var digest = await model.GetDigestAsync();
+        var run = new DevPlantRun(check, answers, model, corpus, DevPlantModel.Seed);
+        var result = await run.GenerateAsync(output);
+        if (digest != await model.GetDigestAsync())
+            throw new InvalidOperationException("The Ollama model digest changed during dev-plant.");
+
+        DevPlantWorkbook.Save(path, result, digest);
+        await ReportIdenticalAsync("dev-kiem", check, answers, output);
+        if (File.Exists(Path.Combine(directory, "dev-chinh", DevBlindProvenance.FileName)))
+        {
+            var main = await DevBlindProvenance.LoadDevCsvAsync(Path.Combine(directory, "dev-chinh.csv"));
+            await ReportIdenticalAsync("dev-chinh", main, await LoadAnswersAsync(directory, "dev-chinh"), output);
+        }
+        if (comparePath is not null) await DevPlantWorkbook.CompareAsync(comparePath, path, output);
+        await output.WriteLineAsync(path);
     }
 
-    private async Task GenerateAsync(string path, TextWriter output)
+    internal async Task<DevPlantResult> GenerateAsync(TextWriter output)
     {
         AddScriptEdits(NumberKind, 25, DevEdits.Numbers);
-        await ReportAsync(NumberKind, _selection.Variants, output);
+        await AddConditionsAsync(20);
         AddScriptEdits(NegationKind, 15, DevEdits.Negations);
-        await ReportAsync(NegationKind, _selection.Variants, output);
-        await AddModelEditsAsync(ConditionKind, 20, DevPlantModel.Condition, insert: false, output);
-        await AddModelEditsAsync(AddedTrueKind, 20, DevPlantModel.AddedTrue, insert: true, output);
-        await AddModelEditsAsync(AddedFalseKind, 20, DevPlantModel.AddedFalse, insert: true, output);
+        await AddOutsideSourceAsync(20);
 
-        var exact = _answers.Where(a => a.Mode == "Trích đoạn" && a.ExactSourceId is not null).ToArray();
-        var controls = exact.Where(a => !_selection.Contains(a)).ToArray();
-        var unsafeCandidates = _answers.Where(a => _questions[a.Code].Category is DevQuestions.Emergency or DevQuestions.InScope)
-            .Where(a => HasClinicalContext(a) || _questions[a.Code].Category == DevQuestions.Emergency)
-            .OrderByDescending(a => _questions[a.Code].Category == DevQuestions.Emergency).ToArray();
-        var unsafeEdits = await GenerateVariantsAsync(unsafeCandidates, UnsafeKind, DevPlantModel.Unsafe, 25, ValidateUnsafe, output);
-        var paraphrases = await GenerateVariantsAsync(exact, ParaphraseKind, DevPlantModel.Paraphrase, 60, ValidateParaphrase, output);
-        var variants = _selection.Variants.Concat(unsafeEdits).Concat(paraphrases).ToArray();
-        var counts = Targets.Select(target => (target.Kind, target.Target, Actual: variants.Count(v => v.Kind == target.Kind))).ToArray();
-        DevPlantWorkbook.Save(path, variants, controls, counts, _answers.Length, _selection.Variants.Count);
-        await output.WriteLineAsync($"Cài bịa: {_selection.Variants.Count}/{_answers.Length}; câu trả lời giữ nguyên: {_answers.Length - _selection.Variants.Count}; TuDong: {controls.Length}");
-        foreach (var position in Positions)
-            await output.WriteLineAsync($"{position}: {_selection.Variants.Count(v => v.Position == position)}");
-        foreach (var mode in new[] { "LLM", "Trích đoạn" })
-            await output.WriteLineAsync($"{mode}: {_selection.Variants.Count(v => v.Answer.Mode == mode)}");
+        foreach (var (kind, target) in Targets.Take(5))
+            await output.WriteLineAsync($"{kind}: {_selection.Variants.Count(v => v.Kind == kind)}/{target}");
+
+        var controls = _answers.SelectMany(a => DevPlantSentences.Find(a, _passages[a])).ToArray();
+        var unsafeVariants = await AddUnsafeAsync(25);
+        await output.WriteLineAsync($"{UnsafeKind}: {unsafeVariants.Count}/25");
+        var paraphrases = await AddParaphrasesAsync(controls, 60);
+        await output.WriteLineAsync($"{ParaphraseKind}: {paraphrases.Count}/60");
+        var variants = _selection.Variants.Concat(unsafeVariants).Concat(paraphrases).ToArray();
+        await output.WriteLineAsync("Loại | Số mẫu | Mục tiêu | Thiếu | LLM | Trích đoạn | Đầu | Giữa | Cuối | Cả câu");
+        foreach (var (kind, target) in Targets)
+            await ReportVariantsAsync(kind, target, variants.Where(v => v.Kind == kind), output);
+        await ReportVariantsAsync("Tổng cài bịa", 100, _selection.Variants, output);
+        await output.WriteLineAsync($"Câu gốc: {_answers.Length}; đủ điều kiện cài bịa: {_eligible.Length}; TuDong: {controls.Length}; thiếu so với 200: {Math.Max(0, 200 - controls.Length)}");
+        foreach (var group in DevQuestions.Groups)
+            await output.WriteLineAsync($"{UnsafeKind} | {group}: {unsafeVariants.Count(v => _questions[v.Answer.Code].Category == group)}");
+        return new(_answers, variants, controls, _eligible.Length, _questions);
+    }
+
+    private static ReplayPassage[] RecordedPassages(DevAnswer answer, IReadOnlyDictionary<string, string> corpus)
+    {
+        if (answer.Passages is not null) return answer.Passages;
+        // Older exports identified the verbatim chunk and the cited heading, but did not save all retrieved passages.
+        var ids = answer.ExactSourceId is { } exact ? new[] { exact } :
+            answer.IsExtractive ? [] : answer.SourceIds;
+        return ids.Select(id => new ReplayPassage(id, corpus[id], 0)).ToArray();
     }
 
     private void AddScriptEdits(string kind, int quota, Func<string, DevEdit[]> findEdits)
     {
-        var candidates = _answers.Where(IsPlantCandidate)
-            .SelectMany(answer => findEdits(answer.Text).Select(edit => (Answer: answer, Edit: edit))).ToArray();
+        var candidates = _eligible.SelectMany(answer => findEdits(answer.Text).Select(edit => (Answer: answer, Edit: edit))).ToArray();
         for (var i = 0; i < quota; i++)
         {
-            var best = candidates.Where(candidate => !_selection.Contains(candidate.Answer))
-                .MinBy(candidate => Priority(candidate.Answer, DevEdits.Position(candidate.Edit.Offset, candidate.Answer.Text.Length)));
+            var best = candidates.Where(c => !_selection.Contains(c.Answer))
+                .OrderBy(c => Priority(c.Answer, DevEdits.Position(c.Edit.Offset, c.Answer.Text.Length), kind))
+                .FirstOrDefault();
             if (best.Answer is null) break;
             _selection.TryAdd(best.Answer, best.Edit, kind);
         }
     }
 
-    private async Task AddModelEditsAsync(string kind, int quota, string prompt, bool insert, TextWriter output)
+    private async Task AddConditionsAsync(int quota)
     {
-        var pending = _answers.Where(IsPlantCandidate).Where(a => !_selection.Contains(a)).ToList();
-        for (var count = 0; count < quota && pending.Count > 0;)
+        var pending = _eligible.Where(a => !_selection.Contains(a)).ToList();
+        var selected = 0;
+        for (var attempt = 0; attempt < 2 && selected < quota; attempt++)
         {
-            var position = Enumerable.Range(0, Positions.Count).MinBy(i => _selection.Variants.Count(v => v.Position == Positions[i]));
-            var answer = pending.MinBy(a => Priority(a, position))!;
-            pending.Remove(answer);
-            var reply = await GenerateAsync(prompt, answer, Positions[position]);
-            var edit = insert ? ValidateInsertion(answer, reply?.Text, position) : ValidateCondition(answer, reply);
-            if (edit is not null && _selection.TryAdd(answer, edit, kind)) count++;
+            var remaining = new List<DevAnswer>();
+            while (pending.Count > 0 && selected < quota)
+            {
+                var position = PreferredPosition(ConditionKind);
+                var answer = pending.MinBy(a => (DevEdits.Negations(a.Text).Length > 0,
+                    Priority(a, position, ConditionKind)))!;
+                pending.Remove(answer);
+                var prompt = attempt == 0 ? DevPlantModel.Condition : DevPlantModel.ConditionRetry;
+                var reply = await AskAsync(prompt, answer, answer.Text, Positions[position]);
+                var edit = DevPlantValidation.Condition(answer.Text, reply);
+                if (edit is null && attempt == 0)
+                    edit = DevPlantScenarios.ConditionEdits(answer.Text)
+                        .MinBy(candidate => Priority(answer, DevEdits.Position(candidate.Offset, answer.Text.Length), ConditionKind));
+                if (edit is not null && _selection.TryAdd(answer, edit, ConditionKind)) selected++;
+                else remaining.Add(answer);
+            }
+            pending = remaining;
         }
-        await ReportAsync(kind, _selection.Variants, output);
     }
 
-    private async Task<IReadOnlyList<DevVariant>> GenerateVariantsAsync(DevAnswer[] candidates, string kind,
-        string prompt, int quota, Func<DevAnswer, DevModelReply?, (string Text, string Position)?> validate, TextWriter output)
+    private async Task AddOutsideSourceAsync(int quota)
     {
-        var variants = new List<DevVariant>();
+        var requests = new[] { (Kind: AddedTrueKind, Prompt: DevPlantModel.AddedTrue), (Kind: AddedFalseKind, Prompt: DevPlantModel.AddedFalse) };
+        var totals = new int[requests.Length];
+        var rejected = new HashSet<(DevAnswer Answer, int Request)>();
+        for (var round = 0; round < 2 && totals.Min() < quota; round++)
+        {
+            rejected.Clear();
+            while (true)
+            {
+                var available = Enumerable.Range(0, requests.Length)
+                    .Where(index => totals[index] < quota && _eligible.Any(a =>
+                        !_selection.Contains(a) && !rejected.Contains((a, index)))).ToArray();
+                if (available.Length == 0) break;
+
+                var index = available.MinBy(i => totals[i]);
+                var (kind, prompt) = requests[index];
+                var (answer, position) = _eligible.Where(a => !_selection.Contains(a) && !rejected.Contains((a, index)))
+                    .SelectMany(a => Enumerable.Range(0, Positions.Count).Where(p => p != 1 || DevEdits.HasMiddleBoundary(a.Text))
+                        .Select(p => (Answer: a, Position: p)))
+                    .MinBy(pair => Priority(pair.Answer, pair.Position, kind));
+                var sources = Sources(answer);
+                var context = round == 0 ? Positions[position] : $"{Positions[position]}\n{DevPlantModel.AddedRetry}";
+                var reply = await AskAsync(prompt, answer, answer.Text, context);
+                var sentence = DevPlantValidation.NewSentence(answer.Text, sources, reply?.Text);
+                if (sentence is null || index == 1)
+                    sentence = DevPlantScenarios.OutsideSentences(_questions[answer.Code].Text + " " + answer.Text, index == 0)
+                        .Select(text => DevPlantValidation.NewSentence(answer.Text, sources, text))
+                        .FirstOrDefault(text => text is not null) ?? sentence;
+                if (sentence is not null && _selection.TryAdd(answer, DevEdits.Insert(answer.Text, sentence, position), kind))
+                    totals[index]++;
+                else
+                    rejected.Add((answer, index));
+            }
+        }
+    }
+
+    private async Task<List<DevVariant>> AddUnsafeAsync(int quota)
+    {
+        var result = new List<DevVariant>();
+        var unique = new HashSet<(string Code, string Text)>();
+        var candidates = _shuffled.Where(a => !string.IsNullOrWhiteSpace(a.Text))
+            .Where(a => _questions[a.Code].Category == DevQuestions.Emergency ||
+                _questions[a.Code].Category == DevQuestions.InScope && a.HasContent)
+            .OrderByDescending(a => _questions[a.Code].Category == DevQuestions.Emergency);
+        foreach (var answer in candidates)
+        {
+            var emergency = _questions[answer.Code].Category == DevQuestions.Emergency;
+            var reply = await AskAsync(DevPlantModel.Unsafe, answer, answer.Text, emergency ? "Khẩn cấp" : "Trong phạm vi");
+            var edits = DevPlantValidation.Unsafe(answer.Text, Sources(answer), reply, emergency);
+            foreach (var edit in edits)
+            {
+                var text = edit.Apply(answer.Text).Trim();
+                if (text == answer.Text || !unique.Add((answer.Code, KnowledgeText.Normalize(text, false)))) continue;
+                result.Add(new(answer, text, UnsafeKind, Positions[DevEdits.Position(edit.Offset, answer.Text.Length)]));
+                break;
+            }
+            if (result.Count == quota) break;
+        }
+        return result;
+    }
+
+    private async Task<List<DevVariant>> AddParaphrasesAsync(DevControl[] controls, int quota)
+    {
+        var result = new List<DevVariant>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         var prior = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-        var unique = new HashSet<string>(StringComparer.Ordinal);
-        for (var round = 0; round < 4 && variants.Count < quota; round++)
+        var candidates = controls.DistinctBy(c => KnowledgeText.Normalize(c.Text, false)).ToArray();
+        var pending = candidates.ToList();
+        for (var round = 0; round < 2 && result.Count < quota; round++)
         {
-            foreach (var answer in candidates)
+            var remaining = new List<DevControl>();
+            foreach (var control in pending)
             {
-                var previous = prior.GetValueOrDefault(answer.Text);
-                var reply = await GenerateAsync(prompt, answer, previous is null ? "" : string.Join("\n", previous));
-                if (validate(answer, reply) is not { } edited || !unique.Add(KnowledgeText.Normalize(edited.Text, false)))
-                    continue;
-                if (previous is null) prior[answer.Text] = previous = [];
-                previous.Add(edited.Text);
-                variants.Add(new(answer, edited.Text, kind, edited.Position));
-                if (variants.Count == quota) break;
+                var prompt = round == 0 ? DevPlantModel.Paraphrase : DevPlantModel.ParaphraseRetry;
+                var reply = await AskAsync(prompt, control.Answer, control.Text, "");
+                var edited = DevPlantValidation.Paraphrase(control.Text, reply?.Text);
+                if (!Add(control, edited)) remaining.Add(control);
+
+                if (result.Count == quota) break;
             }
+            pending = remaining;
         }
-        await ReportAsync(kind, variants, output);
-        return variants;
-    }
 
-    private static IEnumerable<string> NumericTokens(string text) =>
-        System.Text.RegularExpressions.Regex.Matches(text, @"\d+(?:[.,]\d+)*").Select(m => m.Value).Order(StringComparer.Ordinal);
-
-    private static (string Text, string Position)? ValidateParaphrase(DevAnswer answer, DevModelReply? reply)
-    {
-        var edited = reply?.Text?.Trim();
-        if (string.IsNullOrWhiteSpace(edited) || KnowledgeText.Normalize(edited, false) == KnowledgeText.Normalize(answer.Text, false) ||
-            !NumericTokens(edited).SequenceEqual(NumericTokens(answer.Text)))
-            return null;
-        return (edited, "Toàn câu");
-    }
-
-    private (string Text, string Position)? ValidateUnsafe(DevAnswer answer, DevModelReply? reply)
-    {
-        var from = reply?.From?.Trim();
-        if (!string.IsNullOrWhiteSpace(from) && ContainsReferral(from))
+        foreach (var control in candidates)
         {
-            var offset = answer.Text.IndexOf(from, StringComparison.Ordinal);
-            if (offset >= 0 && answer.Text.LastIndexOf(from, StringComparison.Ordinal) == offset)
-            {
-                var edited = new DevEdit(offset, from.Length, "").Apply(answer.Text).Trim();
-                if (edited.Length > 0 && !ContainsReferral(edited))
-                    return (edited, Positions[DevEdits.Position(offset, answer.Text.Length)]);
-            }
+            if (result.Count == quota) break;
+            if (!prior.TryGetValue(control.Text, out var previous)) continue;
+            var reply = await AskAsync(DevPlantModel.ParaphraseAlternative, control.Answer, control.Text, string.Join("\n", previous));
+            Add(control, DevPlantValidation.Paraphrase(control.Text, reply?.Text));
         }
-        var text = reply?.Text?.Trim();
-        if (string.IsNullOrWhiteSpace(text) || !System.Text.RegularExpressions.Regex.IsMatch(
-                KnowledgeText.Normalize(text), @"\b(?:tai nha|tu (?:xu ly|dieu tri|theo doi)|doi|cho|tri hoan)\b"))
-            return null;
-        var insertion = ValidateInsertion(answer, text, 2);
-        return insertion is null ? null : (insertion.Apply(answer.Text), Positions[2]);
+        return result;
+
+        bool Add(DevControl control, string? edited)
+        {
+            if (edited is null || !seen.Add(KnowledgeText.Normalize(edited, false))) return false;
+            if (!prior.TryGetValue(control.Text, out var previous)) prior[control.Text] = previous = [];
+            previous.Add(edited);
+            result.Add(new(control.Answer, edited, ParaphraseKind, $"Câu {control.Sentence}", control.Text));
+            return true;
+        }
     }
 
-    private static bool ContainsReferral(string text) => System.Text.RegularExpressions.Regex.IsMatch(KnowledgeText.Normalize(text),
-        @"\b(?:goi (?:ngay )?115|(?:den|toi|di) (?:ngay )?(?:cap cuu|co so y te|benh vien|khoa cap cuu))\b");
-
-    private static DevEdit? ValidateCondition(DevAnswer answer, DevModelReply? reply)
+    private static Task ReportVariantsAsync(string kind, int target, IEnumerable<DevVariant> variants, TextWriter output)
     {
-        var edit = DevEdits.ReplaceUnique(answer.Text, reply?.From, reply?.To);
-        if (edit is null || reply!.From!.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length > 12 ||
-            edit.Replacement.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length > 12 ||
-            !NumericTokens(reply.From).SequenceEqual(NumericTokens(edit.Replacement)) ||
-            System.Text.RegularExpressions.Regex.IsMatch(edit.Replacement, @"[.!?;\r\n]"))
-            return null;
-        var originalNegations = KnowledgeText.Normalize(reply.From, false).Split(' ').Count(word => word is "không" or "chưa" or "đừng");
-        var editedNegations = KnowledgeText.Normalize(edit.Replacement, false).Split(' ').Count(word => word is "không" or "chưa" or "đừng");
-        return originalNegations == editedNegations ? edit : null;
+        var rows = variants.ToArray();
+        var distribution = new[] { rows.Count(v => v.Answer.Mode == "LLM"), rows.Count(v => v.Answer.Mode == "Trích đoạn") }
+            .Concat(Positions.Select(position => rows.Count(v => v.Position == position)))
+            .Append(rows.Count(v => v.OriginalSentence is not null));
+        return output.WriteLineAsync($"{kind} | {rows.Length} | {target} | {target - rows.Length} | {string.Join(" | ", distribution)}");
     }
 
-    private DevEdit? ValidateInsertion(DevAnswer answer, string? text, int position)
+    private int PreferredPosition(string kind) => Enumerable.Range(0, Positions.Count)
+        .MinBy(p => _selection.Variants.Count(v => v.Position == Positions[p]) +
+            _selection.Variants.Count(v => v.Kind == kind && v.Position == Positions[p]));
+
+    private int Priority(DevAnswer answer, int position, string kind)
     {
-        text = text?.Trim();
-        if (text is null || !DevEdits.IsSingleSentence(text)) return null;
-        var normalized = KnowledgeText.Normalize(text, false);
-        if (normalized.Length == 0 || KnowledgeText.Normalize(answer.Text, false).Contains(normalized, StringComparison.Ordinal) ||
-            KnowledgeText.Normalize(Sources(answer), false).Contains(normalized, StringComparison.Ordinal))
-            return null;
-        return DevEdits.Insert(answer.Text, text, position);
+        var current = _selection.Variants;
+        return 3 * current.Count(v => v.Answer.Mode == answer.Mode) +
+            3 * current.Count(v => v.Position == Positions[position]) +
+            current.Count(v => v.Kind == kind && v.Answer.Mode == answer.Mode) +
+            current.Count(v => v.Kind == kind && v.Position == Positions[position]);
     }
 
-    private bool IsPlantCandidate(DevAnswer answer) => answer.Text.Length > 0 &&
-        _questions[answer.Code].Category != DevQuestions.Far;
+    private string Sources(DevAnswer answer) => ReplayPassage.Format(_passages[answer]);
 
-    private bool HasClinicalContext(DevAnswer answer) => _questions[answer.Code].ExpectedDocId is
-        "prepare-tests" or "prepare-visit" or "supported-visitors" or "prescriptions";
+    private Task<DevModelReply?> AskAsync(string prompt, DevAnswer answer, string text, string context) =>
+        _model.GenerateAsync(prompt, _questions[answer.Code], text, Sources(answer), context);
 
-    private int Priority(DevAnswer answer, int position) =>
-        2 * _selection.Variants.Count(v => v.Position == Positions[position]) +
-        _selection.Variants.Count(v => v.Answer.Mode == answer.Mode) +
-        (answer.ExactSourceId is not null && answer.Mode == "Trích đoạn" ? 3 : 0) +
-        (_selection.Variants.Any(v => v.Answer.Code == answer.Code) ? 1 : 0);
-
-    private string Sources(DevAnswer answer)
+    private static string WorkbookPath(string directory, string name)
     {
-        var exact = answer.ExactSourceId;
-        return exact is not null
-            ? $"[{exact}] {_chunks[exact].Text}"
-            : string.Join("\n\n", answer.SourceIds.Select(id => _chunks[id])
-                .Concat(_chunks.Values.Where(chunk => chunk.Source.DocId == _questions[answer.Code].ExpectedDocId))
-                .DistinctBy(chunk => chunk.Id).Select(chunk => $"[{chunk.Id}] {chunk.Text}"));
+        if (name != Path.GetFileName(name) || !name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Expected a workbook filename in --out-dir.");
+        return Path.Combine(directory, name);
     }
 
-    private Task<DevModelReply?> GenerateAsync(string prompt, DevAnswer answer, string context) =>
-        _model.GenerateAsync(prompt, _questions[answer.Code], answer, Sources(answer), context, _random.Next());
+    private static async Task<DevAnswer[]> LoadAnswersAsync(string directory, string set) =>
+        JsonSerializer.Deserialize<DevAnswer[]>(await File.ReadAllTextAsync(Path.Combine(directory, set, DevBlindProvenance.FileName)),
+            StatisticsReport.JsonOptions) ?? throw new InvalidDataException($"Missing answers for {set}.");
 
-    private static Task ReportAsync(string kind, IEnumerable<DevVariant> variants, TextWriter output) =>
-        output.WriteLineAsync($"{kind}: {variants.Count(v => v.Kind == kind)}/{Targets.Single(target => target.Kind == kind).Target}");
+    private static async Task ReportIdenticalAsync(string set, EvaluationQuestion[] questions, DevAnswer[] answers, TextWriter output)
+    {
+        var identical = answers.GroupBy(a => a.Code).Where(g => g.Count() == 2 && g.First().Text == g.Last().Text)
+            .ToDictionary(g => g.Key, g => g.All(a => !a.HasContent), StringComparer.Ordinal);
+        foreach (var group in DevQuestions.Groups)
+        {
+            var codes = questions.Where(q => q.Category == group).Select(q => q.Stt!).ToArray();
+            await output.WriteLineAsync($"{set} | {group} | A=B: {codes.Count(identical.ContainsKey)}/{codes.Length}" +
+                $" | theo chính sách: {codes.Count(code => identical.GetValueOrDefault(code))}");
+        }
+    }
 }

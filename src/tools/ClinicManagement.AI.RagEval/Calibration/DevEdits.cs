@@ -51,11 +51,16 @@ public static partial class DevEdits
             var separator = text[^1] is '.' or '!' or '?' ? " " : ". ";
             return new(text.Length, 0, separator + sentence);
         }
-        var boundary = SentenceBoundary().Matches(text).Select(m => m.Index + 1)
-            .Where(offset => Position(offset, text.Length) == 1)
-            .OrderBy(offset => Math.Abs(offset - text.Length / 2)).FirstOrDefault();
+        var boundary = MiddleBoundary(text);
         return boundary == 0 ? Insert(text, sentence, 2) : new(boundary, 0, " " + sentence);
     }
+
+    public static bool HasMiddleBoundary(string text) => MiddleBoundary(text) > 0;
+
+    private static int MiddleBoundary(string text) =>
+        SentenceBoundary().Matches(text).Select(m => m.Index + 1)
+            .Where(offset => Position(offset, text.Length) == 1)
+            .OrderBy(offset => Math.Abs(offset - text.Length / 2)).FirstOrDefault();
 
     public static int Position(int offset, int length) => Math.Min(2, offset * 3 / Math.Max(length, 1));
 

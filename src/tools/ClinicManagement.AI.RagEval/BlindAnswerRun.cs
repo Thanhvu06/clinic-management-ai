@@ -24,7 +24,7 @@ public static class BlindAnswerRun
         var measuredAtUtc = DateTimeOffset.UtcNow;
         var result = await BlindAnswerExport.RunAsync(options, runtime.AnswerAsync, console, ct,
             onAnswer: workbook is null ? null : row => answers.Add(runtime.WithPassages(row)), loadedQuestions: workbook?.Questions ?? devQuestions,
-            onResponses: provenance is null ? null : provenance.Add);
+            onResponses: provenance is null ? null : (row, llm, extractive) => provenance.Add(runtime.WithPassages(row), llm, extractive));
         if (workbook is not null)
         {
             workbook.Write(directory, answers);
