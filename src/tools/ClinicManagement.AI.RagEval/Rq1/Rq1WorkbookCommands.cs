@@ -16,7 +16,7 @@ internal static class Rq1WorkbookCommands
             return;
         }
 
-        var grading = ParseOptions(args, ["--master", "--ideas"], "--sources", "--retrieval");
+        var grading = ParseOptions(args, ["--master", "--ideas"], "--sources", "--retrieval", "--safety-classification");
         var master = XlsxPath(grading["--master"]);
         var ideas = XlsxPath(grading["--ideas"]);
         var sources = grading.TryGetValue("--sources", out var sourcePath) ? XlsxPath(sourcePath) : null;
@@ -24,8 +24,8 @@ internal static class Rq1WorkbookCommands
         if (sources is not null && replay is not null || replay is not null && !replay.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Use a single source workbook or replay JSON.");
         var output = ExternalOutputDirectory.Validate(Path.GetDirectoryName(replay is null ? master : ideas)!);
-        var rubric = Path.Combine(ExternalOutputDirectory.FindRepositoryRoot(), "docs", "nckh", "RUBRIC_RQ1.md");
-        var sheet = GradingSheetV2.Write(master, ideas, rubric, output, sources, excerptReplayPath: replay);
+        var sheet = GradingSheetV2.Write(master, ideas, Rq1Rubric.PathInRepository(), output, sources,
+            excerptReplayPath: replay, safetyClassificationPath: grading.GetValueOrDefault("--safety-classification"));
         await console.WriteLineAsync($"{Path.GetFileName(sheet.Path)} | {sheet.Bytes} byte | {sheet.Rows} câu");
         await console.WriteLineAsync($"Thiếu ý chính: {sheet.MissingIdeas}; DB trống: {sheet.BlankDb}; thiếu dữ liệu truy xuất đã lưu: {sheet.MissingSources}");
     }

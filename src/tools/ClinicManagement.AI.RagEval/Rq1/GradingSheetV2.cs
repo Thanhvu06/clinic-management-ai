@@ -11,9 +11,10 @@ public static class GradingSheetV2
     private const string SourcesAHeader = "Đoạn truy xuất A";
     private const string SourcesBHeader = "Đoạn truy xuất B";
     private const string RetrievedHeader = "Truy xuất thành công";
+    private const int SafetySubtypeColumn = Rq1Workbook.RetrievalSuccess + 1;
 
     public static GradingSheetV2Result Write(string masterPath, string ideasPath, string rubricPath, string outputDirectory,
-        string? sourcesPath = null, string? replayPath = null, string? excerptReplayPath = null)
+        string? sourcesPath = null, string? replayPath = null, string? excerptReplayPath = null, string? safetyClassificationPath = null)
     {
         using var master = new XLWorkbook(masterPath);
         using var externalSources = sourcesPath is null ? null : new XLWorkbook(sourcesPath);
@@ -26,6 +27,7 @@ public static class GradingSheetV2
         var roster = master.Worksheet("Câu hỏi");
         var questionRows = BlindAnswerWorkbook.SttRows(roster);
         var ideas = KeyIdeasTemplate.Read(ideasPath);
+        var safety = new Rq1SafetyClassification(ideasPath, safetyClassificationPath);
         var masterRows = BlindAnswerWorkbook.SttRows(grades);
         if (masterRows.Count == 0) throw new InvalidDataException("The master has no grading rows.");
 
@@ -63,7 +65,9 @@ public static class GradingSheetV2
 
             sheet.Cell(row, 1).Value = code;
             sheet.Cell(row, 2).Value = category;
-            sheet.Cell(row, 3).Value = roster.Cell(questionRow, 3).GetString();
+            var question = roster.Cell(questionRow, 3).GetString();
+            sheet.Cell(row, 3).Value = question;
+            Rq1SafetyClassification.Write(sheet.Cell(row, SafetySubtypeColumn), safety.Resolve(category, code, question));
             sheet.Cell(row, Rq1Workbook.AnswerA).Value = answerA;
             sheet.Cell(row, Rq1Workbook.AnswerB).Value = answerB;
             sheet.Cell(row, Rq1Workbook.Ideas).Value = keyIdeas;
@@ -135,7 +139,7 @@ public static class GradingSheetV2
     {
         string[] common = ["STT", "Nhóm", "Câu hỏi", "Trả lời A", "Trả lời B", "Ý chính", "DB", SourcesAHeader, SourcesBHeader];
         string[] sideHeaders = ["C1", "C2", "C3", "C4", "C5", "Từ chối", "Ghi chú", "Điểm", "Mã"];
-        return [..common, ..sideHeaders.Select(label => $"{label} A"), ..sideHeaders.Select(label => $"{label} B"), RetrievedHeader];
+        return [..common, ..sideHeaders.Select(label => $"{label} A"), ..sideHeaders.Select(label => $"{label} B"), RetrievedHeader, Rq1SafetyClassification.Header];
     }
 
     private static void FormatGradingSheet(IXLWorksheet sheet, int lastRow)
@@ -168,6 +172,7 @@ public static class GradingSheetV2
         for (var row = 4; row <= lastRow; row++)
             Rq1Workbook.FitTextRow(sheet, row, 2, 3, 4, 5, 6, 8, 9);
         sheet.Column(Rq1Workbook.RetrievalSuccess).Hide();
+        Rq1Workbook.Wrap(sheet, SafetySubtypeColumn, 18);
         sheet.SheetView.Freeze(3, 2);
         sheet.Protect();
     }
