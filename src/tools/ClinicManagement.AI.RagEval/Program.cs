@@ -56,6 +56,21 @@ if (mode is "llm-judge" or "disagreements")
     }
     return;
 }
+if (mode is "y-chinh-template" or "grading-sheet-v2")
+{
+    try { await Rq1WorkbookCommands.RunAsync(mode, args.Skip(1).ToArray(), Console.Out); }
+    catch (KeyIdeasAlreadyExistsException error)
+    {
+        Console.Error.WriteLine(error.Message);
+        Environment.ExitCode = 1;
+    }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("RQ1 workbook export failed. Check workbook paths, headers and output access.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
 if (mode is "dense" or "compare-retrieval" or "rq1-stats")
 {
     try
@@ -63,7 +78,8 @@ if (mode is "dense" or "compare-retrieval" or "rq1-stats")
         var statisticsInput = StatisticsInput.Parse(args.Skip(1).ToArray(), mode);
         StatisticsReport.EnsureNew(statisticsInput.Output);
         if (mode == "rq1-stats")
-            await Rq1Statistics.WriteAsync(Rq1Statistics.Read(statisticsInput.Xlsx!, statisticsInput.Primary), statisticsInput.Output, Console.Out);
+            await Rq1Statistics.WriteAsync(Rq1Statistics.Read(statisticsInput.Xlsx!, statisticsInput.Primary, statisticsInput.ReviewedXlsx),
+                statisticsInput.Output, Console.Out);
         else
         {
             var selectedQuestions = await statisticsInput.LoadQuestionsAsync();
@@ -74,7 +90,7 @@ if (mode is "dense" or "compare-retrieval" or "rq1-stats")
     }
     catch (Exception)
     {
-        Console.Error.WriteLine("Statistics evaluation failed. Check input structure, a new JSON output path, and local bge-m3 for retrieval.");
+        Console.Error.WriteLine("Statistics evaluation failed. Check input structure, a new JSON output path, and local bge-m3 if running retrieval.");
         Environment.ExitCode = 1;
     }
     return;
@@ -105,7 +121,7 @@ if (mode == "blind-answers")
     return;
 }
 if (mode is not ("bm25" or "hybrid" or "end-to-end" or "end-to-end-hybrid" or "sweep"))
-    throw new ArgumentException("Usage: RagEval [bm25|hybrid|end-to-end|end-to-end-hybrid|sweep] [output.json] [--questions baseline|v2|combined|path.json] [--csv path.csv]; dense|compare-retrieval [--questions baseline|v2|combined|path.json|--csv path.csv|--xlsx path.xlsx] [--output new.json]; rq1-stats --xlsx merged.xlsx [--output new.json]; blind-answers (--csv path.csv|--xlsx path.xlsx) --out-dir external-directory [--seed integer] [--retrieval hybrid|bm25]; merge-grades --master master.xlsx --grader2 grader2.xlsx --out new.xlsx [--grader1 grader1.xlsx]");
+    throw new ArgumentException("Usage: RagEval [bm25|hybrid|end-to-end|end-to-end-hybrid|sweep] [output.json] [--questions baseline|v2|combined|path.json] [--csv path.csv]; dense|compare-retrieval [--questions baseline|v2|combined|path.json|--csv path.csv|--xlsx path.xlsx] [--output new.json]; rq1-stats --xlsx merged.xlsx [--primary grader1|grader2|mean] [--reviewed-xlsx reviewed.xlsx] [--output new.json]; y-chinh-template --xlsx questions.xlsx; grading-sheet-v2 --master master.xlsx --ideas y-chinh.xlsx [--sources sources.xlsx]; blind-answers (--csv path.csv|--xlsx path.xlsx) --out-dir external-directory [--seed integer] [--retrieval hybrid|bm25]; merge-grades --master master.xlsx --grader2 grader2.xlsx --out new.xlsx [--grader1 grader1.xlsx]");
 var input = EvaluationInput.Parse(args.Skip(1).ToArray());
 var questions = await input.LoadAsync();
 var classifier = new VietnameseIntentClassifier();

@@ -48,6 +48,14 @@ public static class MergeGrades
                 copiedAi = true;
                 return;
             }
+            if (MergedChecklists.IsV2(source))
+            {
+                var result = MergedChecklists.Copy(source, master, rows, startColumn);
+                copied += result.Copied;
+                unmatched += result.Unmatched;
+                return;
+            }
+            MergedChecklists.Remove(master, startColumn);
             foreach (var (stt, sourceRow) in BlindAnswerWorkbook.SttRows(source))
             {
                 if (Enumerable.Range(startColumn, 5).All(column => source.Cell(sourceRow, column).IsEmpty())) continue;
