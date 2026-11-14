@@ -159,13 +159,18 @@ dotnet run --no-build -c Release --project src/tools/ClinicManagement.AI.RagEval
 
 Để kèm các đoạn đã lưu, dùng sheet **Truy xuất** trong master hoặc truyền workbook chứa sheet đó qua `--sources`. Từ dòng 3, tiêu đề lần lượt là **STT**, **Đoạn truy xuất A**, **Đoạn truy xuất B** và tùy chọn **Truy xuất thành công** (Có/Không). Ghép theo STT. Dòng có dữ liệu truy xuất và không có đoạn có thể để trống cột A/B của đoạn. Phiếu đánh dấu thiếu dữ liệu nếu STT không có bản ghi truy xuất. Lệnh chỉ dùng đoạn đã lưu.
 
-Chạy replay cho master cũ bằng lệnh sau, với bản build có mã và tài liệu truy xuất giống lần chạy gốc.
+Để kiểm chứng master ngày 10/11, lấy đường dẫn tuyệt đối của driver trong worktree hiện tại, rồi build từ một worktree sạch ở commit lịch sử.
 
 ```powershell
-dotnet run --no-build -c Release --project src/tools/ClinicManagement.AI.RagEval -- retrieval-replay --hidden-eval --xlsx <bo-an.xlsx> --master <master.xlsx> --out <retrieval-replay.json> --source-commit <SHA-40-ky-tu> --embedding-digest <digest-64-ky-tu>
+$excerptTargets = (Resolve-Path src/tools/ClinicManagement.AI.RagEval/Replay/Excerpt/ExcerptReplay.targets).Path
+git worktree add --detach <thu-muc-tam> 0c502693a8ecd09c86d3ce0677cc6623bae8d3ed
+Push-Location <thu-muc-tam>
+dotnet build src/tools/ClinicManagement.AI.RagEval -c Release "-p:CustomAfterMicrosoftCommonTargets=$excerptTargets" -o artifacts/excerpt-replay
+dotnet artifacts/excerpt-replay/ClinicManagement.AI.RagEval.dll excerpt-replay --hidden-eval --xlsx <bo-an.xlsx> --master <master.xlsx> --out <excerpt-replay.json>
+Pop-Location
 ```
 
-Lệnh dùng hybrid và kiểm tra digest bge-m3 cục bộ. Kết quả JSON chứa ID, toàn văn và điểm các đoạn theo STT. Mã thoát 2 nghĩa là kiểm chứng chưa đạt 150/150. Đoạn trích cũ chỉ lấy đoạn xếp đầu và giới hạn năm câu, nên lệnh báo riêng những ca thiếu các đoạn còn lại hoặc bị cắt. Khi đạt đủ, truyền `--retrieval <retrieval-replay.json>` cho `grading-sheet-v2`. Công cụ kiểm chứng lại với master trước khi xuất phiếu cạnh `y-chinh.xlsx`.
+Lệnh chạy nhánh trích đoạn lịch sử với giờ bắt đầu ghi trong metadata, SQLite trong bộ nhớ và hybrid dùng bge-m3 đã ghim digest. Driver ghi các đoạn thực sự được dựng vào prompt LLM theo thứ tự gốc và dừng nhánh LLM tại đó. JSON còn lưu câu trích đoạn tái tạo, loại đường đi và tên chính sách theo STT. Lệnh so với phía trích đoạn trong master sau chuẩn hóa NFC và khoảng trắng. Mã thoát 2 nghĩa là chưa khớp 150/150. Console chỉ báo số lượng và, với ca lệch, STT, độ dài sau chuẩn hóa và vị trí ký tự lệch đầu tiên tính từ 1. Khi đủ 150/150, dùng bản RagEval hiện tại với `grading-sheet-v2 --retrieval <excerpt-replay.json>`. Công cụ kiểm chứng lại với master trước khi ghi phiếu cạnh `y-chinh.xlsx`.
 
 Gộp phiếu v2 qua `merge-grades --grader2` như với phiếu cũ. Với điểm checklist, `rq1-stats` mặc định lấy người chấm 2, hoặc người chấm 1 khi chỉ có checklist của người này. Có thể chọn bằng `--primary grader1` hoặc `--primary grader2`. Truyền bản đã gộp sau xem lại qua `--reviewed-xlsx` để phân tích phụ. Quy tắc tính điểm và kết luận nằm trong [rubric](RUBRIC_RQ1.md) và [định nghĩa RQ1](DINH_NGHIA_RQ1.md).
 
