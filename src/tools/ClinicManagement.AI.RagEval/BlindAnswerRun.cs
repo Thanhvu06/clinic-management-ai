@@ -23,7 +23,7 @@ public static class BlindAnswerRun
         var devQuestions = provenance is null ? null : await DevBlindProvenance.LoadDevCsvAsync(options.CsvPath);
         var measuredAtUtc = DateTimeOffset.UtcNow;
         var result = await BlindAnswerExport.RunAsync(options, runtime.AnswerAsync, console, ct,
-            onAnswer: workbook is null ? null : answers.Add, loadedQuestions: workbook?.Questions ?? devQuestions,
+            onAnswer: workbook is null ? null : row => answers.Add(runtime.WithPassages(row)), loadedQuestions: workbook?.Questions ?? devQuestions,
             onResponses: provenance is null ? null : provenance.Add);
         if (workbook is not null)
         {

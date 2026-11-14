@@ -103,6 +103,13 @@ public sealed class BlindAnswerRuntime : IDisposable
         return (useLlm ? _llm : _extractive).ChatAsync(new AiChatRequestDto { Message = question }, ct);
     }
 
+    internal BlindAnswerRow WithPassages(BlindAnswerRow row)
+    {
+        var (llm, extractive) = _sharedRetrieval.PairPassages();
+        var (a, b) = row.AIs == "LLM" ? (llm, extractive) : (extractive, llm);
+        return row with { PassagesA = a, PassagesB = b };
+    }
+
     public void Dispose()
     {
         _db.Dispose();
