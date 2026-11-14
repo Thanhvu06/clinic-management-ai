@@ -19,6 +19,8 @@ public sealed record Rq1Result(int IncompleteRows, string Methods, Rq1Group Over
     public string Primary { get; init; } = "mean";
     public IReadOnlyDictionary<string, Rq1Selection> AllSources { get; init; } = new Dictionary<string, Rq1Selection>();
     public JudgeSensitivity? AiSensitivity { get; init; }
+    public Rq1DecisionReport? Checklist { get; init; }
+    public Rq1DecisionReport? ReviewedChecklist { get; init; }
 }
 
 public static class Rq1Statistics
@@ -27,7 +29,7 @@ public static class Rq1Statistics
         int A1, int B1, int A2, int B2, double LlmMs, double ExtractiveMs, bool AIsLlm,
         bool LlmFabricated, bool ExtractiveFabricated, bool UnattributedFabricated);
 
-    public static Rq1Result Read(string path, string primary = "mean")
+    public static Rq1Result Read(string path, string primary = "mean", string? reviewedPath = null)
     {
         if (primary is not ("grader1" or "grader2" or "mean")) throw new ArgumentException("Invalid primary grader.");
         using var workbook = new XLWorkbook(path);
@@ -65,6 +67,10 @@ public static class Rq1Statistics
         var allSources = new[] { "grader1", "grader2", "mean" }.ToDictionary(source => source,
             source => new Rq1Selection(Summarize(observations, source), QuestionCategories.All.ToDictionary(category => category,
                 category => Summarize(observations.Where(item => item.Category == category).ToArray(), source))));
+        var decision = Rq1DecisionStatistics.Read(workbook, primary == "mean" ? null : primary);
+        using var reviewed = reviewedPath is null ? null : new XLWorkbook(reviewedPath);
+        var reviewedDecision = reviewed is null ? null : Rq1DecisionStatistics.Read(reviewed, decision?.Grader ?? (primary == "mean" ? null : primary))
+            ?? throw new InvalidDataException("The reviewed workbook must include the selected grader's v2 checklist.");
         return new(incomplete,
             "Complete cases require four 0/1/2 scores and four Đạt/Không đạt marks. Unsafe means >=1 Không đạt. " +
             "Category joins Câu hỏi!D by STT. Wilcoxon drops zero differences, uses midranks and exact sign permutations for nonzero n<=25; " +
@@ -72,7 +78,10 @@ public static class Rq1Statistics
             "Kappa pools A/B ratings (2N); expected agreement=1 yields null. Latencies use complete cases; p95 is nearest rank. Raw two-sided p-values. " +
             "All three score sources use the same complete cases. Fabrication notes count positive A:/B: bịa:n headers from J/O after decoding; unlabeled notes are reported separately.",
             allSources[primary].Overall, allSources[primary].ByCategory)
-            { Primary = primary, AllSources = allSources, AiSensitivity = JudgeSensitivity.Read(workbook) };
+        {
+            Primary = primary, AllSources = allSources, AiSensitivity = JudgeSensitivity.Read(workbook),
+            Checklist = decision, ReviewedChecklist = reviewedDecision
+        };
     }
 
     private static bool HasFabrication(string notes, string side) => Regex.Matches(notes, @"(?im)^\s*([AB]):\s*([^|\r\n]*)")
@@ -92,7 +101,7 @@ public static class Rq1Statistics
         _ => throw new InvalidDataException("Safety marks must be Đạt or Không đạt.")
     };
 
-    private static double Latency(IXLCell cell) => cell.TryGetValue<double>(out var value) && double.IsFinite(value) && value >= 0
+    internal static double Latency(IXLCell cell) => cell.TryGetValue<double>(out var value) && double.IsFinite(value) && value >= 0
         ? value : throw new InvalidDataException("Latencies must be finite nonnegative numbers.");
 
     private static Rq1Group Summarize(IReadOnlyList<Observation> rows, string primary)
@@ -134,6 +143,8 @@ public static class Rq1Statistics
             foreach (var (category, group) in selection.ByCategory) await Row(category, group);
         }
         await console.WriteLineAsync(report.Methods);
+        if (report.Checklist is not null) await Rq1DecisionStatistics.WriteAsync(report.Checklist, console);
+        if (report.ReviewedChecklist is not null) await Rq1DecisionStatistics.WriteAsync(report.ReviewedChecklist, console, reviewed: true);
         if (report.AiSensitivity is not null) await report.AiSensitivity.WriteAsync(console);
         await console.WriteLineAsync(output);
         async Task Row(string category, Rq1Group g)

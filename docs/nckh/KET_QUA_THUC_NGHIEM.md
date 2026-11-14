@@ -146,6 +146,21 @@ Với `--xlsx`, thư mục kết quả có thêm ba workbook bên cạnh hai CSV
 
 Lệnh `merge-grades` ghép theo STT, không theo vị trí dòng. Cột **K–O** lấy từ `--grader2`; cột **F–J** lấy từ `--grader1` nếu có, hoặc giữ điểm trong `--master` nếu không truyền. Tổng kết chỉ báo số lượt dòng có điểm/ghi chú đã chép và số STT có điểm không khớp (cộng cả hai người chấm), không in giá trị ô. Mọi file đầu ra phải là file mới, không ghi đè để tránh mất điểm đã chấm. Công thức, validation, conditional formatting, định dạng và freeze panes được giữ; workbook được đặt chế độ tự tính lại khi mở bằng Excel. Công cụ dùng ClosedXML 0.105.1, giấy phép MIT.
 
+#### Phiếu checklist RQ1 v2
+
+Chạy theo thứ tự sau với các tệp nghiên cứu nằm ngoài repo.
+
+```powershell
+dotnet run --no-build -c Release --project src/tools/ClinicManagement.AI.RagEval -- y-chinh-template --xlsx "E:\NCKH\bo-cau-hoi-an\RAG_bo_cau_hoi_an_v1.xlsx"
+dotnet run --no-build -c Release --project src/tools/ClinicManagement.AI.RagEval -- grading-sheet-v2 --master "E:\NCKH\bo-cau-hoi-an\ket-qua\RAG_ket_qua_day_du.xlsx" --ideas "E:\NCKH\bo-cau-hoi-an\y-chinh.xlsx"
+```
+
+Điền **Ý chính** trong `y-chinh.xlsx` trước khi chấm và đánh **Có** cho các câu DB. DB trống được hiểu là chưa đánh dấu câu DB. Phiếu v2 xuất cạnh master, theo thứ tự câu và A/B của master. Người chấm đánh dấu **Từ chối A/B** để xác định mã TCN và mẫu số của T3.
+
+Để kèm các đoạn đã lưu, dùng sheet **Truy xuất** trong master hoặc truyền workbook chứa sheet đó qua `--sources`. Từ dòng 3, tiêu đề lần lượt là **STT**, **Đoạn truy xuất A**, **Đoạn truy xuất B** và tùy chọn **Truy xuất thành công** (Có/Không). Ghép theo STT. Dòng có dữ liệu truy xuất và không có đoạn có thể để trống cột A/B của đoạn. Phiếu đánh dấu thiếu dữ liệu nếu STT không có bản ghi truy xuất. Lệnh chỉ dùng đoạn đã lưu.
+
+Gộp phiếu v2 qua `merge-grades --grader2` như với phiếu cũ. Với điểm checklist, `rq1-stats` mặc định lấy người chấm 2, hoặc người chấm 1 khi chỉ có checklist của người này. Có thể chọn bằng `--primary grader1` hoặc `--primary grader2`. Truyền bản đã gộp sau xem lại qua `--reviewed-xlsx` để phân tích phụ. Quy tắc tính điểm và kết luận nằm trong [rubric](RUBRIC_RQ1.md) và [định nghĩa RQ1](DINH_NGHIA_RQ1.md).
+
 | Chế độ | Tổng số câu (`N`) | Trong phạm vi | Ngoài phạm vi | Hit@1 | Hit@3 | MRR | Từ chối đúng | TB (ms) | p95 (ms) |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | `bm25` | chưa đo | chưa đo | chưa đo | chưa đo | chưa đo | chưa đo | chưa đo | chưa đo | chưa đo |
@@ -191,7 +206,7 @@ dotnet run --no-build -c Release --project "C:\Projects\clinic-management-ai\src
 
 `compare-retrieval` cũng nhận `--questions baseline|v2|combined|path.json` hoặc `--csv path.csv`; chỉ chọn một nguồn. Lệnh `dense` nhận cùng tùy chọn để đo riêng dense. Mặc định nguồn câu hỏi là baseline. Công cụ dừng nếu không dựng/đọc được index bge-m3 hoặc hybrid bị rơi về BM25 do lỗi embedding, tránh gắn nhãn sai phép đo.
 
-**RQ1 sau khi gộp điểm:** nối các sheet theo STT từ dòng 4, bỏ `VD`; lấy Loại ở `Câu hỏi!D`, khóa A/B ở `Khóa!B`, độ trễ LLM/trích đoạn ở `Khóa!C–D`. Một câu đủ dữ liệu phải có bốn điểm nguyên 0/1/2 (`Phiếu chấm!F,G,K,L`) và bốn dấu an toàn `Đạt`/`Không đạt` (`H,I,M,N`); câu thiếu được đếm riêng và loại khỏi các thống kê. Điểm mỗi chế độ là trung bình hai người sau giải khóa. Không đọc nội dung câu hỏi, câu trả lời hay ghi chú để tính thống kê; không xuất chúng ra console/JSON.
+**RQ1 sau khi gộp điểm theo phiếu cũ:** nối các sheet theo STT từ dòng 4, bỏ `VD`; lấy Loại ở `Câu hỏi!D`, khóa A/B ở `Khóa!B`, độ trễ LLM/trích đoạn ở `Khóa!C–D`. Một câu đủ dữ liệu phải có bốn điểm nguyên 0/1/2 (`Phiếu chấm!F,G,K,L`) và bốn dấu an toàn `Đạt`/`Không đạt` (`H,I,M,N`); câu thiếu được đếm riêng và loại khỏi các thống kê. Điểm mỗi chế độ là trung bình hai người sau giải khóa. Không đọc nội dung câu hỏi, câu trả lời hay ghi chú để tính thống kê; không xuất chúng ra console/JSON.
 
 Wilcoxon bỏ cặp chênh lệch bằng 0, dùng hạng trung bình cho ties; n không bằng 0 ≤ 25 dùng phân phối exact của mọi phép đổi dấu trên midranks, còn lại xấp xỉ chuẩn có hiệu chỉnh ties, không hiệu chỉnh liên tục. Tất cả cặp bằng nhau cho p=1, r=0. Effect size r = |z|/√n, z lấy từ phương sai midranks kể cả khi p tính exact. Báo cả tổng và từng Loại; nhóm rỗng cho chỉ số không áp dụng là null/NA.
 
