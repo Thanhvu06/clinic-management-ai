@@ -25,7 +25,7 @@ internal static class Rq1WorkbookCommands
             throw new ArgumentException("Use a single source workbook or replay JSON.");
         var output = ExternalOutputDirectory.Validate(Path.GetDirectoryName(replay is null ? master : ideas)!);
         var rubric = Path.Combine(ExternalOutputDirectory.FindRepositoryRoot(), "docs", "nckh", "RUBRIC_RQ1.md");
-        var sheet = GradingSheetV2.Write(master, ideas, rubric, output, sources, replay);
+        var sheet = GradingSheetV2.Write(master, ideas, rubric, output, sources, excerptReplayPath: replay);
         await console.WriteLineAsync($"{Path.GetFileName(sheet.Path)} | {sheet.Bytes} byte | {sheet.Rows} câu");
         await console.WriteLineAsync($"Thiếu ý chính: {sheet.MissingIdeas}; DB trống: {sheet.BlankDb}; thiếu dữ liệu truy xuất đã lưu: {sheet.MissingSources}");
     }

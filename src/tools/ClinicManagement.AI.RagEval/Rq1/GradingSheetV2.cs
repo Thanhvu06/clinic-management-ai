@@ -13,13 +13,15 @@ public static class GradingSheetV2
     private const string RetrievedHeader = "Truy xuất thành công";
 
     public static GradingSheetV2Result Write(string masterPath, string ideasPath, string rubricPath, string outputDirectory,
-        string? sourcesPath = null, string? replayPath = null)
+        string? sourcesPath = null, string? replayPath = null, string? excerptReplayPath = null)
     {
         using var master = new XLWorkbook(masterPath);
         using var externalSources = sourcesPath is null ? null : new XLWorkbook(sourcesPath);
-        if (sourcesPath is not null && replayPath is not null)
+        if (new[] { sourcesPath, replayPath, excerptReplayPath }.Count(path => path is not null) > 1)
             throw new ArgumentException("Use a single source workbook or replay JSON.");
-        var sources = replayPath is null ? ReadSources(externalSources ?? master, sourcesPath is not null) : ReadReplay(master, replayPath);
+        var sources = excerptReplayPath is not null ? ReadExcerptReplay(master, excerptReplayPath)
+            : replayPath is not null ? ReadLegacyReplay(master, replayPath)
+            : ReadSources(externalSources ?? master, sourcesPath is not null);
         var grades = master.Worksheet(Rq1Workbook.Sheet);
         var roster = master.Worksheet("Câu hỏi");
         var questionRows = BlindAnswerWorkbook.SttRows(roster);
@@ -104,7 +106,20 @@ public static class GradingSheetV2
                 hasResult ? Rq1Workbook.YesNo(sheet.Cell(entry.Value, 4)) : null), StringComparer.Ordinal);
     }
 
-    private static Dictionary<string, (string A, string B, bool? Retrieved)> ReadReplay(XLWorkbook master, string path)
+    private static Dictionary<string, (string A, string B, bool? Retrieved)> ReadExcerptReplay(XLWorkbook master, string path)
+    {
+        var replay = ExcerptReplayFile.Read(path);
+        if (!ExcerptReplayVerification.Verify(master, replay.ByStt).IsComplete)
+            throw new InvalidDataException("All 150 historical excerpts must match the master before grading export.");
+        return replay.ByStt.ToDictionary(entry => entry.Key, entry =>
+        {
+            var passages = entry.Value.PromptPassages;
+            var text = string.Join("\n\n", passages.Select(passage => $"[{passage.Id}]\n{passage.Text}"));
+            return (text, text, (bool?)(passages.Length > 0));
+        }, StringComparer.Ordinal);
+    }
+
+    private static Dictionary<string, (string A, string B, bool? Retrieved)> ReadLegacyReplay(XLWorkbook master, string path)
     {
         var replay = RetrievalReplay.Read(path);
         if (!ReplayVerification.Verify(master, replay.ByStt).IsComplete)

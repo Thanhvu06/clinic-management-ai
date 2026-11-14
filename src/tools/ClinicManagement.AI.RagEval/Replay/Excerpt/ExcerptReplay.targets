@@ -1,0 +1,26 @@
+<Project>
+  <Target Name="ValidateHistoricalExcerptReplay" BeforeTargets="PrepareForBuild" Condition="'$(MSBuildProjectName)' == 'ClinicManagement.AI.RagEval'">
+    <Exec Command="git rev-parse HEAD" WorkingDirectory="$(MSBuildProjectDirectory)" ConsoleToMSBuild="true" StandardOutputImportance="Low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="ExcerptReplayRevision" />
+    </Exec>
+    <Error Condition="'$(ExcerptReplayRevision)' != '0c502693a8ecd09c86d3ce0677cc6623bae8d3ed'" Text="Use the historical worktree for excerpt replay." />
+    <Exec Command="git diff --quiet HEAD -- ." WorkingDirectory="$(MSBuildProjectDirectory)/../../.." />
+    <Exec Command="git ls-files --others --exclude-standard -- src/backend src/shared src/tools" WorkingDirectory="$(MSBuildProjectDirectory)/../../.." ConsoleToMSBuild="true" StandardOutputImportance="Low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="ExcerptReplayUntrackedFiles" />
+    </Exec>
+    <Error Condition="'$(ExcerptReplayUntrackedFiles)' != ''" Text="The historical worktree contains untracked source files." />
+  </Target>
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'ClinicManagement.AI.RagEval'">
+    <StartupObject>ClinicManagement.AI.RagEval.HistoricalExcerptReplay</StartupObject>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'ClinicManagement.AI.RagEval'">
+    <Compile Include="$(MSBuildThisFileDirectory)*.cs" />
+    <AssemblyMetadata Include="ExcerptReplaySourceCommit" Value="0c502693a8ecd09c86d3ce0677cc6623bae8d3ed" />
+  </ItemGroup>
+  <Target Name="UseHistoricalExcerptReplayDriver" BeforeTargets="CoreCompile" Condition="'$(MSBuildProjectName)' == 'ClinicManagement.AI.RagEval'">
+    <ItemGroup>
+      <Compile Remove="Program.cs" />
+      <Compile Include="$(MSBuildThisFileDirectory)ExcerptReplayMain.cs.inc" />
+    </ItemGroup>
+  </Target>
+</Project>
