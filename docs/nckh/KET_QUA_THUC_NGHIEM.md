@@ -142,7 +142,7 @@ Thời gian mỗi câu gồm lời gọi chat, không gồm dựng chỉ mục v
 
 Mẫu trống trong repo: `docs/nckh/templates/RAG_bo_cau_hoi_an_mau.xlsx`. Điền câu hỏi từ dòng **4** của sheet **Câu hỏi**, cột **A–F** lần lượt là STT, Người viết, Câu hỏi, Loại, Tài liệu đúng, Ý chính cần có; dòng ví dụ `VD` được bỏ qua. `--xlsx` thay cho `--csv`, hai tùy chọn loại trừ nhau; chế độ CSV vẫn được giữ. File Excel gốc không bị sửa.
 
-Với `--xlsx`, thư mục kết quả có thêm ba workbook bên cạnh hai CSV và JSON hiện có. `RAG_ket_qua_day_du.xlsx` giữ đủ sáu sheet và tự điền **Phiếu chấm!D–E**, **Khóa!B–D** theo STT ở cột A từng sheet. Chỉ gửi `RAG_phieu_cham_NguoiCham1.xlsx` cho người chấm 1 và `RAG_phieu_cham_NguoiCham2.xlsx` cho người chấm 2: ba sheet **Khóa**, **Tính**, **Tổng hợp** đã bị xóa hẳn trong hai file này. Người chấm 1 điền **F–J**, người chấm 2 điền **K–O** trên sheet **Phiếu chấm**. Giữ bản đầy đủ và khóa riêng đến khi hoàn tất chấm mù.
+Với `--xlsx`, thư mục kết quả có thêm ba workbook bên cạnh hai CSV và JSON hiện có. `RAG_ket_qua_day_du.xlsx` giữ đủ sáu sheet và tự điền **Phiếu chấm!D–E**, **Khóa!B–D** theo STT ở cột A từng sheet. Chỉ gửi `RAG_phieu_cham_NguoiCham1.xlsx` cho người chấm 1 và `RAG_phieu_cham_NguoiCham2.xlsx` cho người chấm 2: ba sheet **Khóa**, **Tính**, **Tổng hợp** đã bị xóa hẳn trong hai file này. Người chấm 1 điền **F–J**, người chấm 2 điền **K–O** trên sheet **Phiếu chấm**. Giữ bản đầy đủ và khóa riêng đến khi hoàn tất chấm mù. Các lần xuất mới bằng `blind-answers --xlsx` lưu mã và toàn văn các đoạn đã truy xuất theo phía A/B trong `Khóa!E–I` của master.
 
 Lệnh `merge-grades` ghép theo STT, không theo vị trí dòng. Cột **K–O** lấy từ `--grader2`; cột **F–J** lấy từ `--grader1` nếu có, hoặc giữ điểm trong `--master` nếu không truyền. Tổng kết chỉ báo số lượt dòng có điểm/ghi chú đã chép và số STT có điểm không khớp (cộng cả hai người chấm), không in giá trị ô. Mọi file đầu ra phải là file mới, không ghi đè để tránh mất điểm đã chấm. Công thức, validation, conditional formatting, định dạng và freeze panes được giữ; workbook được đặt chế độ tự tính lại khi mở bằng Excel. Công cụ dùng ClosedXML 0.105.1, giấy phép MIT.
 
@@ -158,6 +158,14 @@ dotnet run --no-build -c Release --project src/tools/ClinicManagement.AI.RagEval
 Điền **Ý chính** trong `y-chinh.xlsx` trước khi chấm và đánh **Có** cho các câu DB. DB trống được hiểu là chưa đánh dấu câu DB. Phiếu v2 xuất cạnh master, theo thứ tự câu và A/B của master. Người chấm đánh dấu **Từ chối A/B** để xác định mã TCN và mẫu số của T3.
 
 Để kèm các đoạn đã lưu, dùng sheet **Truy xuất** trong master hoặc truyền workbook chứa sheet đó qua `--sources`. Từ dòng 3, tiêu đề lần lượt là **STT**, **Đoạn truy xuất A**, **Đoạn truy xuất B** và tùy chọn **Truy xuất thành công** (Có/Không). Ghép theo STT. Dòng có dữ liệu truy xuất và không có đoạn có thể để trống cột A/B của đoạn. Phiếu đánh dấu thiếu dữ liệu nếu STT không có bản ghi truy xuất. Lệnh chỉ dùng đoạn đã lưu.
+
+Chạy replay cho master cũ bằng lệnh sau, với bản build có mã và tài liệu truy xuất giống lần chạy gốc.
+
+```powershell
+dotnet run --no-build -c Release --project src/tools/ClinicManagement.AI.RagEval -- retrieval-replay --hidden-eval --xlsx <bo-an.xlsx> --master <master.xlsx> --out <retrieval-replay.json> --source-commit <SHA-40-ky-tu> --embedding-digest <digest-64-ky-tu>
+```
+
+Lệnh dùng hybrid và kiểm tra digest bge-m3 cục bộ. Kết quả JSON chứa ID, toàn văn và điểm các đoạn theo STT. Mã thoát 2 nghĩa là kiểm chứng chưa đạt 150/150. Đoạn trích cũ chỉ lấy đoạn xếp đầu và giới hạn năm câu, nên lệnh báo riêng những ca thiếu các đoạn còn lại hoặc bị cắt. Khi đạt đủ, truyền `--retrieval <retrieval-replay.json>` cho `grading-sheet-v2`. Công cụ kiểm chứng lại với master trước khi xuất phiếu cạnh `y-chinh.xlsx`.
 
 Gộp phiếu v2 qua `merge-grades --grader2` như với phiếu cũ. Với điểm checklist, `rq1-stats` mặc định lấy người chấm 2, hoặc người chấm 1 khi chỉ có checklist của người này. Có thể chọn bằng `--primary grader1` hoặc `--primary grader2`. Truyền bản đã gộp sau xem lại qua `--reviewed-xlsx` để phân tích phụ. Quy tắc tính điểm và kết luận nằm trong [rubric](RUBRIC_RQ1.md) và [định nghĩa RQ1](DINH_NGHIA_RQ1.md).
 

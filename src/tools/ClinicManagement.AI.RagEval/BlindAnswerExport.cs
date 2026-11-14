@@ -91,7 +91,11 @@ public static class ExternalOutputDirectory
 }
 
 public sealed record BlindExportResult(int Count, int Seed, string GradingPath, string KeyPath);
-public sealed record BlindAnswerRow(string Stt, string AnswerA, string AnswerB, string AIs, double LlmMs, double ExtractiveMs);
+public sealed record BlindAnswerRow(string Stt, string AnswerA, string AnswerB, string AIs, double LlmMs, double ExtractiveMs)
+{
+    public ReplayPassage[]? PassagesA { get; init; }
+    public ReplayPassage[]? PassagesB { get; init; }
+}
 
 public static class BlindAnswerExport
 {

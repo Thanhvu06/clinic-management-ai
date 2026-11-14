@@ -56,6 +56,16 @@ if (mode is "llm-judge" or "disagreements")
     }
     return;
 }
+if (mode == "retrieval-replay")
+{
+    try { Environment.ExitCode = await RetrievalReplayCommand.RunAsync(args.Skip(1).ToArray(), Console.Out); }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("Replay failed. Check input workbooks, source SHA, pinned bge-m3 digest and new output path.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
 if (mode is "y-chinh-template" or "grading-sheet-v2")
 {
     try { await Rq1WorkbookCommands.RunAsync(mode, args.Skip(1).ToArray(), Console.Out); }
@@ -121,7 +131,7 @@ if (mode == "blind-answers")
     return;
 }
 if (mode is not ("bm25" or "hybrid" or "end-to-end" or "end-to-end-hybrid" or "sweep"))
-    throw new ArgumentException("Usage: RagEval [bm25|hybrid|end-to-end|end-to-end-hybrid|sweep] [output.json] [--questions baseline|v2|combined|path.json] [--csv path.csv]; dense|compare-retrieval [--questions baseline|v2|combined|path.json|--csv path.csv|--xlsx path.xlsx] [--output new.json]; rq1-stats --xlsx merged.xlsx [--primary grader1|grader2|mean] [--reviewed-xlsx reviewed.xlsx] [--output new.json]; y-chinh-template --xlsx questions.xlsx; grading-sheet-v2 --master master.xlsx --ideas y-chinh.xlsx [--sources sources.xlsx]; blind-answers (--csv path.csv|--xlsx path.xlsx) --out-dir external-directory [--seed integer] [--retrieval hybrid|bm25]; merge-grades --master master.xlsx --grader2 grader2.xlsx --out new.xlsx [--grader1 grader1.xlsx]");
+    throw new ArgumentException("Usage: RagEval [bm25|hybrid|end-to-end|end-to-end-hybrid|sweep] [output.json] [--questions baseline|v2|combined|path.json] [--csv path.csv]; dense|compare-retrieval [--questions baseline|v2|combined|path.json|--csv path.csv|--xlsx path.xlsx] [--output new.json]; rq1-stats --xlsx merged.xlsx [--primary grader1|grader2|mean] [--reviewed-xlsx reviewed.xlsx] [--output new.json]; y-chinh-template --xlsx questions.xlsx; grading-sheet-v2 --master master.xlsx --ideas y-chinh.xlsx [--sources sources.xlsx|--retrieval replay.json]; retrieval-replay --hidden-eval --xlsx questions.xlsx --master master.xlsx --out new.json --source-commit SHA --embedding-digest DIGEST; blind-answers (--csv path.csv|--xlsx path.xlsx) --out-dir external-directory [--seed integer] [--retrieval hybrid|bm25]; merge-grades --master master.xlsx --grader2 grader2.xlsx --out new.xlsx [--grader1 grader1.xlsx]");
 var input = EvaluationInput.Parse(args.Skip(1).ToArray());
 var questions = await input.LoadAsync();
 var classifier = new VietnameseIntentClassifier();

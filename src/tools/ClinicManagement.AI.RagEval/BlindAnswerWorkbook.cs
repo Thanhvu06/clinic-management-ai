@@ -61,15 +61,19 @@ public sealed class BlindAnswerWorkbook : IDisposable
 
     public void Write(string directory, IReadOnlyList<BlindAnswerRow> answers)
     {
+        var key = _workbook.Worksheet("Khóa");
+        if (answers.Any(answer => answer.PassagesA is not null || answer.PassagesB is not null))
+            RecordedPassages.WriteHeaders(key);
         foreach (var answer in answers)
         {
             var row = _gradingRows[answer.Stt];
             _workbook.Worksheet("Phiếu chấm").Cell(row, 4).Value = answer.AnswerA;
             _workbook.Worksheet("Phiếu chấm").Cell(row, 5).Value = answer.AnswerB;
             var keyRow = _keyRows[answer.Stt];
-            _workbook.Worksheet("Khóa").Cell(keyRow, 2).Value = answer.AIs;
-            _workbook.Worksheet("Khóa").Cell(keyRow, 3).Value = answer.LlmMs;
-            _workbook.Worksheet("Khóa").Cell(keyRow, 4).Value = answer.ExtractiveMs;
+            key.Cell(keyRow, 2).Value = answer.AIs;
+            key.Cell(keyRow, 3).Value = answer.LlmMs;
+            key.Cell(keyRow, 4).Value = answer.ExtractiveMs;
+            RecordedPassages.WriteRow(key, keyRow, answer);
         }
         SaveNew(_workbook, Path.Combine(directory, FullFile));
         foreach (var sheet in new[] { "Khóa", "Tính", "Tổng hợp" }) _workbook.Worksheets.Delete(sheet);

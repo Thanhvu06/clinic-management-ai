@@ -13,11 +13,13 @@ public static class GradingSheetV2
     private const string RetrievedHeader = "Truy xuất thành công";
 
     public static GradingSheetV2Result Write(string masterPath, string ideasPath, string rubricPath, string outputDirectory,
-        string? sourcesPath = null)
+        string? sourcesPath = null, string? replayPath = null)
     {
         using var master = new XLWorkbook(masterPath);
         using var externalSources = sourcesPath is null ? null : new XLWorkbook(sourcesPath);
-        var sources = ReadSources(externalSources ?? master, sourcesPath is not null);
+        if (sourcesPath is not null && replayPath is not null)
+            throw new ArgumentException("Use a single source workbook or replay JSON.");
+        var sources = replayPath is null ? ReadSources(externalSources ?? master, sourcesPath is not null) : ReadReplay(master, replayPath);
         var grades = master.Worksheet(Rq1Workbook.Sheet);
         var roster = master.Worksheet("Câu hỏi");
         var questionRows = BlindAnswerWorkbook.SttRows(roster);
@@ -92,7 +94,7 @@ public static class GradingSheetV2
     private static Dictionary<string, (string A, string B, bool? Retrieved)> ReadSources(XLWorkbook workbook, bool required)
     {
         if (!workbook.Worksheets.TryGetWorksheet(Rq1Workbook.SourcesSheet, out var sheet))
-            return required ? throw new InvalidDataException("The source workbook must include the Truy xuất worksheet.") : [];
+            return required ? throw new InvalidDataException("The source workbook must include the Truy xuất worksheet.") : RecordedPassages.Read(workbook);
         if (Rq1Workbook.Text(sheet.Cell(3, 1)) != "STT" ||
             Rq1Workbook.Text(sheet.Cell(3, 2)) != SourcesAHeader || Rq1Workbook.Text(sheet.Cell(3, 3)) != SourcesBHeader)
             throw new InvalidDataException("The recorded source worksheet has unexpected headers.");
@@ -100,6 +102,18 @@ public static class GradingSheetV2
         return BlindAnswerWorkbook.SttRows(sheet).ToDictionary(entry => entry.Key, entry =>
             (sheet.Cell(entry.Value, 2).GetString(), sheet.Cell(entry.Value, 3).GetString(),
                 hasResult ? Rq1Workbook.YesNo(sheet.Cell(entry.Value, 4)) : null), StringComparer.Ordinal);
+    }
+
+    private static Dictionary<string, (string A, string B, bool? Retrieved)> ReadReplay(XLWorkbook master, string path)
+    {
+        var replay = RetrievalReplay.Read(path);
+        if (!ReplayVerification.Verify(master, replay.ByStt).IsComplete)
+            throw new InvalidDataException("All 150 replay rows must match the master before grading export.");
+        return replay.ByStt.ToDictionary(entry => entry.Key, entry =>
+        {
+            var text = ReplayPassage.Format(entry.Value);
+            return (text, text, (bool?)(entry.Value.Length > 0));
+        }, StringComparer.Ordinal);
     }
 
     private static string[] Headers()
