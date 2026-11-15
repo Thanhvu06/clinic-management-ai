@@ -17,7 +17,7 @@ internal sealed record JudgeCheckpointRow(int Row, JudgeGrade A, JudgeGrade B, d
 }
 
 internal sealed record JudgeCheckpointHeader(int Version, Guid Id, string InputSha256, string OutputFile,
-    string Model, int Runs, int Seed, DateTimeOffset StartedAtUtc, int Context = 8192);
+    string Model, int Runs, int Seed, DateTimeOffset StartedAtUtc, int Context = 8192, string? SourceMode = null);
 
 internal sealed class JudgeCheckpointException(string message) : IOException(message);
 
@@ -42,14 +42,14 @@ internal sealed class JudgeCheckpoint : IDisposable
     public JudgeCheckpointHeader Header { get; }
     public IReadOnlyDictionary<int, JudgeCheckpointRow> Rows => _rows;
 
-    public static JudgeCheckpoint Open(JudgeOptions options, string inputSha256, IReadOnlySet<int> inputRows)
+    public static JudgeCheckpoint Open(JudgeOptions options, string inputSha256, string legacyHash, IReadOnlySet<int> inputRows)
     {
         if (!options.Resume)
         {
             if (File.Exists(options.Checkpoint))
                 throw new JudgeCheckpointException("Judge checkpoint already exists. Use --resume or a different output directory.");
             var initial = new JudgeCheckpointHeader(options.V2 ? 2 : 1, Guid.NewGuid(), inputSha256, Path.GetFileName(options.Output),
-                options.Model, options.Runs, options.Seed, DateTimeOffset.UtcNow, options.Context);
+                options.Model, options.Runs, options.Seed, DateTimeOffset.UtcNow, options.Context, options.SourceModeName);
             JudgeOutputFiles.Publish(options.Checkpoint, path =>
             {
                 using var writer = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
@@ -68,7 +68,10 @@ internal sealed class JudgeCheckpoint : IDisposable
             var headerEnd = bytes.IndexOf((byte)'\n');
             if (headerEnd < 0) throw new JudgeCheckpointException("Judge checkpoint header is incomplete.");
             var header = Read<JudgeCheckpointHeader>(bytes[..headerEnd]);
-            if (header.Version != (options.V2 ? 2 : 1) || header.Context != options.Context || header.Id == Guid.Empty || header.InputSha256 != inputSha256 ||
+            if ((header.SourceMode ?? "corpus") != options.SourceModeName)
+                throw new JudgeCheckpointException("Judge checkpoint source mode differs. Resume with the original --judge-sources value.");
+            var expectedHash = header.SourceMode is null ? legacyHash : inputSha256;
+            if (header.Version != (options.V2 ? 2 : 1) || header.Context != options.Context || header.Id == Guid.Empty || header.InputSha256 != expectedHash ||
                 header.OutputFile != Path.GetFileName(options.Output) || header.Model != options.Model ||
                 header.Runs != options.Runs || options.SeedSpecified && header.Seed != options.Seed)
                 throw new JudgeCheckpointException("Judge checkpoint parameters differ (input SHA-256, output, model, runs or seed).");

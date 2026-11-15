@@ -22,19 +22,29 @@ public sealed record JudgeRunSummary(string Model, int Seed, int Runs, int Quest
 
 public static class JudgeRun
 {
-    private sealed record Item(int Row, string Question, string Ideas, string Category, string? Document, string A, string B, Rq1SafetySubtype? SafetySubtype);
+    private sealed record Item(int Row, string Stt, string Question, string Ideas, string Category, string? Document, string A, string B, Rq1SafetySubtype? SafetySubtype)
+    {
+        public string Answer(int side) => side == 0 ? A : B;
+    }
     internal const int CitationFlagColumn = 16;
     internal static string CitationFlagHeader(int side) => side == 0 ? "A citation_unverified" : "B citation_unverified";
 
-    public static async Task<JudgeRunSummary> RunAsync(JudgeOptions options, ILlmJudgeClient judge, IJudgeSources sources,
-        TextWriter console, CancellationToken ct = default)
+    public static Task<JudgeRunSummary> RunAsync(JudgeOptions options, ILlmJudgeClient judge, IJudgeSources sources,
+        TextWriter console, CancellationToken ct = default) =>
+        RunCoreAsync(options with { SourceMode = JudgeSourceMode.Corpus }, judge, console, ct, sources);
+
+    internal static Task<JudgeRunSummary> RunAsync(JudgeOptions options, ILlmJudgeClient judge, TextWriter console,
+        CancellationToken ct = default, Func<CancellationToken, Task<CorpusJudgeSources>>? createCorpus = null) =>
+        RunCoreAsync(options, judge, console, ct, createCorpus: createCorpus);
+
+    private static async Task<JudgeRunSummary> RunCoreAsync(JudgeOptions options, ILlmJudgeClient judge, TextWriter console,
+        CancellationToken ct, IJudgeSources? sources = null, Func<CancellationToken, Task<CorpusJudgeSources>>? createCorpus = null)
     {
         if (!options.Resume) options.EnsureNewOutputs();
         using var input = new FileStream(options.Xlsx, FileMode.Open, FileAccess.Read, FileShare.Read);
         var inputHash = Convert.ToHexString(await SHA256.HashDataAsync(input, ct));
         input.Position = 0;
         using var book = new XLWorkbook(input);
-        if (book.Worksheets.Contains("Khóa")) throw new InvalidDataException("Judge requires a blinded workbook without key.");
         var sheet = book.Worksheet("Phiếu chấm");
         if (options.V2 && Enumerable.Range(0, 2).Any(side => !sheet.Cell(2, CitationFlagColumn + side).IsEmpty()))
             throw new InvalidDataException("V2 citation flag columns must be free in the input workbook.");
@@ -43,9 +53,14 @@ public static class JudgeRun
         var current = Rq1Rubric.ReadForJudge();
         var items = ReadItems(sheet, questions, options);
         // A resume must not mix grades from different rubric text or reviewed dev classifications.
-        inputHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(
+        var legacyHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(
             new { inputHash, current, subtypes = items.Select(item => item.SafetySubtype) }))));
-        using var checkpoint = JudgeCheckpoint.Open(options, inputHash, items.Select(item => item.Row).ToHashSet());
+        var modeHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(legacyHash + "\n" + options.SourceModeName)));
+        var inputRows = items.Select(item => item.Row).ToHashSet();
+        using var resumed = options.Resume ? JudgeCheckpoint.Open(options, modeHash, legacyHash, inputRows) : null;
+        var recorded = ReadRecordedMaterials(book, items, options.SourceMode);
+        using var created = options.Resume ? null : JudgeCheckpoint.Open(options, modeHash, legacyHash, inputRows);
+        var checkpoint = resumed ?? created!;
         var target = items.Take(options.Limit ?? items.Count).ToArray();
         if (options.V2 && !checkpoint.Rows.Keys.ToHashSet().IsSubsetOf(target.Select(item => item.Row)))
             throw new JudgeCheckpointException("V2 limit cannot exclude previously processed rows.");
@@ -60,13 +75,16 @@ public static class JudgeRun
             return published;
         }
 
-        await GradePendingAsync(target, rubric, current, checkpoint, judge, sources, console, options.V2, ct);
+        await GradePendingAsync(target, rubric, current, checkpoint, judge, sources, createCorpus, recorded, console, options.V2, ct);
         var summary = ApplyGrades(sheet, target, checkpoint, options.V2);
         var subtypeColumn = Math.Max(sheet.LastColumnUsed()?.ColumnNumber() ?? 0, CitationFlagColumn + 1) + 1;
         sheet.Cell(2, subtypeColumn).Value = Rq1SafetyClassification.Header;
         sheet.Column(subtypeColumn).Width = 22;
         foreach (var item in items)
             Rq1SafetyClassification.Write(sheet.Cell(item.Row, subtypeColumn), item.SafetySubtype);
+        if (recorded is not null)
+            foreach (var name in new[] { "Khóa", "Tính", "Tổng hợp" })
+                if (book.Worksheets.Contains(name)) book.Worksheets.Delete(name);
         if (published is null)
         {
             JudgeOutputFiles.PublishSummary(options, summary);
@@ -81,21 +99,30 @@ public static class JudgeRun
         return summary;
     }
 
-    public static async Task MeasurePromptsAsync(JudgeOptions options, LocalJudgeClient judge, IJudgeSources sources,
-        TextWriter console, CancellationToken ct = default)
+    public static Task MeasurePromptsAsync(JudgeOptions options, LocalJudgeClient judge, IJudgeSources sources,
+        TextWriter console, CancellationToken ct = default) =>
+        MeasurePromptsCoreAsync(options with { SourceMode = JudgeSourceMode.Corpus }, judge, console, ct, sources);
+
+    internal static Task MeasurePromptsAsync(JudgeOptions options, LocalJudgeClient judge, TextWriter console, CancellationToken ct = default) =>
+        MeasurePromptsCoreAsync(options, judge, console, ct);
+
+    private static async Task MeasurePromptsCoreAsync(JudgeOptions options, LocalJudgeClient judge, TextWriter console,
+        CancellationToken ct, IJudgeSources? sources = null)
     {
         using var book = new XLWorkbook(options.Xlsx);
-        if (book.Worksheets.Contains("Khóa")) throw new InvalidDataException("Judge requires a blinded workbook without key.");
         var items = ReadItems(book.Worksheet("Phiếu chấm"), book.Worksheet("Câu hỏi"), options);
         var rubric = JudgePrompt.Rubric(book.Worksheet("Hướng dẫn"));
         var current = Rq1Rubric.ReadForJudge();
-        var materials = await LoadMaterialsAsync(items, sources, ct);
+        var recorded = ReadRecordedMaterials(book, items, options.SourceMode);
+        var materials = recorded ?? await LoadCorpusMaterialsAsync(items, sources, null, ct);
         var maximum = 0;
         foreach (var item in items)
         {
-            var material = materials[item.Row];
-            foreach (var answer in new[] { item.A, item.B })
-                maximum = Math.Max(maximum, await judge.MeasurePromptAsync(BuildPrompt(item, rubric, current, material, answer), ct));
+            for (var side = 0; side < 2; side++)
+            {
+                var prompt = BuildPrompt(item, rubric, current, materials[item.Row][side], item.Answer(side), recorded is not null);
+                maximum = Math.Max(maximum, await judge.MeasurePromptAsync(prompt, ct));
+            }
         }
         await console.WriteLineAsync(maximum.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
@@ -114,7 +141,7 @@ public static class JudgeRun
                 throw new InvalidDataException("Answer rows require a question, two answers and matching STT.");
             var question = sheet.Cell(row, 2).GetString();
             var category = QuestionCategories.Canonical(questions.Cell(questionRow, 4).GetString());
-            items.Add(new(row, question, sheet.Cell(row, 3).GetString(), category,
+            items.Add(new(row, stt, question, sheet.Cell(row, 3).GetString(), category,
                 questions.Cell(questionRow, 5).GetString().Trim(), a, b,
                 safety.Resolve(category, stt, question)));
         }
@@ -124,14 +151,15 @@ public static class JudgeRun
 
     private static async Task GradePendingAsync(IReadOnlyList<Item> items, string rubric, Rq1JudgeRubric current,
         JudgeCheckpoint checkpoint,
-        ILlmJudgeClient judge, IJudgeSources sources, TextWriter console, bool v2, CancellationToken ct)
+        ILlmJudgeClient judge, IJudgeSources? sources, Func<CancellationToken, Task<CorpusJudgeSources>>? createCorpus,
+        Dictionary<int, JudgeMaterial[]>? recorded, TextWriter console, bool v2, CancellationToken ct)
     {
         var runs = checkpoint.Header.Runs;
         bool Complete(Item item) => checkpoint.Rows.TryGetValue(item.Row, out var saved) && (v2 || saved.IsComplete(runs));
         var pending = items.Where(item => !Complete(item)).ToArray();
         var processed = items.Count - pending.Length;
         await PrintProgressAsync(console, processed, items.Count, 0, 0);
-        var materials = await LoadMaterialsAsync(pending, sources, ct);
+        var materials = recorded ?? await LoadCorpusMaterialsAsync(pending, sources, createCorpus, ct);
         var random = new Random(checkpoint.Header.Seed);
         var sessionElapsed = 0.0;
         var newlyProcessed = 0;
@@ -146,9 +174,9 @@ public static class JudgeRun
             foreach (var side in new[] { first, 1 - first })
             {
                 if (grades[side]?.RunsCompleted == runs) continue;
-                var answer = side == 0 ? item.A : item.B;
-                var material = materials[item.Row];
-                var prompt = BuildPrompt(item, rubric, current, material, answer);
+                var answer = item.Answer(side);
+                var material = materials[item.Row][side];
+                var prompt = BuildPrompt(item, rubric, current, material, answer, recorded is not null);
                 grades[side] = await GradeAsync(judge, prompt, answer, material, runs, v2, ct);
             }
             var elapsed = timer.Elapsed.TotalMilliseconds;
@@ -158,21 +186,52 @@ public static class JudgeRun
         }
     }
 
-    private static string BuildPrompt(Item item, string rubric, Rq1JudgeRubric current, JudgeMaterial material, string answer) =>
+    private static string BuildPrompt(Item item, string rubric, Rq1JudgeRubric current, JudgeMaterial material, string answer, bool recorded) =>
         JudgePrompt.BuildWithRubric(item.Question, item.Ideas, item.Category, item.SafetySubtype,
-            rubric, current, material.Text, answer, material.HasDocuments);
+            rubric, current, material.Text, answer, material.HasDocuments, recorded);
 
-    private static async Task<Dictionary<int, JudgeMaterial>> LoadMaterialsAsync(IEnumerable<Item> items, IJudgeSources sources, CancellationToken ct)
+    private static Dictionary<int, JudgeMaterial[]>? ReadRecordedMaterials(XLWorkbook book, IReadOnlyList<Item> items, JudgeSourceMode mode)
     {
-        var materials = new Dictionary<int, JudgeMaterial>();
+        if (mode == JudgeSourceMode.Corpus)
+        {
+            if (book.Worksheets.Contains("Khóa")) throw new InvalidDataException("Judge requires a blinded workbook without key.");
+            return null;
+        }
+
+        var recorded = RecordedPassages.Read(book);
+        if (recorded.Count == 0)
+            throw new JudgeRecordedSourcesException("RecordedPassages are missing. Use the full workbook with recorded passages in the Khóa worksheet.");
+
+        var materials = new Dictionary<int, JudgeMaterial[]>();
+        foreach (var item in items)
+        {
+            if (!recorded.TryGetValue(item.Stt, out var passages))
+                throw new JudgeRecordedSourcesException("RecordedPassages are missing for an answer pair. Check the matching STT in the Khóa worksheet.");
+            materials.Add(item.Row, [RecordedMaterial(passages.A), RecordedMaterial(passages.B)]);
+        }
+        return materials;
+    }
+
+    private static JudgeMaterial RecordedMaterial(string text) => string.IsNullOrWhiteSpace(text)
+        ? new(string.Empty, false, false) : new(text, true, true);
+
+    private static async Task<Dictionary<int, JudgeMaterial[]>> LoadCorpusMaterialsAsync(IReadOnlyList<Item> items, IJudgeSources? sources,
+        Func<CancellationToken, Task<CorpusJudgeSources>>? createCorpus, CancellationToken ct)
+    {
+        var materials = new Dictionary<int, JudgeMaterial[]>();
+        if (items.Count == 0) return materials;
+        using var corpus = sources is null
+            ? await (createCorpus is null ? CorpusJudgeSources.CreateAsync(ct: ct) : createCorpus(ct))
+            : null;
+        sources ??= corpus!;
         // Retrieve first to avoid swapping embedding/chat models for each question on small VRAM.
         foreach (var item in items)
         {
-            var material = sources is CorpusJudgeSources corpus
-                ? await corpus.GetMaterialAsync(item.Question, item.Document, ct)
+            var material = sources is CorpusJudgeSources actualCorpus
+                ? await actualCorpus.GetMaterialAsync(item.Question, item.Document, ct)
                 : new JudgeMaterial(await sources.GetAsync(item.Question, item.Document, ct), null, null);
             if (material.HasDocuments is null) material = material with { HasDocuments = !string.IsNullOrWhiteSpace(material.Text) };
-            materials.Add(item.Row, material);
+            materials.Add(item.Row, [material, material]);
         }
         return materials;
     }
@@ -344,3 +403,5 @@ public static class JudgeRun
             string.Join("; ", flags) + " | " + reason, fabricated, uncertain, verdicts.Count);
     }
 }
+
+internal sealed class JudgeRecordedSourcesException(string message) : IOException(message);
