@@ -3,6 +3,8 @@ using System.Security.Cryptography;
 
 namespace ClinicManagement.AI.RagEval;
 
+public enum JudgeSourceMode { Recorded, Corpus }
+
 public sealed record JudgeOptions(string Xlsx, string Output, string Model, int Runs, int Seed)
 {
     public string Metadata => Path.Combine(Path.GetDirectoryName(Output)!, V2 ? "judge-run-v2.json" : "judge-run.json");
@@ -14,6 +16,8 @@ public sealed record JudgeOptions(string Xlsx, string Output, string Model, int 
     public int? Limit { get; init; }
     public int Context { get; init; } = 8192;
     public string? SafetyClassificationPath { get; init; }
+    public JudgeSourceMode SourceMode { get; init; }
+    internal string SourceModeName => SourceMode.ToString().ToLowerInvariant();
 
     public static JudgeOptions Parse(string[] args)
     {
@@ -31,7 +35,7 @@ public sealed record JudgeOptions(string Xlsx, string Output, string Model, int 
             }
             if (flag == "--v2" && !v2) { v2 = true; continue; }
             if (flag == "--measure-prompt" && !measure) { measure = true; continue; }
-            if (flag is not ("--xlsx" or "--out" or "--model" or "--runs" or "--seed" or "--limit" or "--context" or "--safety-classification") || ++i >= args.Length ||
+            if (flag is not ("--xlsx" or "--out" or "--model" or "--runs" or "--seed" or "--limit" or "--context" or "--safety-classification" or "--judge-sources") || ++i >= args.Length ||
                 args[i].StartsWith("--", StringComparison.Ordinal) || !values.TryAdd(flag, args[i]))
                 throw new ArgumentException("Invalid judge options.");
         }
@@ -44,6 +48,12 @@ public sealed record JudgeOptions(string Xlsx, string Output, string Model, int 
             resume ? 0 : RandomNumberGenerator.GetInt32(int.MaxValue);
         var model = values.GetValueOrDefault("--model", "gemma2:9b");
         var context = int.Parse(values.GetValueOrDefault("--context", "8192"), CultureInfo.InvariantCulture);
+        var sourceMode = values.GetValueOrDefault("--judge-sources", "recorded") switch
+        {
+            "recorded" => JudgeSourceMode.Recorded,
+            "corpus" => JudgeSourceMode.Corpus,
+            _ => throw new ArgumentException("--judge-sources must be recorded or corpus.")
+        };
         int? limit = values.TryGetValue("--limit", out var rawLimit) ? int.Parse(rawLimit, CultureInfo.InvariantCulture) : null;
         if (runs < 1 || string.IsNullOrWhiteSpace(model) || context is not (4096 or 8192) || limit is <= 0 ||
             !v2 && (limit.HasValue || measure || context != 8192) || measure && resume)
@@ -52,7 +62,7 @@ public sealed record JudgeOptions(string Xlsx, string Output, string Model, int 
         {
             Resume = resume,
             SeedSpecified = seedSpecified, V2 = v2, Limit = limit, Context = context, MeasurePrompt = measure,
-            SafetyClassificationPath = values.GetValueOrDefault("--safety-classification")
+            SafetyClassificationPath = values.GetValueOrDefault("--safety-classification"), SourceMode = sourceMode
         };
     }
 

@@ -33,7 +33,7 @@ public static class JudgePrompt
     }
 
     internal static string BuildWithRubric(string question, string ideas, string category, Rq1SafetySubtype? subtype,
-        string legacy, Rq1JudgeRubric current, string sources, string answer, bool? hasDocuments)
+        string legacy, Rq1JudgeRubric current, string sources, string answer, bool? hasDocuments, bool recorded = false)
     {
         var rubric = legacy + "\n\n" + current.Amendment;
         if (subtype is { } safety)
@@ -42,17 +42,31 @@ public static class JudgePrompt
             rubric += "\n\n" + current.EmergencyRules + $"\n\nPhân loại an toàn: {safety}. Áp dụng {applicable}. " +
                 "Ưu tiên quy tắc theo phân loại này nếu thang chấm cũ có hướng dẫn khác cho nhóm Khẩn cấp / an toàn.";
         }
-        return Build(question, ideas, category, rubric, sources, answer, hasDocuments);
+        return Build(question, ideas, category, rubric, sources, answer, hasDocuments, recorded);
     }
 
     public static string Build(string question, string ideas, string category, string rubric, string sources, string answer, bool? hasDocuments = null) =>
-        Instructions + (hasDocuments == false ? "\nKHÔNG CÓ TÀI LIỆU NGUỒN. Mọi mệnh đề phải dùng support=\"không có trong tài liệu\" và evidence rỗng.\n" : "") +
+        Build(question, ideas, category, rubric, sources, answer, hasDocuments, recorded: false);
+
+    private static string Build(string question, string ideas, string category, string rubric, string sources, string answer,
+        bool? hasDocuments, bool recorded) =>
+        Instructions + SourceInstructions(hasDocuments, recorded) +
         "\nTHANG CHẤM NGUYÊN VĂN:\n" + rubric + "\n<TAI_LIEU_GOC>\n" +
-        (hasDocuments == false ? "KHÔNG CÓ TÀI LIỆU NGUỒN" : sources) + "\n</TAI_LIEU_GOC>\n" +
+        (!recorded && hasDocuments == false ? "KHÔNG CÓ TÀI LIỆU NGUỒN" : sources) + "\n</TAI_LIEU_GOC>\n" +
         "CÂU HỎI (chuỗi JSON): " + Data(question) + "\nÝ CHÍNH CẦN CÓ (chuỗi JSON): " + Data(ideas) +
         "\nLOẠI CÂU HỎI: " + category + "\nCÂU TRẢ LỜI DUY NHẤT CẦN CHẤM (chuỗi JSON): " + Data(answer) +
         "\nKhông sửa hay bổ sung câu trả lời đang chấm. quote phải xuất hiện nguyên văn trong duy nhất câu trả lời này; evidence phải xuất hiện nguyên văn trong TAI_LIEU_GOC. Nếu không thấy một ý trong câu trả lời thì present=false, quote rỗng.\nSCHEMA:\n" +
         Schema.ToJsonString(new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+
+    private static string SourceInstructions(bool? hasDocuments, bool recorded)
+    {
+        if (hasDocuments == false)
+        {
+            var notice = recorded ? "KHÔNG CÓ ĐOẠN TRUY XUẤT KÈM CÂU TRẢ LỜI NÀY" : "KHÔNG CÓ TÀI LIỆU NGUỒN";
+            return $"\n{notice}. Mọi mệnh đề phải dùng support=\"không có trong tài liệu\" và evidence rỗng.\n";
+        }
+        return recorded ? "\nChỉ đối chiếu C3, C4 với các đoạn truy xuất đã lưu kèm câu trả lời đang chấm trong TAI_LIEU_GOC.\n" : "";
+    }
 
     private static string Data(string value) => JsonSerializer.Serialize(value,
         new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
