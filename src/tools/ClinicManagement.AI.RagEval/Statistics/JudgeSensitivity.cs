@@ -13,11 +13,13 @@ public sealed record JudgeSensitivity(JudgeHumanComparison AllScored, JudgeHuman
 
     internal static bool CopyAiGrades(IXLWorksheet source, XLWorkbook master, IReadOnlyDictionary<string, int> masterRows)
     {
-        if (!Enumerable.Range(0, 2).All(side =>
-            source.Cell(2, JudgeRun.CitationFlagColumn + side).GetString() == JudgeRun.CitationFlagHeader(side))) return false;
+        bool HasHeaders(Func<int, string> header) => Enumerable.Range(0, 2).All(side =>
+            source.Cell(2, JudgeRun.CitationFlagColumn + side).GetString() == header(side));
+        Func<int, string> flagHeader = HasHeaders(JudgeRun.FormatFlagHeader) ? JudgeRun.FormatFlagHeader : JudgeRun.CitationFlagHeader;
+        if (!HasHeaders(flagHeader)) return false;
         var target = master.Worksheets.TryGetWorksheet(SheetName, out var existing) ? existing : master.AddWorksheet(SheetName);
         target.Clear(XLClearOptions.Contents);
-        string[] headers = ["STT", "AI điểm A", "AI điểm B", JudgeRun.CitationFlagHeader(0), JudgeRun.CitationFlagHeader(1)];
+        string[] headers = ["STT", "AI điểm A", "AI điểm B", flagHeader(0), flagHeader(1)];
         for (var i = 0; i < headers.Length; i++) target.Cell(2, i + 1).Value = headers[i];
         foreach (var (stt, row) in BlindAnswerWorkbook.SttRows(source))
         {

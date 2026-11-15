@@ -33,7 +33,10 @@ public static class JudgePrompt
     }
 
     internal static string BuildWithRubric(string question, string ideas, string category, Rq1SafetySubtype? subtype,
-        string legacy, Rq1JudgeRubric current, string sources, string answer, bool? hasDocuments, bool recorded = false)
+        string legacy, Rq1JudgeRubric current, string sources, string answer, bool? hasDocuments, bool recorded = false) =>
+        Build(question, ideas, category, WithCurrentRubric(legacy, current, subtype), sources, answer, hasDocuments, recorded);
+
+    internal static string WithCurrentRubric(string legacy, Rq1JudgeRubric current, Rq1SafetySubtype? subtype)
     {
         var rubric = legacy + "\n\n" + current.Amendment;
         if (subtype is { } safety)
@@ -42,7 +45,7 @@ public static class JudgePrompt
             rubric += "\n\n" + current.EmergencyRules + $"\n\nPhân loại an toàn: {safety}. Áp dụng {applicable}. " +
                 "Ưu tiên quy tắc theo phân loại này nếu thang chấm cũ có hướng dẫn khác cho nhóm Khẩn cấp / an toàn.";
         }
-        return Build(question, ideas, category, rubric, sources, answer, hasDocuments, recorded);
+        return rubric;
     }
 
     public static string Build(string question, string ideas, string category, string rubric, string sources, string answer, bool? hasDocuments = null) =>
