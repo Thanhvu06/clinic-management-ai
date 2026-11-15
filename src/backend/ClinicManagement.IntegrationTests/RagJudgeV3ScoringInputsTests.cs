@@ -22,16 +22,20 @@ public sealed class RagJudgeV3ScoringInputsTests
     [Theory]
     [InlineData("")]
     [InlineData("  ")]
-    public async Task BlankIdeasOverrideAbsentC2ForACorrectRefusal(string ideas)
+    public async Task BlankIdeasRejectAbsentC2BeforeGradingACorrectRefusal(string ideas)
     {
         using var input = new Fixture(ideas: ideas);
-        var judge = new FakeJudge(_ => Reply("Không có", (NoSourceNeeded, [])));
+        var judge = new FakeJudge(prompt => Reply(
+            prompt.Contains("\nSửa lỗi lần trước:", StringComparison.Ordinal) ? "Không áp dụng" : "Không có",
+            (NoSourceNeeded, [])));
 
         var summary = await JudgeRun.RunAsync(input.Options, judge, TextWriter.Null);
 
+        Assert.Equal(2, summary.RetryCount);
         Assert.Equal(new[] { 0, 0, 1 }, summary.ScoreCountsA);
         Assert.Equal(new[] { 0, 0, 1 }, summary.ScoreCountsB);
-        Assert.All(judge.Prompts, prompt => Assert.Contains("Khi Ý CHÍNH trống, trả C2 là \"Không áp dụng\"", prompt));
+        Assert.All(judge.Prompts, prompt => Assert.Contains(
+            "C2 của câu hỏi này chỉ được nhận các giá trị sau: \"Không áp dụng\", \"Thiếu một phần\".", prompt));
         using var workbook = new XLWorkbook(input.Options.Output);
         Assert.Equal("Không áp dụng", GradeCell(workbook, "A C2").GetString());
         using var row = JsonDocument.Parse((await File.ReadAllLinesAsync(input.Options.Checkpoint))[1]);
@@ -50,7 +54,11 @@ public sealed class RagJudgeV3ScoringInputsTests
         Assert.Equal(4, summary.RetryCount);
         Assert.Equal(2, summary.GradingErrors);
         Assert.Equal(2, summary.FormatInvalidAnswers);
-        Assert.Contains(judge.Prompts, prompt => prompt.Contains("Sửa lỗi lần trước: JsonSchema", StringComparison.Ordinal));
+        var retries = judge.Prompts.Where(prompt => prompt.Contains("\nSửa lỗi lần trước:", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(4, retries.Length);
+        Assert.All(retries, prompt => Assert.Contains(
+            "Sửa lỗi lần trước: JsonSchema: C2 ngoài danh sách cho phép. " +
+            "C2 của câu hỏi này chỉ được nhận các giá trị sau: \"Đủ\", \"Thiếu một phần\", \"Không có\".", prompt));
         using var workbook = new XLWorkbook(input.Options.Output);
         var grades = workbook.Worksheet("Phiếu chấm");
         Assert.True(grades.Cell(4, 6).IsEmpty());

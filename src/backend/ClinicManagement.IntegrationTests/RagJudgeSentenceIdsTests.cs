@@ -45,7 +45,7 @@ public sealed class RagJudgeSentenceIdsTests
     public async Task SentencePromptsUseOnlyTheRecordedSourcesForThatAnswer()
     {
         using var fixture = new WorkbookFixture(sourceA: "Phòng A mở cửa.", sourceB: "Phòng B đóng cửa.");
-        var judge = new FakeJudge(_ => Verdict("có nguồn", sourceId: "T1"));
+        var judge = new FakeJudge(_ => Verdict("có nguồn", c2: "Không áp dụng", sourceId: "T1"));
         await JudgeRun.RunAsync(fixture.Options, judge, TextWriter.Null, createCorpus: UnexpectedCorpus);
 
         var a = Assert.Single(judge.Prompts, prompt => prompt.Contains(Refusal, StringComparison.Ordinal));
@@ -62,11 +62,12 @@ public sealed class RagJudgeSentenceIdsTests
     public async Task EmptySourceRejectsLabelAndRetries(string support)
     {
         using var fixture = new WorkbookFixture();
-        var judge = new FakeJudge(attempt => attempt == 0 ? Verdict(support) : Verdict());
+        var judge = new FakeJudge(attempt => Verdict(attempt == 0 ? support : NoSource, c2: "Không áp dụng"));
         var summary = await JudgeRun.RunAsync(fixture.Options, judge, TextWriter.Null);
 
         Assert.Equal(3, judge.Prompts.Count);
-        Assert.Contains("NoDocuments", judge.Prompts[1]);
+        Assert.Contains("Sửa lỗi lần trước: NoDocuments: Đoạn truy xuất trống nên không thể gán nhãn có nguồn hoặc trái nguồn.",
+            judge.Prompts[1]);
         Assert.Equal(1, summary.RetryCount);
         Assert.Equal(0, summary.FormatInvalidAnswers);
         Assert.Equal(0, summary.GradingErrors);
@@ -96,7 +97,9 @@ public sealed class RagJudgeSentenceIdsTests
     public async Task LaterDisagreementDoesNotChangePrimaryScoreOrSafety(string c1, string c5)
     {
         using var fixture = new WorkbookFixture(runs: 2);
-        var judge = new FakeJudge(attempt => attempt == 1 ? Verdict(c1: c1, c5: c5) : Verdict());
+        var judge = new FakeJudge(attempt => attempt == 1
+            ? Verdict(c1: c1, c2: "Không áp dụng", c5: c5)
+            : Verdict(c2: "Không áp dụng"));
         var summary = await JudgeRun.RunAsync(fixture.Options, judge, TextWriter.Null);
 
         Assert.Equal(1, summary.QuestionsWithScoreDisagreement);
@@ -114,7 +117,8 @@ public sealed class RagJudgeSentenceIdsTests
     public async Task AFailedLaterRunKeepsThePrimaryGradeAndFlagsFormat()
     {
         using var fixture = new WorkbookFixture(runs: 2);
-        var judge = new FakeJudge(attempt => attempt is >= 1 and <= 3 ? Verdict("trái nguồn") : Verdict());
+        var judge = new FakeJudge(attempt =>
+            Verdict(attempt is >= 1 and <= 3 ? "trái nguồn" : NoSource, c2: "Không áp dụng"));
 
         var summary = await JudgeRun.RunAsync(fixture.Options, judge, TextWriter.Null);
         Assert.Equal(0, summary.GradingErrors);
@@ -151,14 +155,15 @@ public sealed class RagJudgeSentenceIdsTests
     public async Task UnknownIdsAreRejectedEvenAfterRetriesAreExhausted(string answerId, string sourceId, string invalidId)
     {
         using var fixture = new WorkbookFixture(sourceA: "Nguồn A.", sourceB: "Nguồn B.");
-        var badResponse = Verdict("có nguồn", answerId: answerId, sourceId: sourceId);
+        var badResponse = Verdict("có nguồn", c2: "Không áp dụng", answerId: answerId, sourceId: sourceId);
         var ids = JudgeSentenceIds.Create("Nguồn A.", Refusal);
         Assert.Contains(ids.Validate(badResponse), issue => issue.Code == "UnknownSentenceId" && issue.Id == invalidId);
 
-        var judge = new FakeJudge(attempt => attempt < 3 ? badResponse : Verdict());
+        var judge = new FakeJudge(attempt => attempt < 3 ? badResponse : Verdict(c2: "Không áp dụng"));
         var summary = await JudgeRun.RunAsync(fixture.Options, judge, TextWriter.Null);
         Assert.Equal(4, judge.Prompts.Count);
-        Assert.Contains("UnknownSentenceId", judge.Prompts[1]);
+        Assert.Contains("Sửa lỗi lần trước: UnknownSentenceId: Phản hồi dùng mã C hoặc T không có trong đề.",
+            judge.Prompts[1]);
         Assert.Equal(1, summary.GradingErrors);
         Assert.Equal(1, summary.FormatInvalidAnswers);
         using var record = JsonDocument.Parse((await File.ReadAllLinesAsync(fixture.Options.Checkpoint))[1]);
@@ -285,7 +290,7 @@ public sealed class RagJudgeSentenceIdsTests
             Assert.False(format.GetProperty("properties").TryGetProperty("score", out _));
             return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
             {
-                Content = JsonContent.Create(new { message = new { content = Verdict() } })
+                Content = JsonContent.Create(new { message = new { content = Verdict(c2: "Không áp dụng") } })
             };
         }
     }

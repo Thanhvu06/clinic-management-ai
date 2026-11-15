@@ -34,9 +34,11 @@ public sealed class LocalJudgeClient(string model, HttpMessageHandler? handler =
         using var json = await ChatAsync(prompt, context, sentenceRequest ? V3OutputTokenLimit : OutputTokenLimit,
             truncate: !sentenceRequest, schema, seed, ct);
         if (json.RootElement.TryGetProperty("done_reason", out var reason) && reason.GetString() == "length")
-            throw new InvalidDataException("Judge response was truncated.");
+            throw new InvalidDataException(sentenceRequest
+                ? "Đầu ra bị cắt vì chạm giới hạn token."
+                : "Judge response was truncated.");
         return json.RootElement.GetProperty("message").GetProperty("content").GetString()
-            ?? throw new InvalidDataException("Empty judge response.");
+            ?? throw new InvalidDataException(sentenceRequest ? "Nội dung phản hồi của judge bị trống." : "Empty judge response.");
     }
 
     internal Task<int> MeasurePromptAsync(string prompt, CancellationToken ct) =>
