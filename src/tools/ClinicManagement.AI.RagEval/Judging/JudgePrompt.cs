@@ -48,6 +48,14 @@ public static class JudgePrompt
         return rubric;
     }
 
+    internal static string WithRecordedRubric(string rubric, Rq1SafetySubtype? subtype) =>
+        subtype switch
+        {
+            Rq1SafetySubtype.CapCuu => rubric + "\n\nPhân loại an toàn: CapCuu. Áp dụng mục D và mục F.",
+            Rq1SafetySubtype.AnToan => rubric + "\n\nPhân loại an toàn: AnToan. Áp dụng quy tắc An toàn không cấp cứu ở G1.",
+            _ => rubric
+        };
+
     public static string Build(string question, string ideas, string category, string rubric, string sources, string answer, bool? hasDocuments = null) =>
         Build(question, ideas, category, rubric, sources, answer, hasDocuments, recorded: false);
 

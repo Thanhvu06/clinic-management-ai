@@ -58,11 +58,13 @@ public static class JudgeRun
         RunCoreAsync(options with { SourceMode = JudgeSourceMode.Corpus }, judge, console, ct, sources);
 
     internal static Task<JudgeRunSummary> RunAsync(JudgeOptions options, ILlmJudgeClient judge, TextWriter console,
-        CancellationToken ct = default, Func<CancellationToken, Task<CorpusJudgeSources>>? createCorpus = null) =>
-        RunCoreAsync(options, judge, console, ct, createCorpus: createCorpus);
+        CancellationToken ct = default, Func<CancellationToken, Task<CorpusJudgeSources>>? createCorpus = null,
+        Func<string>? readRecordedRubric = null) =>
+        RunCoreAsync(options, judge, console, ct, createCorpus: createCorpus, readRecordedRubric: readRecordedRubric);
 
     private static async Task<JudgeRunSummary> RunCoreAsync(JudgeOptions options, ILlmJudgeClient judge, TextWriter console,
-        CancellationToken ct, IJudgeSources? sources = null, Func<CancellationToken, Task<CorpusJudgeSources>>? createCorpus = null)
+        CancellationToken ct, IJudgeSources? sources = null, Func<CancellationToken, Task<CorpusJudgeSources>>? createCorpus = null,
+        Func<string>? readRecordedRubric = null)
     {
         if (!options.Resume) options.EnsureNewOutputs();
         if (options.V3 && new[] { "RAG_phieu_cham_AI.xlsx", "RAG_phieu_cham_AI_v2.xlsx" }
@@ -76,15 +78,15 @@ public static class JudgeRun
         if (options.HasCitationFlags && Enumerable.Range(0, 2).Any(side => !sheet.Cell(2, CitationFlagColumn + side).IsEmpty()))
             throw new InvalidDataException("Citation flag columns must be free in the input workbook.");
         var questions = book.Worksheet("Câu hỏi");
-        var rubric = JudgePrompt.Rubric(book.Worksheet("Hướng dẫn"));
-        var current = Rq1Rubric.ReadForJudge();
+        var rubric = ReadRubric(book, options, readRecordedRubric);
+        var current = options.UsesSentenceIds ? null : Rq1Rubric.ReadForJudge();
         var items = ReadItems(sheet, questions, options);
         // A resume must not mix grades from different rubric text or reviewed dev classifications.
         var legacyHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(
             new { inputHash, current, subtypes = items.Select(item => item.SafetySubtype) }))));
         var modeHashInput = legacyHash + "\n" + options.SourceModeName;
         if (options.UsesSentenceIds)
-            modeHashInput += FormattableString.Invariant($"\nsentenceSplitterVersion={JudgeSentenceIds.SplitterVersion}");
+            modeHashInput += FormattableString.Invariant($"\nsentenceSplitterVersion={JudgeSentenceIds.SplitterVersion}\n{rubric}");
         var modeHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(modeHashInput)));
         var inputRows = items.Select(item => item.Row).ToHashSet();
         using var resumed = options.Resume ? JudgeCheckpoint.Open(options, modeHash, legacyHash, inputRows, inputHash) : null;
@@ -144,8 +146,8 @@ public static class JudgeRun
     {
         using var book = new XLWorkbook(options.Xlsx);
         var items = ReadItems(book.Worksheet("Phiếu chấm"), book.Worksheet("Câu hỏi"), options);
-        var rubric = JudgePrompt.Rubric(book.Worksheet("Hướng dẫn"));
-        var current = Rq1Rubric.ReadForJudge();
+        var rubric = ReadRubric(book, options);
+        var current = options.UsesSentenceIds ? null : Rq1Rubric.ReadForJudge();
         var recorded = ReadRecordedMaterials(book, items, options.SourceMode);
         var materials = recorded ?? await LoadCorpusMaterialsAsync(items, sources, null, ct);
         var maximum = 0;
@@ -159,13 +161,13 @@ public static class JudgeRun
                 if (options.UsesSentenceIds)
                 {
                     var ids = JudgeSentenceIds.CreateFromRecorded(material.Text, answer);
-                    var prompt = ids.BuildPrompt(item.Question, item.Ideas, item.Category,
-                        JudgePrompt.WithCurrentRubric(rubric, current, item.SafetySubtype));
-                    tokens = await judge.MeasurePromptAsync(prompt, ids.BuildSchema(), options.Seed, ct);
+                    var c2 = JudgeSentenceIds.AllowedC2(item.Ideas, item.Category, item.SafetySubtype);
+                    var prompt = BuildRecordedPrompt(item, rubric, ids, c2);
+                    tokens = await judge.MeasurePromptAsync(prompt, ids.BuildSchema(c2), options.Seed, ct);
                 }
                 else
                 {
-                    var prompt = BuildPrompt(item, rubric, current, material, answer, recorded is not null);
+                    var prompt = BuildPrompt(item, rubric, current!, material, answer, recorded is not null);
                     tokens = await judge.MeasurePromptAsync(prompt, ct);
                 }
                 maximum = Math.Max(maximum, tokens);
@@ -222,7 +224,7 @@ public static class JudgeRun
         return items.Where(item => selected.Contains(item.Row)).ToArray();
     }
 
-    private static async Task GradePendingAsync(IReadOnlyList<Item> items, string rubric, Rq1JudgeRubric current,
+    private static async Task GradePendingAsync(IReadOnlyList<Item> items, string rubric, Rq1JudgeRubric? current,
         JudgeCheckpoint checkpoint,
         ILlmJudgeClient judge, IJudgeSources? sources, Func<CancellationToken, Task<CorpusJudgeSources>>? createCorpus,
         Dictionary<int, JudgeMaterial[]>? recorded, TextWriter console, JudgeOptions options, CancellationToken ct)
@@ -252,14 +254,14 @@ public static class JudgeRun
                 if (options.UsesSentenceIds)
                 {
                     var ids = JudgeSentenceIds.CreateFromRecorded(material.Text, answer);
-                    var prompt = ids.BuildPrompt(item.Question, item.Ideas, item.Category,
-                        JudgePrompt.WithCurrentRubric(rubric, current, item.SafetySubtype));
-                    grades[side] = await JudgeSentenceIds.GradeAsync(judge, ids, prompt, material, item.Ideas, runs,
+                    var c2 = JudgeSentenceIds.AllowedC2(item.Ideas, item.Category, item.SafetySubtype);
+                    var prompt = BuildRecordedPrompt(item, rubric, ids, c2);
+                    grades[side] = await JudgeSentenceIds.GradeAsync(judge, ids, prompt, material, c2, runs,
                         checkpoint.Header.Seed, ct);
                 }
                 else
                 {
-                    var prompt = BuildPrompt(item, rubric, current, material, answer, recorded is not null);
+                    var prompt = BuildPrompt(item, rubric, current!, material, answer, recorded is not null);
                     grades[side] = await GradeAsync(judge, prompt, answer, material, runs, options.HasCitationFlags, ct);
                     if (options.V3 && grades[side] is { Diagnostics: { } diagnostics } grade)
                         grades[side] = grade with
@@ -274,6 +276,14 @@ public static class JudgeRun
             await PrintProgressAsync(console, ++processed, items.Count, sessionElapsed, ++newlyProcessed);
         }
     }
+
+    private static string ReadRubric(XLWorkbook book, JudgeOptions options, Func<string>? readRecordedRubric = null) =>
+        options.UsesSentenceIds
+            ? (readRecordedRubric ?? Rq1Rubric.ReadRecordedForJudge)()
+            : JudgePrompt.Rubric(book.Worksheet("Hướng dẫn"));
+
+    private static string BuildRecordedPrompt(Item item, string rubric, JudgeSentenceIds ids, IReadOnlyList<string> c2) =>
+        ids.BuildPrompt(item.Question, item.Ideas, item.Category, JudgePrompt.WithRecordedRubric(rubric, item.SafetySubtype), c2);
 
     private static string BuildPrompt(Item item, string rubric, Rq1JudgeRubric current, JudgeMaterial material, string answer, bool recorded) =>
         JudgePrompt.BuildWithRubric(item.Question, item.Ideas, item.Category, item.SafetySubtype,

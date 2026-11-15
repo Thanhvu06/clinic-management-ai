@@ -16,13 +16,16 @@ internal enum JudgeFailureKind
     MissingAnswerId
 }
 
+internal sealed record JudgeAttemptFailure(int Run, int Attempt, JudgeFailureKind Kind, string Reason);
+
 internal sealed record JudgeGradeDiagnostics(int RetryCount, JudgeFailureKind? FinalFailure,
     bool? SourceEmpty = null, bool? RetrievalHasDocuments = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? CitationUnverified = null,
     string? ExceptionType = null,
     [property: JsonPropertyName("format_invalid"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? FormatInvalid = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? AgreedRuns = null,
-    [property: JsonPropertyName("citation_unverified"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? LegacyFormatFlag = null)
+    [property: JsonPropertyName("citation_unverified"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? LegacyFormatFlag = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<JudgeAttemptFailure>? AttemptFailures = null)
 {
     [JsonIgnore]
     public bool HasFormatFlag => (FormatInvalid ?? CitationUnverified ?? LegacyFormatFlag) == true;
