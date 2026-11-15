@@ -88,7 +88,10 @@ public sealed record EvaluationInput(string? OutputPath, IReadOnlyList<string> Q
         return questions.ToArray();
     }
 
-    public static EvaluationQuestion[] ParseCsvQuestions(string csvContent, string sourceName = "csv")
+    public static EvaluationQuestion[] ParseCsvQuestions(string csvContent, string sourceName = "csv") =>
+        ParseCsvQuestions(csvContent, sourceName, expectedAuthor: null);
+
+    internal static EvaluationQuestion[] ParseCsvQuestions(string csvContent, string sourceName, string? expectedAuthor)
     {
         if (string.IsNullOrWhiteSpace(csvContent))
             throw new InvalidDataException("Invalid CSV question set: " + sourceName);
@@ -135,6 +138,8 @@ public sealed record EvaluationInput(string? OutputPath, IReadOnlyList<string> Q
                 continue;
             if (string.IsNullOrWhiteSpace(questionText))
                 throw new InvalidDataException($"Row {r + 1} in {sourceName} is missing question text.");
+            if (expectedAuthor is not null && GetCell(row, authorCol) != expectedAuthor)
+                throw new InvalidDataException($"Row {r + 1} in {sourceName} does not match the registered author.");
 
             var normalizedCategory = NormalizeCategory(category);
             var normalizedDoc = NormalizeDocId(rawDoc);

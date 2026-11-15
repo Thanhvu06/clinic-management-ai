@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Serialization;
 using ClinicManagement.Application.AI.DTOs;
 using ClinicManagement.Application.AI.Knowledge;
@@ -19,6 +21,9 @@ public sealed record DevAnswer(string Code, string Side, string Mode, string Tex
 internal sealed class DevBlindProvenance
 {
     public const string FileName = "dev-nguon.json";
+    internal const string SupplementAuthor = "Claude (chat), chủ nhiệm duyệt";
+    private const string SupplementResource = "RagEval.dev-chinh-bo-sung.csv";
+    private const string SupplementSha256 = "8EB14A7348145B419099F45FCC764C85176D7F959FF5BA73C02E0E5DB16E4960";
     private readonly IReadOnlyList<KnowledgeChunk> _chunks = new MarkdownKnowledgeCatalog().Chunks;
     public List<DevAnswer> Answers { get; } = [];
 
@@ -41,13 +46,47 @@ internal sealed class DevBlindProvenance
         });
     }
 
-    public static async Task<EvaluationQuestion[]> LoadDevCsvAsync(string path)
+    public static Task<EvaluationQuestion[]> LoadDevCsvAsync(string path) =>
+        LoadDevCsvAsync(path, LoadRegisteredSupplementAsync);
+
+    internal static async Task<EvaluationQuestion[]> LoadDevCsvAsync(string path, Func<Task<EvaluationQuestion[]>> loadSupplement)
     {
         var questions = await EvaluationInput.Parse(["--csv", path]).LoadAsync(requireBothScopes: false);
         var rq2 = (await DevQuestions.LoadRq2Async()).ToDictionary(q => q.Stt!, StringComparer.Ordinal);
-        if (questions.Any(q => q.Stt is null || !rq2.TryGetValue(q.Stt, out var original) ||
-            q.Text != original.Text || q.Category != original.Category || q.ExpectedDocId != original.ExpectedDocId))
+        if (questions.All(q => Matches(q, rq2)))
+            return questions;
+
+        var supplement = await loadSupplement();
+        if (supplement.Any(q => rq2.ContainsKey(q.Stt!)))
+            throw new InvalidDataException("The dev supplement reuses an RQ2 STT.");
+        var registered = supplement.ToDictionary(q => q.Stt!, StringComparer.Ordinal);
+        if (questions.Any(q => !Matches(q, rq2) && !Matches(q, registered)))
             throw new InvalidDataException("The CSV does not match the labeled RQ2 dev questions.");
         return questions;
+    }
+
+    private static bool Matches(EvaluationQuestion question, IReadOnlyDictionary<string, EvaluationQuestion> registered) =>
+        question.Stt is not null && registered.TryGetValue(question.Stt, out var original) &&
+        question.Text == original.Text && question.Category == original.Category && question.ExpectedDocId == original.ExpectedDocId;
+
+    private static async Task<EvaluationQuestion[]> LoadRegisteredSupplementAsync()
+    {
+        using var stream = typeof(DevBlindProvenance).Assembly.GetManifestResourceStream(SupplementResource)
+            ?? throw new InvalidDataException("The registered dev supplement is missing.");
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        return ParseSupplement(await reader.ReadToEndAsync(), SupplementSha256);
+    }
+
+    internal static EvaluationQuestion[] ParseSupplement(string content, string expectedSha256)
+    {
+        var text = content.Replace("\r\n", "\n", StringComparison.Ordinal);
+        if (Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))) != expectedSha256)
+            throw new InvalidDataException("The registered dev supplement does not match its SHA-256.");
+
+        var rows = EvaluationInput.ParseCsvQuestions(text, SupplementResource, SupplementAuthor);
+        if (rows.Any(q => string.IsNullOrWhiteSpace(q.Stt)) ||
+            rows.Select(q => q.Stt).Distinct(StringComparer.Ordinal).Count() != rows.Length)
+            throw new InvalidDataException("The registered dev supplement requires unique, nonempty STT values.");
+        return rows;
     }
 }
