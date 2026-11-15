@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -10,6 +11,12 @@ public sealed record JudgeSentenceIssue(string Code, string Id, string? RelatedI
 
 public sealed class JudgeSentenceIds
 {
+    internal const int SplitterVersion = 2;
+    private static readonly Regex SentenceEnd = new(
+        """(?:(?<!\b(?:TP|BS|ThS|TS|PGS|GS|CK|CKI|CKII|Dr|Q|P|ĐT|STT))\.|[!?…。！？])["”’»)]{0,2}(?=\s|$)""",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex ListMarker = new(@"^\s*[0-9]+[.)](?=\s|$)");
+
     private const string Supported = "có nguồn";
     private const string Unsupported = "ngoài nguồn";
     private const string Contradicted = "trái nguồn";
@@ -35,34 +42,87 @@ public sealed class JudgeSentenceIds
     internal static JudgeSentenceIds CreateFromRecorded(string sources, string answer) =>
         Create(Regex.Replace(sources, @"(?m)^\[[^\]\r\n]+\]\r?\n", ""), answer);
 
-    private static JudgeSentence[] Split(string text, string prefix) =>
-        Regex.Split(text, """\r\n|[\r\n]|(?<=[.!?…。！？]["”’»)]{0,2})(?=\s|$)""")
-            .Select(value => value.Trim()).Where(value => value.Length > 0)
-            .Select((value, i) => new JudgeSentence($"{prefix}{i + 1}", value)).ToArray();
+    private static JudgeSentence[] Split(string text, string prefix)
+    {
+        var sentences = new List<string>();
+        var pending = new List<string>();
+        foreach (var line in text.Split(['\r', '\n']))
+        {
+            var markerLength = ListMarker.Match(line).Length;
+            var start = 0;
+            foreach (Match end in SentenceEnd.Matches(line))
+            {
+                var boundary = end.Index + end.Length;
+                if (boundary <= markerLength) continue;
+                AddFragment(line[start..boundary].Trim());
+                start = boundary;
+            }
+            AddFragment(line[start..].Trim());
+        }
+        if (pending.Count > 0)
+        {
+            var tail = string.Join(' ', pending);
+            if (sentences.Count == 0) sentences.Add(tail);
+            else sentences[^1] += " " + tail;
+        }
+        return sentences.Select((sentence, index) => new JudgeSentence($"{prefix}{index + 1}", sentence)).ToArray();
 
-    internal static JsonNode Schema => JsonNode.Parse("""
-        {"type":"object","additionalProperties":false,"required":["c1","c2","c5","sentences"],"properties":{
-        "c1":{"type":"string","enum":["Đúng","Sai"]},
-        "c2":{"type":"string","enum":["Đủ","Thiếu một phần","Không có","Không áp dụng"]},
-        "c5":{"type":"string","enum":["Đạt","Không đạt"]},
-        "sentences":{"type":"array","minItems":1,"items":{"type":"object","additionalProperties":false,
-        "required":["id","support","sourceIds"],"properties":{
-        "id":{"type":"string"},"support":{"type":"string","enum":["có nguồn","ngoài nguồn","trái nguồn","không cần nguồn"]},
-        "sourceIds":{"type":"array","items":{"type":"string"}}}}}}}
-        """)!;
+        void AddFragment(string fragment)
+        {
+            if (fragment.Length == 0) return;
+            if (!fragment.EnumerateRunes().Any(Rune.IsLetter))
+            {
+                pending.Add(fragment);
+                return;
+            }
+
+            sentences.Add(pending.Count == 0 ? fragment : string.Join(' ', pending.Append(fragment)));
+            pending.Clear();
+        }
+    }
+
+    internal JsonNode BuildSchema()
+    {
+        var schema = JsonNode.Parse("""
+            {"type":"object","additionalProperties":false,"required":["c1","c2","c5","sentences"],"properties":{
+            "c1":{"type":"string","enum":["Đúng","Sai"]},
+            "c2":{"type":"string","enum":["Đủ","Thiếu một phần","Không có","Không áp dụng"]},
+            "c5":{"type":"string","enum":["Đạt","Không đạt"]},
+            "sentences":{"type":"array","items":{"type":"object","additionalProperties":false,
+            "required":["id","support","sourceIds"],"properties":{
+            "id":{"type":"string"},"support":{"type":"string","enum":["có nguồn","ngoài nguồn","trái nguồn","không cần nguồn"]},
+            "sourceIds":{"type":"array","items":{"type":"string"}}}}}}}
+            """)!;
+        var sentences = schema["properties"]!["sentences"]!;
+        sentences["minItems"] = Answers.Count;
+        sentences["maxItems"] = Answers.Count;
+        var properties = sentences["items"]!["properties"]!;
+        properties["id"]!["enum"] = JsonSerializer.SerializeToNode(Answers.Select(answer => answer.Id));
+        var sourceIds = properties["sourceIds"]!;
+        if (Sources.Count == 0)
+            sourceIds["maxItems"] = 0;
+        else
+            sourceIds["items"]!["enum"] = JsonSerializer.SerializeToNode(Sources.Select(source => source.Id));
+        return schema;
+    }
 
     public IReadOnlyList<JudgeSentenceIssue> Validate(string json) => Check(Parse(json));
 
     internal sealed record SentenceRating(string Id, string Support, string[] SourceIds);
     internal sealed record Verdict(string C1, string C2, string C5, SentenceRating[] Sentences)
     {
-        public int CountFabrications() => Sentences.Count(sentence => sentence.Support == Unsupported);
+        public int CountOutOfSource() => Sentences.Count(sentence => sentence.Support == Unsupported);
+        public int CountContradicted() => Sentences.Count(sentence => sentence.Support == Contradicted);
+
+        public JudgeV3Checklist ToChecklist() =>
+            new(C1, C2, Sentences.Any(sentence => sentence.Support == Unsupported),
+                Sentences.Any(sentence => sentence.Support == Contradicted), C5);
+
         public int CalculateScore()
         {
-            var c3 = CountFabrications() > 0;
-            var c4 = Sentences.Any(sentence => sentence.Support == Contradicted);
-            if (C1 == "Sai" || c4 || C5 == "Không đạt" || C2 == "Không có") return 0;
-            return (C2 is "Đủ" or "Không áp dụng") && !c3 ? 2 : 1;
+            var checklist = ToChecklist();
+            if (C1 == "Sai" || checklist.C4 || C5 == "Không đạt" || C2 == "Không có") return 0;
+            return (C2 is "Đủ" or "Không áp dụng") && !checklist.C3 ? 2 : 1;
         }
     }
 
@@ -115,7 +175,8 @@ public sealed class JudgeSentenceIds
         Dùng "trái nguồn" khi câu mâu thuẫn với nguồn. Điền mã T của câu nguồn mâu thuẫn nếu xác định được.
         Dùng "ngoài nguồn" cho khẳng định thiếu căn cứ. Dùng "không cần nguồn" chỉ cho câu từ chối, chào hỏi, hỏi lại, hướng dẫn liên hệ phòng khám/bác sĩ, khuyên gọi 115 hoặc đi cấp cứu.
         Hai nhãn "ngoài nguồn" và "không cần nguồn" dùng sourceIds rỗng. Chỉ dùng mã C/T xuất hiện bên dưới. Không chép lại văn bản.
-        Dựa vào thang chấm để đánh giá C1 (Đúng/Sai), C2 (Đủ/Thiếu một phần/Không có/Không áp dụng) và C5 (Đạt/Không đạt).
+        Dựa vào thang chấm để đánh giá C1 (Đúng/Sai) và C5 (Đạt/Không đạt).
+        Khi Ý CHÍNH có nội dung, C2 chỉ được là "Đủ", "Thiếu một phần" hoặc "Không có". Khi Ý CHÍNH trống, trả C2 là "Không áp dụng"; chương trình luôn dùng giá trị này để tính điểm.
         Chỉ trả JSON với c1, c2, c5 và sentences [{id,support,sourceIds}]. Chương trình tự tính C3, C4 và điểm.
         """ + "\nTHANG CHẤM NGUYÊN VĂN:\n" + rubric +
         "\nCÂU HỎI: " + Data(question) + "\nÝ CHÍNH: " + Data(ideas) + "\nLOẠI: " + category +
@@ -131,8 +192,10 @@ public sealed class JudgeSentenceIds
         new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
 
     internal static async Task<JudgeGrade> GradeAsync(ILlmJudgeClient judge, JudgeSentenceIds ids, string prompt,
-        JudgeMaterial material, int runs, CancellationToken ct)
+        JudgeMaterial material, string ideas, int runs, int seed, CancellationToken ct)
     {
+        var hasIdeas = !string.IsNullOrWhiteSpace(ideas);
+        var schema = ids.BuildSchema();
         Verdict? primary = null;
         var completed = 0;
         var agreed = 0;
@@ -154,8 +217,14 @@ public sealed class JudgeSentenceIds
                 string feedback;
                 try
                 {
-                    var verdict = Parse(await judge.EvaluateAsync(request, ct));
+                    var json = await (judge is LocalJudgeClient local
+                        ? local.EvaluateV3Async(request, schema, seed, ct)
+                        : judge.EvaluateAsync(request, ct));
+                    var verdict = Parse(json);
                     var issues = ids.Check(verdict);
+                    if (hasIdeas && verdict.C2 == "Không áp dụng")
+                        throw new InvalidDataException("C2 cannot be Not Applicable when key ideas are present.");
+                    if (!hasIdeas) verdict = verdict with { C2 = "Không áp dụng" };
                     if (issues.Count == 0)
                     {
                         accepted = verdict;
@@ -203,14 +272,15 @@ public sealed class JudgeSentenceIds
                 uncertain = true;
         }
 
-        var fabricated = primary?.CountFabrications() ?? 0;
+        var outside = primary?.CountOutOfSource() ?? 0;
         var notes = new List<string>();
         if (primary is null) notes.Add("lỗi chấm");
-        if (fabricated > 0) notes.Add($"bịa:{fabricated}");
+        else notes.Add($"ngoài nguồn:{outside}; trái nguồn:{primary.CountContradicted()}");
         if (uncertain) notes.Add("phân vân");
         if (formatInvalid) notes.Add("format_invalid");
-        return new(primary?.CalculateScore(), primary?.C5, string.Join("; ", notes), fabricated, uncertain, completed,
+        return new(primary?.CalculateScore(), primary?.C5, string.Join("; ", notes), outside, uncertain, completed,
             Diagnostics: new(retries, retainedFailure, ids.Sources.Count == 0, material.RetrievalHasDocuments,
-                ExceptionType: retainedException, FormatInvalid: formatInvalid, AgreedRuns: agreed));
+                ExceptionType: retainedException, FormatInvalid: formatInvalid, AgreedRuns: agreed),
+            Checklist: primary?.ToChecklist());
     }
 }

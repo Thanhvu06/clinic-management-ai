@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ClinicManagement.Infrastructure.AI.Knowledge;
 
 namespace ClinicManagement.AI.RagEval;
@@ -21,28 +22,43 @@ public sealed class LocalJudgeClient(string model, HttpMessageHandler? handler =
     private readonly HttpClient _http = new(handler ?? new SocketsHttpHandler { UseProxy = false })
         { BaseAddress = new Uri("http://127.0.0.1:11434"), Timeout = TimeSpan.FromMinutes(15) };
 
-    public async Task<string> EvaluateAsync(string prompt, CancellationToken ct = default)
+    public Task<string> EvaluateAsync(string prompt, CancellationToken ct = default) =>
+        EvaluateCoreAsync(prompt, null, null, ct);
+
+    internal Task<string> EvaluateV3Async(string prompt, JsonNode schema, int seed, CancellationToken ct) =>
+        EvaluateCoreAsync(prompt, schema, seed, ct);
+
+    private async Task<string> EvaluateCoreAsync(string prompt, JsonNode? schema, int? seed, CancellationToken ct)
     {
-        using var json = await ChatAsync(prompt, context, v3 ? V3OutputTokenLimit : OutputTokenLimit, truncate: !v3, ct);
+        var sentenceRequest = schema is not null;
+        using var json = await ChatAsync(prompt, context, sentenceRequest ? V3OutputTokenLimit : OutputTokenLimit,
+            truncate: !sentenceRequest, schema, seed, ct);
         if (json.RootElement.TryGetProperty("done_reason", out var reason) && reason.GetString() == "length")
             throw new InvalidDataException("Judge response was truncated.");
         return json.RootElement.GetProperty("message").GetProperty("content").GetString()
             ?? throw new InvalidDataException("Empty judge response.");
     }
 
-    internal async Task<int> MeasurePromptAsync(string prompt, CancellationToken ct)
+    internal Task<int> MeasurePromptAsync(string prompt, CancellationToken ct) =>
+        MeasurePromptAsync(prompt, null, null, ct);
+
+    internal async Task<int> MeasurePromptAsync(string prompt, JsonNode? schema, int? seed, CancellationToken ct)
     {
-        using var json = await ChatAsync(prompt, 8192, 1, truncate: false, ct);
+        using var json = await ChatAsync(prompt, 8192, 1, truncate: false, schema, seed, ct);
         return json.RootElement.TryGetProperty("prompt_eval_count", out var count) && count.TryGetInt32(out var tokens) && tokens > 0
             ? tokens : throw new InvalidDataException("Ollama did not report prompt tokens.");
     }
 
-    private async Task<JsonDocument> ChatAsync(string prompt, int numCtx, int numPredict, bool truncate, CancellationToken ct)
+    private async Task<JsonDocument> ChatAsync(string prompt, int numCtx, int numPredict, bool truncate,
+        JsonNode? schema, int? seed, CancellationToken ct)
     {
+        if (v3 && schema is null) throw new InvalidOperationException("Judge v3 requires a sentence schema and seed.");
+        var options = new JsonObject { ["temperature"] = 0, ["num_ctx"] = numCtx, ["num_predict"] = numPredict };
+        if (seed.HasValue) options["seed"] = seed.Value;
         using var response = await _http.PostAsJsonAsync("/api/chat", new
         {
-            model, stream = false, format = v3 ? JudgeSentenceIds.Schema : JudgePrompt.Schema, truncate,
-            options = new { temperature = 0, num_ctx = numCtx, num_predict = numPredict },
+            model, stream = false, format = schema ?? JudgePrompt.Schema, truncate,
+            options,
             messages = new[] { new { role = "user", content = prompt } }
         }, ct);
         response.EnsureSuccessStatusCode();
