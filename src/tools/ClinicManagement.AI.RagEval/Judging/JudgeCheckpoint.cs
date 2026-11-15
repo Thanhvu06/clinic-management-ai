@@ -5,9 +5,9 @@ namespace ClinicManagement.AI.RagEval;
 internal sealed record JudgeGrade(int? Score, string? Safety, string Note, int Fabrications, bool Uncertain,
     int RunsCompleted, bool CitationError = false, JudgeGradeDiagnostics? Diagnostics = null)
 {
-    public bool IsValid(int runs) => RunsCompleted >= 0 && RunsCompleted <= runs && Fabrications >= 0 &&
-        Note is not null && (RunsCompleted == runs
-            ? Score is >= 0 and <= 2 && Safety is "Đạt" or "Không đạt" && (!CitationError || Diagnostics?.CitationUnverified == true)
+    public bool IsValid(int runs, bool v3) => RunsCompleted >= 0 && RunsCompleted <= runs && Fabrications >= 0 &&
+        Note is not null && ((RunsCompleted == runs || v3 && Score.HasValue && RunsCompleted > 0)
+            ? Score is >= 0 and <= 2 && Safety is "Đạt" or "Không đạt" && (!CitationError || Diagnostics?.HasFormatFlag == true)
             : Score is null && Safety is null);
 }
 
@@ -42,13 +42,13 @@ internal sealed class JudgeCheckpoint : IDisposable
     public JudgeCheckpointHeader Header { get; }
     public IReadOnlyDictionary<int, JudgeCheckpointRow> Rows => _rows;
 
-    public static JudgeCheckpoint Open(JudgeOptions options, string inputSha256, string legacyHash, IReadOnlySet<int> inputRows)
+    public static JudgeCheckpoint Open(JudgeOptions options, string inputSha256, string legacyHash, IReadOnlySet<int> inputRows, string workbookHash)
     {
         if (!options.Resume)
         {
             if (File.Exists(options.Checkpoint))
                 throw new JudgeCheckpointException("Judge checkpoint already exists. Use --resume or a different output directory.");
-            var initial = new JudgeCheckpointHeader(options.V2 ? 2 : 1, Guid.NewGuid(), inputSha256, Path.GetFileName(options.Output),
+            var initial = new JudgeCheckpointHeader(options.Version, Guid.NewGuid(), inputSha256, Path.GetFileName(options.Output),
                 options.Model, options.Runs, options.Seed, DateTimeOffset.UtcNow, options.Context, options.SourceModeName);
             JudgeOutputFiles.Publish(options.Checkpoint, path =>
             {
@@ -70,8 +70,8 @@ internal sealed class JudgeCheckpoint : IDisposable
             var header = Read<JudgeCheckpointHeader>(bytes[..headerEnd]);
             if ((header.SourceMode ?? "corpus") != options.SourceModeName)
                 throw new JudgeCheckpointException("Judge checkpoint source mode differs. Resume with the original --judge-sources value.");
-            var expectedHash = header.SourceMode is null ? legacyHash : inputSha256;
-            if (header.Version != (options.V2 ? 2 : 1) || header.Context != options.Context || header.Id == Guid.Empty || header.InputSha256 != expectedHash ||
+            var expectedHash = header.SourceMode is not null ? inputSha256 : options.V3 ? workbookHash : legacyHash;
+            if (header.Version != options.Version || header.Context != options.Context || header.Id == Guid.Empty || header.InputSha256 != expectedHash ||
                 header.OutputFile != Path.GetFileName(options.Output) || header.Model != options.Model ||
                 header.Runs != options.Runs || options.SeedSpecified && header.Seed != options.Seed)
                 throw new JudgeCheckpointException("Judge checkpoint parameters differ (input SHA-256, output, model, runs or seed).");
@@ -84,9 +84,9 @@ internal sealed class JudgeCheckpoint : IDisposable
                 if (end < 0) break;
                 var row = Read<JudgeCheckpointRow>(bytes.Slice(position, end));
                 if (!inputRows.Contains(row.Row) || row.A is null || row.B is null ||
-                    !row.A.IsValid(header.Runs) || !row.B.IsValid(header.Runs) ||
+                    !row.A.IsValid(header.Runs, options.V3) || !row.B.IsValid(header.Runs, options.V3) ||
                     !double.IsFinite(row.ElapsedMs) || row.ElapsedMs < 0 ||
-                    rows.TryGetValue(row.Row, out var previous) && (options.V2 || previous.IsComplete(header.Runs)))
+                    rows.TryGetValue(row.Row, out var previous) && (options.HasCitationFlags || previous.IsComplete(header.Runs)))
                     throw new JudgeCheckpointException("Invalid judge checkpoint row.");
                 rows[row.Row] = row;
                 position += end + 1;

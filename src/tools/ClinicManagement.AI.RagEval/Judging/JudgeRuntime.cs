@@ -14,15 +14,16 @@ public interface IJudgeSources
     Task<string> GetAsync(string question, string? expectedDocument, CancellationToken ct = default);
 }
 
-public sealed class LocalJudgeClient(string model, HttpMessageHandler? handler = null, int context = 8192) : ILlmJudgeClient, IDisposable
+public sealed class LocalJudgeClient(string model, HttpMessageHandler? handler = null, int context = 8192, bool v3 = false) : ILlmJudgeClient, IDisposable
 {
     public const int OutputTokenLimit = 4096;
+    public const int V3OutputTokenLimit = 800;
     private readonly HttpClient _http = new(handler ?? new SocketsHttpHandler { UseProxy = false })
         { BaseAddress = new Uri("http://127.0.0.1:11434"), Timeout = TimeSpan.FromMinutes(15) };
 
     public async Task<string> EvaluateAsync(string prompt, CancellationToken ct = default)
     {
-        using var json = await ChatAsync(prompt, context, OutputTokenLimit, truncate: true, ct);
+        using var json = await ChatAsync(prompt, context, v3 ? V3OutputTokenLimit : OutputTokenLimit, truncate: !v3, ct);
         if (json.RootElement.TryGetProperty("done_reason", out var reason) && reason.GetString() == "length")
             throw new InvalidDataException("Judge response was truncated.");
         return json.RootElement.GetProperty("message").GetProperty("content").GetString()
@@ -40,7 +41,7 @@ public sealed class LocalJudgeClient(string model, HttpMessageHandler? handler =
     {
         using var response = await _http.PostAsJsonAsync("/api/chat", new
         {
-            model, stream = false, format = JudgePrompt.Schema, truncate,
+            model, stream = false, format = v3 ? JudgeSentenceIds.Schema : JudgePrompt.Schema, truncate,
             options = new { temperature = 0, num_ctx = numCtx, num_predict = numPredict },
             messages = new[] { new { role = "user", content = prompt } }
         }, ct);

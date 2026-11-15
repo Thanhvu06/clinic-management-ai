@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace ClinicManagement.AI.RagEval;
 
@@ -8,12 +9,24 @@ internal enum JudgeFailureKind
     NoDocuments,
     MissingCitation,
     JsonSchema,
-    Other
+    Other,
+    UnknownSentenceId,
+    MissingSourceId,
+    Timeout,
+    MissingAnswerId
 }
 
 internal sealed record JudgeGradeDiagnostics(int RetryCount, JudgeFailureKind? FinalFailure,
-    bool? SourceEmpty = null, bool? RetrievalHasDocuments = null, bool? CitationUnverified = null)
+    bool? SourceEmpty = null, bool? RetrievalHasDocuments = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? CitationUnverified = null,
+    string? ExceptionType = null,
+    [property: JsonPropertyName("format_invalid"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? FormatInvalid = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? AgreedRuns = null,
+    [property: JsonPropertyName("citation_unverified"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? LegacyFormatFlag = null)
 {
+    [JsonIgnore]
+    public bool HasFormatFlag => (FormatInvalid ?? CitationUnverified ?? LegacyFormatFlag) == true;
+
     public static JudgeFailureKind ClassifySchemaFailure(Exception error, string? response)
     {
         if (response is null) return error is JsonException ? JudgeFailureKind.JsonSchema : JudgeFailureKind.Other;

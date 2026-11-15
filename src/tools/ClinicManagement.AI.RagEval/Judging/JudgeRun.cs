@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using ClosedXML.Excel;
 
 namespace ClinicManagement.AI.RagEval;
@@ -17,7 +18,18 @@ public sealed record JudgeRunSummary(string Model, int Seed, int Runs, int Quest
     public int[] ScoreCountsA { get; init; } = [];
     public int[] ScoreCountsB { get; init; } = [];
     public Guid CheckpointId { get; init; }
-    public int CitationUnverifiedAnswers { get; init; }
+    [JsonIgnore]
+    public int CitationUnverifiedAnswers => LegacyCitationUnverifiedAnswers ?? 0;
+    [JsonPropertyName("citationUnverifiedAnswers"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? LegacyCitationUnverifiedAnswers { get; init; }
+    [JsonPropertyName("format_invalid_answers"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? FormatInvalidAnswers { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ComparedRuns { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? AgreedRuns { get; init; }
+    public int NumCtx { get; init; } = 8192;
+    public int RetryCount { get; init; }
 }
 
 public static class JudgeRun
@@ -28,6 +40,8 @@ public static class JudgeRun
     }
     internal const int CitationFlagColumn = 16;
     internal static string CitationFlagHeader(int side) => side == 0 ? "A citation_unverified" : "B citation_unverified";
+
+    internal static string FormatFlagHeader(int side) => side == 0 ? "A format_invalid" : "B format_invalid";
 
     public static Task<JudgeRunSummary> RunAsync(JudgeOptions options, ILlmJudgeClient judge, IJudgeSources sources,
         TextWriter console, CancellationToken ct = default) =>
@@ -41,13 +55,16 @@ public static class JudgeRun
         CancellationToken ct, IJudgeSources? sources = null, Func<CancellationToken, Task<CorpusJudgeSources>>? createCorpus = null)
     {
         if (!options.Resume) options.EnsureNewOutputs();
+        if (options.V3 && new[] { "RAG_phieu_cham_AI.xlsx", "RAG_phieu_cham_AI_v2.xlsx" }
+            .Contains(Path.GetFileName(options.Output), StringComparer.OrdinalIgnoreCase))
+            throw new InvalidDataException("Use a separate output workbook for judge v3.");
         using var input = new FileStream(options.Xlsx, FileMode.Open, FileAccess.Read, FileShare.Read);
         var inputHash = Convert.ToHexString(await SHA256.HashDataAsync(input, ct));
         input.Position = 0;
         using var book = new XLWorkbook(input);
         var sheet = book.Worksheet("Phiếu chấm");
-        if (options.V2 && Enumerable.Range(0, 2).Any(side => !sheet.Cell(2, CitationFlagColumn + side).IsEmpty()))
-            throw new InvalidDataException("V2 citation flag columns must be free in the input workbook.");
+        if (options.HasCitationFlags && Enumerable.Range(0, 2).Any(side => !sheet.Cell(2, CitationFlagColumn + side).IsEmpty()))
+            throw new InvalidDataException("Citation flag columns must be free in the input workbook.");
         var questions = book.Worksheet("Câu hỏi");
         var rubric = JudgePrompt.Rubric(book.Worksheet("Hướng dẫn"));
         var current = Rq1Rubric.ReadForJudge();
@@ -57,26 +74,28 @@ public static class JudgeRun
             new { inputHash, current, subtypes = items.Select(item => item.SafetySubtype) }))));
         var modeHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(legacyHash + "\n" + options.SourceModeName)));
         var inputRows = items.Select(item => item.Row).ToHashSet();
-        using var resumed = options.Resume ? JudgeCheckpoint.Open(options, modeHash, legacyHash, inputRows) : null;
+        using var resumed = options.Resume ? JudgeCheckpoint.Open(options, modeHash, legacyHash, inputRows, inputHash) : null;
         var recorded = ReadRecordedMaterials(book, items, options.SourceMode);
-        using var created = options.Resume ? null : JudgeCheckpoint.Open(options, modeHash, legacyHash, inputRows);
+        using var created = options.Resume ? null : JudgeCheckpoint.Open(options, modeHash, legacyHash, inputRows, inputHash);
         var checkpoint = resumed ?? created!;
-        var target = items.Take(options.Limit ?? items.Count).ToArray();
-        if (options.V2 && !checkpoint.Rows.Keys.ToHashSet().IsSubsetOf(target.Select(item => item.Row)))
-            throw new JudgeCheckpointException("V2 limit cannot exclude previously processed rows.");
+        var target = options.PilotStratified is int perGroup
+            ? SelectPilot(items, options.Master!, perGroup, checkpoint.Header.Seed)
+            : items.Take(options.Limit ?? items.Count).ToArray();
+        if (options.HasCitationFlags && !checkpoint.Rows.Keys.ToHashSet().IsSubsetOf(target.Select(item => item.Row)))
+            throw new JudgeCheckpointException("Judge selection cannot exclude previously processed rows.");
         var published = options.Resume ? JudgeOutputFiles.ReadPublishedSummary(options, checkpoint.Header.Id) : null;
-        if (!options.V2 && published is not null && checkpoint.Rows.Count != items.Count)
+        if (!options.HasCitationFlags && published is not null && checkpoint.Rows.Count != items.Count)
             throw new JudgeCheckpointException("Published judge metadata requires a checkpoint record for every question.");
-        if (published is not null && File.Exists(options.Output) && published.Questions == target.Length &&
-            (options.V2 ? checkpoint.Rows.Count == target.Length :
+        if (published is not null && (!options.V3 || published.FormatInvalidAnswers.HasValue) && File.Exists(options.Output) && published.Questions == target.Length &&
+            (options.HasCitationFlags ? checkpoint.Rows.Count == target.Length :
                 published.FullyGradedQuestions == items.Count && checkpoint.Rows.Values.All(row => row.IsComplete(checkpoint.Header.Runs))))
         {
             await PrintSummaryAsync(published, options, console);
             return published;
         }
 
-        await GradePendingAsync(target, rubric, current, checkpoint, judge, sources, createCorpus, recorded, console, options.V2, ct);
-        var summary = ApplyGrades(sheet, target, checkpoint, options.V2);
+        await GradePendingAsync(target, rubric, current, checkpoint, judge, sources, createCorpus, recorded, console, options, ct);
+        var summary = ApplyGrades(sheet, target, checkpoint, options);
         var subtypeColumn = Math.Max(sheet.LastColumnUsed()?.ColumnNumber() ?? 0, CitationFlagColumn + 1) + 1;
         sheet.Cell(2, subtypeColumn).Value = Rq1SafetyClassification.Header;
         sheet.Column(subtypeColumn).Width = 22;
@@ -120,7 +139,12 @@ public static class JudgeRun
         {
             for (var side = 0; side < 2; side++)
             {
-                var prompt = BuildPrompt(item, rubric, current, materials[item.Row][side], item.Answer(side), recorded is not null);
+                var answer = item.Answer(side);
+                var material = materials[item.Row][side];
+                var prompt = options.UsesSentenceIds
+                    ? JudgeSentenceIds.CreateFromRecorded(material.Text, answer).BuildPrompt(item.Question, item.Ideas, item.Category,
+                        JudgePrompt.WithCurrentRubric(rubric, current, item.SafetySubtype))
+                    : BuildPrompt(item, rubric, current, material, answer, recorded is not null);
                 maximum = Math.Max(maximum, await judge.MeasurePromptAsync(prompt, ct));
             }
         }
@@ -141,7 +165,10 @@ public static class JudgeRun
                 throw new InvalidDataException("Answer rows require a question, two answers and matching STT.");
             var question = sheet.Cell(row, 2).GetString();
             var category = QuestionCategories.Canonical(questions.Cell(questionRow, 4).GetString());
-            items.Add(new(row, stt, question, sheet.Cell(row, 3).GetString(), category,
+            var ideas = sheet.Cell(row, 3).GetString();
+            if ((category is DevQuestions.InScope or DevQuestions.Paraphrase) && string.IsNullOrWhiteSpace(ideas))
+                throw new JudgeMissingIdeasException($"Thiếu Ý chính ở Phiếu chấm, dòng {row} ({category}).");
+            items.Add(new(row, stt, question, ideas, category,
                 questions.Cell(questionRow, 5).GetString().Trim(), a, b,
                 safety.Resolve(category, stt, question)));
         }
@@ -149,13 +176,36 @@ public static class JudgeRun
         return items;
     }
 
+    private static Item[] SelectPilot(List<Item> items, string master, int count, int seed)
+    {
+        using var workbook = new XLWorkbook(master);
+        var questions = workbook.Worksheet("Câu hỏi");
+        var rows = BlindAnswerWorkbook.SttRows(questions);
+        var categories = items.ToDictionary(item => item.Row, item => rows.TryGetValue(item.Stt, out var row)
+            ? QuestionCategories.Canonical(questions.Cell(row, 4).GetString())
+            : throw new InvalidDataException("Master is missing a question ID."));
+        if (items.Any(item => categories[item.Row] != item.Category))
+            throw new InvalidDataException("Master and judge question categories differ.");
+        var groups = items.GroupBy(item => categories[item.Row]).OrderBy(group => group.Key, StringComparer.Ordinal).ToArray();
+        if (groups.Length == 0 || groups.Any(group => group.Count() < count))
+            throw new InvalidDataException("Not enough questions in a pilot stratum.");
+        var random = new Random(seed);
+        var selected = groups.SelectMany(group =>
+        {
+            var candidates = group.OrderBy(item => item.Row).ToArray();
+            random.Shuffle(candidates);
+            return candidates.Take(count);
+        }).Select(item => item.Row).ToHashSet();
+        return items.Where(item => selected.Contains(item.Row)).ToArray();
+    }
+
     private static async Task GradePendingAsync(IReadOnlyList<Item> items, string rubric, Rq1JudgeRubric current,
         JudgeCheckpoint checkpoint,
         ILlmJudgeClient judge, IJudgeSources? sources, Func<CancellationToken, Task<CorpusJudgeSources>>? createCorpus,
-        Dictionary<int, JudgeMaterial[]>? recorded, TextWriter console, bool v2, CancellationToken ct)
+        Dictionary<int, JudgeMaterial[]>? recorded, TextWriter console, JudgeOptions options, CancellationToken ct)
     {
         var runs = checkpoint.Header.Runs;
-        bool Complete(Item item) => checkpoint.Rows.TryGetValue(item.Row, out var saved) && (v2 || saved.IsComplete(runs));
+        bool Complete(Item item) => checkpoint.Rows.TryGetValue(item.Row, out var saved) && (options.HasCitationFlags || saved.IsComplete(runs));
         var pending = items.Where(item => !Complete(item)).ToArray();
         var processed = items.Count - pending.Length;
         await PrintProgressAsync(console, processed, items.Count, 0, 0);
@@ -176,8 +226,23 @@ public static class JudgeRun
                 if (grades[side]?.RunsCompleted == runs) continue;
                 var answer = item.Answer(side);
                 var material = materials[item.Row][side];
-                var prompt = BuildPrompt(item, rubric, current, material, answer, recorded is not null);
-                grades[side] = await GradeAsync(judge, prompt, answer, material, runs, v2, ct);
+                if (options.UsesSentenceIds)
+                {
+                    var ids = JudgeSentenceIds.CreateFromRecorded(material.Text, answer);
+                    var prompt = ids.BuildPrompt(item.Question, item.Ideas, item.Category,
+                        JudgePrompt.WithCurrentRubric(rubric, current, item.SafetySubtype));
+                    grades[side] = await JudgeSentenceIds.GradeAsync(judge, ids, prompt, material, runs, ct);
+                }
+                else
+                {
+                    var prompt = BuildPrompt(item, rubric, current, material, answer, recorded is not null);
+                    grades[side] = await GradeAsync(judge, prompt, answer, material, runs, options.HasCitationFlags, ct);
+                    if (options.V3 && grades[side] is { Diagnostics: { } diagnostics } grade)
+                        grades[side] = grade with
+                        {
+                            Diagnostics = diagnostics with { CitationUnverified = null, FormatInvalid = diagnostics.HasFormatFlag }
+                        };
+                }
             }
             var elapsed = timer.Elapsed.TotalMilliseconds;
             checkpoint.Append(new(item.Row, grades[0]!, grades[1]!, (saved?.ElapsedMs ?? 0) + elapsed));
@@ -242,15 +307,18 @@ public static class JudgeRun
         await console.WriteLineAsync($"{processed}/{total} | trung bình {StatisticsReport.Number(average)} giây/câu | còn khoảng {StatisticsReport.Number(average * (total - processed))} giây");
     }
 
-    private static JudgeRunSummary ApplyGrades(IXLWorksheet sheet, IReadOnlyList<Item> items, JudgeCheckpoint checkpoint, bool v2)
+    private static JudgeRunSummary ApplyGrades(IXLWorksheet sheet, IReadOnlyList<Item> items, JudgeCheckpoint checkpoint, JudgeOptions options)
     {
         var errors = 0; var uncertain = 0; var fabricatedA = 0; var fabricatedB = 0;
         var blankQuestions = 0;
         var citationErrorQuestions = 0;
         var uncertainQuestions = 0;
         var unverified = 0;
-        if (v2)
-            for (var side = 0; side < 2; side++) sheet.Cell(2, CitationFlagColumn + side).Value = CitationFlagHeader(side);
+        var compared = 0;
+        var agreed = 0;
+        if (options.HasCitationFlags)
+            for (var side = 0; side < 2; side++)
+                sheet.Cell(2, CitationFlagColumn + side).Value = options.V3 ? FormatFlagHeader(side) : CitationFlagHeader(side);
         int[][] scoreCounts = [new int[3], new int[3]];
         foreach (var item in items)
         {
@@ -266,12 +334,24 @@ public static class JudgeRun
                 {
                     sheet.Cell(item.Row, 6 + side).Value = score;
                     scoreCounts[side][score]++;
-                    if (grade.Diagnostics?.CitationUnverified == true) unverified++;
-                    if (v2) sheet.Cell(item.Row, CitationFlagColumn + side).Value = grade.Diagnostics?.CitationUnverified == true;
+                    if (!options.V3 && grade.Diagnostics?.CitationUnverified == true) unverified++;
+                    if (options.V2) sheet.Cell(item.Row, CitationFlagColumn + side).Value = grade.Diagnostics?.CitationUnverified == true;
                 }
                 else errors++;
+                if (options.V3)
+                {
+                    var invalid = grade.Diagnostics?.HasFormatFlag == true;
+                    if (invalid) unverified++;
+                    sheet.Cell(item.Row, CitationFlagColumn + side).Value = invalid;
+                    if (grade.Diagnostics?.AgreedRuns is int agreements)
+                    {
+                        compared += Math.Max(0, grade.RunsCompleted - 1);
+                        agreed += agreements;
+                    }
+                }
                 if (grade.Safety is not null) sheet.Cell(item.Row, 8 + side).Value = grade.Safety;
-                notes.Add($"{(side == 0 ? "A" : "B")}: {grade.Note}");
+                var note = options.V3 ? grade.Note.Replace("citation_unverified", "format_invalid", StringComparison.Ordinal) : grade.Note;
+                notes.Add($"{(side == 0 ? "A" : "B")}: {note}");
                 if (grade.Uncertain) uncertain++;
             }
             if (grades.Any(grade => !grade.Score.HasValue)) blankQuestions++;
@@ -283,7 +363,8 @@ public static class JudgeRun
         var header = checkpoint.Header;
         return new JudgeRunSummary(header.Model, header.Seed, header.Runs, items.Count, errors, uncertain,
             fabricatedA, fabricatedB, header.StartedAtUtc, checkpoint.Rows.Values.Sum(row => row.ElapsedMs),
-            "Unique normalized fabricated claim text per answer across successful runs; errors/uncertainty count answers, not questions.")
+            options.UsesSentenceIds ? "Out-of-source sentence IDs in the first run per answer." :
+                "Unique normalized fabricated claim text per answer across successful runs; errors/uncertainty count answers, not questions.")
         {
             FullyGradedQuestions = items.Count - blankQuestions,
             QuestionsWithBlanks = blankQuestions,
@@ -292,7 +373,13 @@ public static class JudgeRun
             ScoreCountsA = scoreCounts[0],
             ScoreCountsB = scoreCounts[1],
             CheckpointId = header.Id,
-            CitationUnverifiedAnswers = unverified
+            LegacyCitationUnverifiedAnswers = options.V3 ? null : unverified,
+            FormatInvalidAnswers = options.V3 ? unverified : null,
+            ComparedRuns = options.UsesSentenceIds ? compared : null,
+            AgreedRuns = options.UsesSentenceIds ? agreed : null,
+            NumCtx = header.Context,
+            RetryCount = checkpoint.Rows.Values.Sum(row =>
+                (row.A.Diagnostics?.RetryCount ?? 0) + (row.B.Diagnostics?.RetryCount ?? 0))
         };
     }
 
@@ -301,9 +388,16 @@ public static class JudgeRun
         await console.WriteLineAsync($"Số câu: {summary.Questions}");
         await console.WriteLineAsync($"Model: {summary.Model}; seed: {summary.Seed}; runs: {summary.Runs}");
         await console.WriteLineAsync($"Số lỗi chấm (câu trả lời): {summary.GradingErrors}; số phân vân (câu trả lời): {summary.UncertainAnswers}");
-        await console.WriteLineAsync($"Số câu chấm đủ A/B: {summary.FullyGradedQuestions}; có ô trống: {summary.QuestionsWithBlanks}; có lỗi trích dẫn dẫn đến ô trống: {summary.QuestionsWithCitationErrors}; lệch điểm giữa các lần chấm: {summary.QuestionsWithScoreDisagreement}");
+        await console.WriteLineAsync($"Số câu chấm đủ A/B: {summary.FullyGradedQuestions}; có ô trống: {summary.QuestionsWithBlanks}; câu có cờ lỗi trích dẫn: {summary.QuestionsWithCitationErrors}; lệch giữa các lần chấm: {summary.QuestionsWithScoreDisagreement}");
+        await console.WriteLineAsync($"Số ô trống: {summary.GradingErrors}");
         await console.WriteLineAsync($"Phân bố điểm A (0/1/2): {string.Join("/", summary.ScoreCountsA)}; B (0/1/2): {string.Join("/", summary.ScoreCountsB)}");
-        await console.WriteLineAsync($"Số ô citation_unverified: {summary.CitationUnverifiedAnswers}");
+        if (options.V3)
+            await console.WriteLineAsync($"Số ô format_invalid: {summary.FormatInvalidAnswers}");
+        else
+            await console.WriteLineAsync($"Số ô citation_unverified: {summary.CitationUnverifiedAnswers}");
+        if (summary.ComparedRuns is int comparisons)
+            await console.WriteLineAsync($"Lần chấm sau khớp điểm và an toàn với lần đầu: {summary.AgreedRuns}/{comparisons}");
+        await console.WriteLineAsync($"num_ctx: {summary.NumCtx}; retry trung bình/ô: {StatisticsReport.Number(summary.RetryCount / (2.0 * summary.Questions))}");
         await console.WriteLineAsync($"Tổng mệnh đề BỊA A/B: {summary.FabricatedClaimsA}/{summary.FabricatedClaimsB}");
         await console.WriteLineAsync($"Thời gian chấm đã lưu (ms): {StatisticsReport.Number(summary.ElapsedMs)}");
         await console.WriteLineAsync($"Trung bình đã lưu (giây/câu): {StatisticsReport.Number(summary.ElapsedMs / (1000 * summary.Questions))}");
@@ -405,3 +499,5 @@ public static class JudgeRun
 }
 
 internal sealed class JudgeRecordedSourcesException(string message) : IOException(message);
+
+internal sealed class JudgeMissingIdeasException(string message) : IOException(message);

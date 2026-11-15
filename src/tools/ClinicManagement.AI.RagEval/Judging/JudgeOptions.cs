@@ -7,11 +7,18 @@ public enum JudgeSourceMode { Recorded, Corpus }
 
 public sealed record JudgeOptions(string Xlsx, string Output, string Model, int Runs, int Seed)
 {
-    public string Metadata => Path.Combine(Path.GetDirectoryName(Output)!, V2 ? "judge-run-v2.json" : "judge-run.json");
-    public string Checkpoint => Path.Combine(Path.GetDirectoryName(Output)!, V2 ? "judge-checkpoint-v2.jsonl" : "judge-checkpoint.jsonl");
+    private string Suffix => Version == 1 ? "" : $"-v{Version}";
+    public string Metadata => Path.Combine(Path.GetDirectoryName(Output)!, $"judge-run{Suffix}.json");
+    public string Checkpoint => Path.Combine(Path.GetDirectoryName(Output)!, $"judge-checkpoint{Suffix}.jsonl");
     public bool Resume { get; init; }
     public bool SeedSpecified { get; init; } = true;
     public bool V2 { get; init; }
+    public bool V3 { get; init; }
+    public int Version => V3 ? 3 : V2 ? 2 : 1;
+    public bool HasCitationFlags => Version >= 2;
+    internal bool UsesSentenceIds => V3 && SourceMode == JudgeSourceMode.Recorded;
+    public int? PilotStratified { get; init; }
+    public string? Master { get; init; }
     public bool MeasurePrompt { get; init; }
     public int? Limit { get; init; }
     public int Context { get; init; } = 8192;
@@ -35,7 +42,8 @@ public sealed record JudgeOptions(string Xlsx, string Output, string Model, int 
             }
             if (flag == "--v2" && !v2) { v2 = true; continue; }
             if (flag == "--measure-prompt" && !measure) { measure = true; continue; }
-            if (flag is not ("--xlsx" or "--out" or "--model" or "--runs" or "--seed" or "--limit" or "--context" or "--safety-classification" or "--judge-sources") || ++i >= args.Length ||
+            if (flag is not ("--xlsx" or "--out" or "--model" or "--runs" or "--seed" or "--limit" or "--context" or
+                "--safety-classification" or "--judge-sources" or "--judge-version" or "--pilot-stratified" or "--master") || ++i >= args.Length ||
                 args[i].StartsWith("--", StringComparison.Ordinal) || !values.TryAdd(flag, args[i]))
                 throw new ArgumentException("Invalid judge options.");
         }
@@ -55,13 +63,23 @@ public sealed record JudgeOptions(string Xlsx, string Output, string Model, int 
             _ => throw new ArgumentException("--judge-sources must be recorded or corpus.")
         };
         int? limit = values.TryGetValue("--limit", out var rawLimit) ? int.Parse(rawLimit, CultureInfo.InvariantCulture) : null;
-        if (runs < 1 || string.IsNullOrWhiteSpace(model) || context is not (4096 or 8192) || limit is <= 0 ||
-            !v2 && (limit.HasValue || measure || context != 8192) || measure && resume)
+        var version = int.Parse(values.GetValueOrDefault("--judge-version", v2 ? "2" : "1"), CultureInfo.InvariantCulture);
+        int? pilot = values.TryGetValue("--pilot-stratified", out var rawPilot) ? int.Parse(rawPilot, CultureInfo.InvariantCulture) : null;
+        var master = values.GetValueOrDefault("--master");
+        if (runs < 1 || string.IsNullOrWhiteSpace(model) || version is < 1 or > 3 || v2 && version != 2 || limit is <= 0 ||
+            (version == 3 ? context < 1024 || context % 256 != 0 : context is not (4096 or 8192)) ||
+            version == 1 && (limit.HasValue || measure || context != 8192) || measure && resume ||
+            pilot is <= 0 || pilot.HasValue && (version != 3 || limit.HasValue || master is null) ||
+            master is not null && (!pilot.HasValue || !master.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)))
             throw new ArgumentException("Invalid judge options.");
+        if (version == 3 && (Path.GetFileName(output).Equals("RAG_phieu_cham_AI.xlsx", StringComparison.OrdinalIgnoreCase) ||
+            Path.GetFileName(output).Equals("RAG_phieu_cham_AI_v2.xlsx", StringComparison.OrdinalIgnoreCase)))
+            throw new ArgumentException("Use a separate output workbook for judge v3.");
         return new(Path.GetFullPath(input), Path.GetFullPath(output), model, runs, seed)
         {
             Resume = resume,
-            SeedSpecified = seedSpecified, V2 = v2, Limit = limit, Context = context, MeasurePrompt = measure,
+            SeedSpecified = seedSpecified, V2 = version == 2, V3 = version == 3, Limit = limit, Context = context,
+            MeasurePrompt = measure, PilotStratified = pilot, Master = master is null ? null : Path.GetFullPath(master),
             SafetyClassificationPath = values.GetValueOrDefault("--safety-classification"), SourceMode = sourceMode
         };
     }
