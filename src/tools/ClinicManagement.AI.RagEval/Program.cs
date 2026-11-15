@@ -137,13 +137,29 @@ if (mode == "blind-answers")
 }
 if (mode is not ("bm25" or "hybrid" or "end-to-end" or "end-to-end-hybrid" or "sweep"))
     throw new ArgumentException("Usage: RagEval [bm25|hybrid|end-to-end|end-to-end-hybrid|sweep] [output.json] [--questions baseline|v2|combined|path.json] [--csv path.csv]; dense|compare-retrieval [--questions baseline|v2|combined|path.json|--csv path.csv|--xlsx path.xlsx] [--output new.json]; rq1-stats --xlsx merged.xlsx [--primary grader1|grader2|mean] [--reviewed-xlsx reviewed.xlsx] [--output new.json]; y-chinh-template --xlsx questions.xlsx; grading-sheet-v2 --master master.xlsx --ideas y-chinh.xlsx [--sources sources.xlsx|--retrieval excerpt-replay.json]; excerpt-replay --hidden-eval --xlsx questions.xlsx --master master.xlsx --out new.json (historical build); retrieval-replay --hidden-eval --xlsx questions.xlsx --master master.xlsx --out new.json --source-commit SHA --embedding-digest DIGEST; blind-answers (--csv path.csv|--xlsx path.xlsx) --out-dir external-directory [--seed integer] [--retrieval hybrid|bm25]; merge-grades --master master.xlsx --grader2 grader2.xlsx --out new.xlsx [--grader1 grader1.xlsx]");
-var input = EvaluationInput.Parse(args.Skip(1).ToArray());
+var lowIdfSweep = mode == "sweep" && args.ElementAtOrDefault(1) == "--low-idf-fallback"
+    ? LowIdfFallbackSweep.Parse(args[2..])
+    : null;
+var input = lowIdfSweep?.Input ?? EvaluationInput.Parse(args.Skip(1).ToArray());
 var questions = await input.LoadAsync();
 var classifier = new VietnameseIntentClassifier();
 var environment = new EvaluationEnvironment();
 using var http = new HttpClient(new SocketsHttpHandler { UseProxy = false, ConnectTimeout = TimeSpan.FromSeconds(2) })
     { Timeout = Timeout.InfiniteTimeSpan };
 var catalog = new MarkdownKnowledgeCatalog();
+if (lowIdfSweep is not null)
+{
+    var defaults = new OllamaOptions();
+    var reports = new List<object>();
+    foreach (var threshold in LowIdfFallbackSweep.Thresholds)
+    {
+        var result = await RunOnce("hybrid", true, false, defaults.MinScore, defaults.MinQueryCoverage,
+            defaults.MinTermIdf, defaults.MinCosine, threshold);
+        reports.Add(result.Report);
+    }
+    await WriteSweepAsync(reports);
+    return;
+}
 if (mode == "sweep")
 {
     var sweepResults = new List<object>();
@@ -187,13 +203,7 @@ if (mode == "sweep")
             e2eHybridRejection = Math.Round(e2eHybrid.CorrectRejection * 100, 2)
         });
     }
-    var sweepJson = JsonSerializer.Serialize(sweepResults, new JsonSerializerOptions { WriteIndented = true });
-    Console.WriteLine(sweepJson);
-    if (input.OutputPath is not null)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(input.OutputPath))!);
-        await File.WriteAllTextAsync(input.OutputPath, sweepJson + Environment.NewLine);
-    }
+    await WriteSweepAsync(sweepResults);
     return;
 }
 var endToEnd = mode.StartsWith("end-to-end", StringComparison.Ordinal);
@@ -208,12 +218,25 @@ if (input.OutputPath is not null)
     await File.WriteAllTextAsync(input.OutputPath, json + Environment.NewLine);
 }
 
+async Task WriteSweepAsync(List<object> reports)
+{
+    var sweepJson = JsonSerializer.Serialize(reports, new JsonSerializerOptions { WriteIndented = true });
+    Console.WriteLine(sweepJson);
+    if (input.OutputPath is not null)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(input.OutputPath))!);
+        await File.WriteAllTextAsync(input.OutputPath, sweepJson + Environment.NewLine);
+    }
+}
+
 async Task<(double HitAt1, double HitAt3, double CorrectRejection, object Report)> RunOnce(
-    string currentMode, bool useHybrid, bool useEndToEnd, double minScore, double minCoverage, double minIdf, double minCosine)
+    string currentMode, bool useHybrid, bool useEndToEnd, double minScore, double minCoverage, double minIdf,
+    double minCosine, double? lowIdfFallbackCosine = null)
 {
     var options = Options.Create(new OllamaOptions
     {
-        IsEnabled = useHybrid, MinScore = minScore, MinQueryCoverage = minCoverage, MinTermIdf = minIdf, MinCosine = minCosine
+        IsEnabled = useHybrid, MinScore = minScore, MinQueryCoverage = minCoverage, MinTermIdf = minIdf,
+        MinCosine = minCosine, LowIdfFallbackCosine = lowIdfFallbackCosine
     });
     var ollama = new OllamaKnowledgeClient(http, options);
     using var retriever = new ClinicKnowledgeRetriever(catalog, ollama, options, environment, NullLogger<ClinicKnowledgeRetriever>.Instance);
@@ -281,6 +304,29 @@ async Task<(double HitAt1, double HitAt3, double CorrectRejection, object Report
     var rej = (double)rejected / outside;
     var avgMs = samples.Average();
     var p95Ms = sorted[(int)Math.Ceiling(sorted.Length * 0.95) - 1];
+    if (lowIdfSweep is not null)
+    {
+        var probes = new List<object>();
+        foreach (var question in lowIdfSweep.Probes)
+        {
+            var result = await retriever.RetrieveAsync(question);
+            if (result.EmbeddingWasCalled != result.HybridUsed || ollama.LastFailureCode is not null)
+                throw new InvalidOperationException("Probe query embedding did not complete.");
+            probes.Add(new
+            {
+                question,
+                result.EmbeddingWasCalled,
+                result.HybridUsed,
+                hits = result.Hits.Select(h => new { chunkId = h.Chunk.Id, docId = h.Chunk.Source.DocId, h.Score }).ToArray()
+            });
+        }
+        return (h1, h3, rej, new
+        {
+            mode = currentMode, lowIdfFallbackCosine, minScore, minQueryCoverage = minCoverage, minTermIdf = minIdf,
+            minCosine, topK = options.Value.TopK, embeddingModel = options.Value.EmbeddingModel, chunks = catalog.Chunks.Count,
+            n = questions.Length, inScope, outside, hitAt1 = h1, hitAt3 = h3, correctRejection = rej, byCategory, probes
+        });
+    }
     object report = input.IsCsv
         ? new
         {

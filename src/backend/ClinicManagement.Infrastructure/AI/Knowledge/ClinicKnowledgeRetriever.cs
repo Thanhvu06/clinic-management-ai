@@ -87,9 +87,14 @@ public sealed class ClinicKnowledgeRetriever(MarkdownKnowledgeCatalog catalog, O
         var minCoverage = Math.Clamp(options.Value.MinQueryCoverage, 0, 1);
         var minTermIdf = Math.Max(0, options.Value.MinTermIdf);
         var accepted = lexical.Where(h => h.Score >= min).ToArray();
-        if (accepted.Length == 0 || !_bm25.MeetsCoverage(maskedQuestion, accepted[0].Chunk, minCoverage, minTermIdf))
-            return new([]);
+        if (accepted.Length == 0) return new([]);
+        var bestLexical = accepted[0].Chunk;
+        var passedLexical = _bm25.MeetsCoverage(maskedQuestion, bestLexical, minCoverage, minTermIdf);
+        var fallbackCosine = passedLexical ? null : options.Value.LowIdfFallbackCosine;
         var vectors = Volatile.Read(ref _embeddings);
+        if (!passedLexical && (fallbackCosine is null || !options.Value.IsEnabled || vectors is null ||
+            !_bm25.MeetsCoverage(maskedQuestion, bestLexical, minCoverage, 0)))
+            return new([]);
         var called = false;
         var hybridUsed = false;
         IReadOnlyList<KnowledgeHit> ranked = accepted;
@@ -102,7 +107,8 @@ public sealed class ClinicKnowledgeRetriever(MarkdownKnowledgeCatalog catalog, O
                 var minCosine = Math.Clamp(options.Value.MinCosine, 0, 1);
                 var cosines = catalog.Chunks.Select((chunk, i) => (chunk, Score: Bm25KnowledgeIndex.Cosine(query.Value[0], vectors[i])))
                     .ToDictionary(x => x.chunk.Id, x => x.Score, StringComparer.Ordinal);
-                if (cosines[accepted[0].Chunk.Id] < minCosine)
+                if (cosines[bestLexical.Id] < minCosine ||
+                    fallbackCosine is { } threshold && accepted.Max(hit => cosines[hit.Chunk.Id]) < threshold)
                     return new([], called, true);
                 var semantic = accepted.Select(a => new KnowledgeHit(a.Chunk, cosines[a.Chunk.Id]))
                     .Where(h => h.Score >= Math.Max(0.55, minCosine))
@@ -111,6 +117,7 @@ public sealed class ClinicKnowledgeRetriever(MarkdownKnowledgeCatalog catalog, O
                 hybridUsed = true;
             }
         }
+        if (fallbackCosine.HasValue && !hybridUsed) return new([], called);
         return new(ranked.Take(Math.Clamp(options.Value.TopK, 1, 10)).ToArray(), called, hybridUsed);
     }
 

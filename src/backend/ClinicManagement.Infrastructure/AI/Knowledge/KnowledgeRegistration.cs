@@ -11,6 +11,7 @@ public static class KnowledgeRegistration
     {
         services.AddOptions<OllamaOptions>().Bind(configuration.GetSection(OllamaOptions.SectionName))
             .Validate(options => options.TimeoutSeconds is >= 1 and <= 120 && options.TopK is >= 1 and <= 10 &&
+                options.LowIdfFallbackCosine is (null or >= 0 and <= 1) &&
                 options.MinScore is > 0 and <= 1 && Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var uri) &&
                 uri.IsLoopback && uri.Scheme == "http" && string.IsNullOrEmpty(uri.UserInfo), "Invalid local RAG configuration.")
             .ValidateOnStart();

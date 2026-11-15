@@ -12,6 +12,7 @@ public sealed class OllamaOptions
     public double MinQueryCoverage { get; set; } = 0.5;
     public double MinTermIdf { get; set; } = 1.25;
     public double MinCosine { get; set; } = 0.20;
+    public double? LowIdfFallbackCosine { get; set; }
     public int TopK { get; set; } = 4;
 
     public Uri LocalEndpoint(string path)
