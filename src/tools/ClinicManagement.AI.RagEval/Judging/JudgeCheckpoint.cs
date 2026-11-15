@@ -1,9 +1,13 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace ClinicManagement.AI.RagEval;
 
+internal sealed record JudgeV3Checklist(string C1, string C2, bool C3, bool C4, string C5);
+
 internal sealed record JudgeGrade(int? Score, string? Safety, string Note, int Fabrications, bool Uncertain,
-    int RunsCompleted, bool CitationError = false, JudgeGradeDiagnostics? Diagnostics = null)
+    int RunsCompleted, bool CitationError = false, JudgeGradeDiagnostics? Diagnostics = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JudgeV3Checklist? Checklist = null)
 {
     public bool IsValid(int runs, bool v3) => RunsCompleted >= 0 && RunsCompleted <= runs && Fabrications >= 0 &&
         Note is not null && ((RunsCompleted == runs || v3 && Score.HasValue && RunsCompleted > 0)
@@ -17,7 +21,8 @@ internal sealed record JudgeCheckpointRow(int Row, JudgeGrade A, JudgeGrade B, d
 }
 
 internal sealed record JudgeCheckpointHeader(int Version, Guid Id, string InputSha256, string OutputFile,
-    string Model, int Runs, int Seed, DateTimeOffset StartedAtUtc, int Context = 8192, string? SourceMode = null);
+    string Model, int Runs, int Seed, DateTimeOffset StartedAtUtc, int Context = 8192, string? SourceMode = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? SentenceSplitterVersion = null);
 
 internal sealed class JudgeCheckpointException(string message) : IOException(message);
 
@@ -49,7 +54,8 @@ internal sealed class JudgeCheckpoint : IDisposable
             if (File.Exists(options.Checkpoint))
                 throw new JudgeCheckpointException("Judge checkpoint already exists. Use --resume or a different output directory.");
             var initial = new JudgeCheckpointHeader(options.Version, Guid.NewGuid(), inputSha256, Path.GetFileName(options.Output),
-                options.Model, options.Runs, options.Seed, DateTimeOffset.UtcNow, options.Context, options.SourceModeName);
+                options.Model, options.Runs, options.Seed, DateTimeOffset.UtcNow, options.Context, options.SourceModeName,
+                options.UsesSentenceIds ? JudgeSentenceIds.SplitterVersion : null);
             JudgeOutputFiles.Publish(options.Checkpoint, path =>
             {
                 using var writer = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
@@ -70,6 +76,8 @@ internal sealed class JudgeCheckpoint : IDisposable
             var header = Read<JudgeCheckpointHeader>(bytes[..headerEnd]);
             if ((header.SourceMode ?? "corpus") != options.SourceModeName)
                 throw new JudgeCheckpointException("Judge checkpoint source mode differs. Resume with the original --judge-sources value.");
+            if (options.UsesSentenceIds && header.Version == 3 && header.SentenceSplitterVersion != JudgeSentenceIds.SplitterVersion)
+                throw new JudgeCheckpointException("Judge checkpoint sentence splitter version differs. Start a new v3 recorded run with a new output directory.");
             var expectedHash = header.SourceMode is not null ? inputSha256 : options.V3 ? workbookHash : legacyHash;
             if (header.Version != options.Version || header.Context != options.Context || header.Id == Guid.Empty || header.InputSha256 != expectedHash ||
                 header.OutputFile != Path.GetFileName(options.Output) || header.Model != options.Model ||
