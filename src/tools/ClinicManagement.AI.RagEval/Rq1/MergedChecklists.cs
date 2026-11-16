@@ -60,8 +60,13 @@ internal static class MergedChecklists
         return (copied, sourceRows.Keys.Count(code => !rows.ContainsKey(code)));
     }
 
-    private static bool SameText(IXLWorksheet left, int leftRow, int leftCol, IXLWorksheet right, int rightRow, int rightCol) =>
-        Rq1Workbook.Text(left.Cell(leftRow, leftCol)) == Rq1Workbook.Text(right.Cell(rightRow, rightCol));
+    private static bool SameText(IXLWorksheet left, int leftRow, int leftCol, IXLWorksheet right, int rightRow, int rightCol)
+    {
+        return NormalizeLineEndings(left.Cell(leftRow, leftCol)) == NormalizeLineEndings(right.Cell(rightRow, rightCol));
+
+        static string NormalizeLineEndings(IXLCell cell) =>
+            Rq1Workbook.Text(cell).Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+    }
 
     internal static void Remove(XLWorkbook workbook, int start)
     {
