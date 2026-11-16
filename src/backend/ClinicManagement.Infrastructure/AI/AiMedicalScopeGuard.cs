@@ -63,17 +63,35 @@ public static class AiMedicalScopeGuard
         @"\bke\s+them\b|\bke\s+(?:thuoc|don)\s+moi\b|\bthem\s+(?:thuoc|don\s+thuoc)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
+    private const string QuantityQuestion = @"(?:bao\s+(?:nhiêu|nhieu)|mấy|may)";
+    private const string ExplicitDoseAmount = @"(?:liều|lieu\s+(?:dung|luong)|gấp\s+đôi|gap\s+doi)";
+    private const string DoseAmount = $@"\b(?:{QuantityQuestion}|{ExplicitDoseAmount})\b";
+    private const string MedicationUseAmount =
+        $@"\b(?:(?<!\b(?:nước|nuoc)\s){QuantityQuestion}(?!\s+(?:nước|nuoc)\b)|{ExplicitDoseAmount})\b";
+    private const string MedicationUseVerb =
+        @"\b(?:(?:uống|uong|dùng|dung|nhỏ|nho|bôi|boi|tiêm|tiem|ngậm|ngam|dán|dan|xịt|xit)\b|" +
+        @"(?:đặt|dat)\b(?!\s+(?:lịch|lich|hẹn|hen)\b))";
+
     private static readonly Regex DosageSuggestion = new(
-        @"\b(?:co\s+nen|nen)\b.{0,40}\b(?:bao\s+nhieu|may|lieu|tang|giam|gap\s+doi)\b|" +
-        @"\b(?:bao\s+nhieu|may|lieu|tang|giam|gap\s+doi)\b.{0,40}\b(?:co\s+nen|nen)\b|" +
-        @"\buong\b.{0,40}\b(?:bao\s+nhieu|may)\s+goi\s+(?:thuoc|oresol)\b",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+        $@"\b(?:nên|nen)\b.{{0,40}}{DoseAmount}|{DoseAmount}.{{0,40}}\b(?:nên|nen)\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex MedicationUseWithDose = new(
+        $@"{MedicationUseVerb}.{{0,40}}{MedicationUseAmount}|{MedicationUseAmount}.{{0,40}}{MedicationUseVerb}",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex DoseAdjustment = new(
+        @"\b(?:tăng|giảm)\s+liều\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex TimingQuestion = new(
         @"\b(?:(?:bao\s+nhieu|may)\s+(?:phut|gio|tieng)|(?:den|toi|co\s+mat)\s+som)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex MedicationDoseContext = new(
-        @"\b(?:thuoc|vien|lieu|siro|goi|ong|giot|mieng\s+dan|khang\s+sinh|ha\s+sot|giam\s+dau|" +
+        @"\b(?:thuoc|vien|siro|giot|mieng\s+dan|khang\s+sinh|ha\s+sot|giam\s+dau|" +
         @"paracetamol|ibuprofen|amoxicillin|aspirin|oresol)\b|(?<![\p{L}_])(?:mg|mcg|ml)\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private const string QualifiedDoseUnit = @"(?:gói|goi|ống|ong|liều|lieu)\b";
+    private static readonly Regex MedicationDoseUnitContext = new(
+        $@"\b(?:\d+\s*|{QuantityQuestion}\s+){QualifiedDoseUnit}|" +
+        $@"\b{QualifiedDoseUnit}\s+(?:thuốc|thuoc|oresol|tiêm|tiem)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex MedicationRecommendation = new(
         @"\b(?:(?:thi co (?:can|nen) (?:cho )?uong thuoc|co (?:can|nen) (?:cho )?uong khang sinh) (?:hay )?khong|" +
@@ -106,12 +124,17 @@ public static class AiMedicalScopeGuard
         {
             var clausePreserved = clause.Preserved;
             var clauseFolded = clause.Folded;
-            if (DosageSuggestion.IsMatch(clauseFolded) &&
-                (!TimingQuestion.IsMatch(clauseFolded) || MedicationDoseContext.IsMatch(clauseFolded)))
-                return true;
-
             var isReadClause = PreservedPrescriptionRead.IsMatch(clausePreserved) ||
                                FoldedPrescriptionRead.IsMatch(clauseFolded);
+            var asksMedicationAmount = MedicationUseWithDose.IsMatch(clausePreserved);
+            var hasDoseContext = MedicationDoseContext.IsMatch(clauseFolded) ||
+                                 MedicationDoseUnitContext.IsMatch(clausePreserved) ||
+                                 DoseAdjustment.IsMatch(clausePreserved);
+            if ((asksMedicationAmount && hasDoseContext && !isReadClause) ||
+                (DosageSuggestion.IsMatch(clausePreserved) &&
+                 (hasDoseContext || (asksMedicationAmount && !TimingQuestion.IsMatch(clauseFolded)))))
+                return true;
+
             var isSoftRequest = AccentedDoseRequest.IsMatch(clausePreserved) ||
                                 PrescriptionRequest.IsMatch(clauseFolded) ||
                                 UnaccentedDoseRequest.IsMatch(clauseFolded) ||
