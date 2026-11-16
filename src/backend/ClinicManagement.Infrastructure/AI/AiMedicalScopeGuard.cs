@@ -11,6 +11,8 @@ namespace ClinicManagement.Infrastructure.AI;
 /// </summary>
 public static class AiMedicalScopeGuard
 {
+    internal const string PatientRefusal = "Tôi không thể kê đơn hoặc hướng dẫn liều dùng qua cuộc trò chuyện. Vui lòng liên hệ bác sĩ, dược sĩ hoặc phòng khám để được hướng dẫn.";
+
     // Output is not a user question: numeric dosing and authored prescriptions
     // must be rejected even without request words such as "bao nhiêu".
     private static readonly Regex ProviderDoseOrPrescriptionAdvice = new(
@@ -64,6 +66,15 @@ public static class AiMedicalScopeGuard
     private static readonly Regex DosageSuggestion = new(
         @"\b(?:co\s+nen|nen)\b.{0,40}\b(?:bao\s+nhieu|may|lieu|tang|giam|gap\s+doi)\b|\b(?:bao\s+nhieu|may|lieu|tang|giam|gap\s+doi)\b.{0,40}\b(?:co\s+nen|nen)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    private static readonly Regex MedicationDoseContext = new(
+        @"\b(?:thuoc|vien|mg|mcg|ml|lieu dung|lieu luong)\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex MedicationRecommendation = new(
+        @"\b(?:(?:thi co (?:can|nen) (?:cho )?uong thuoc|co (?:can|nen) (?:cho )?uong khang sinh) (?:hay )?khong|" +
+        @"co (?:nen )?uong (?:thuoc|khang sinh)(?: (?!sau\b|truoc\b|luc\b)\p{L}+){0,3} duoc (?:khong|ko|k)|" +
+        @"(?:nen|can) (?:cho )?uong thuoc (?:gi|nao)|" +
+        @"uong (?:thuoc|khang sinh) (?:may|bao nhieu) ngay\b.{0,35}\b(?:ngung|dung))\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     public static bool IsPrescriptionRequest(string? message) =>
         IsPrescriptionRequest(AiActorRole.Patient, message);
@@ -89,14 +100,16 @@ public static class AiMedicalScopeGuard
         {
             var clausePreserved = clause.Preserved;
             var clauseFolded = clause.Folded;
-            if (DosageSuggestion.IsMatch(clauseFolded))
+            if (DosageSuggestion.IsMatch(clauseFolded) &&
+                (MedicationDoseContext.IsMatch(clauseFolded) || Regex.IsMatch(clausePreserved, @"\bliều\b")))
                 return true;
 
             var isReadClause = PreservedPrescriptionRead.IsMatch(clausePreserved) ||
                                FoldedPrescriptionRead.IsMatch(clauseFolded);
             var isSoftRequest = AccentedDoseRequest.IsMatch(clausePreserved) ||
                                 PrescriptionRequest.IsMatch(clauseFolded) ||
-                                UnaccentedDoseRequest.IsMatch(clauseFolded);
+                                UnaccentedDoseRequest.IsMatch(clauseFolded) ||
+                                MedicationRecommendation.IsMatch(clauseFolded);
             if (isSoftRequest && !isReadClause)
                 return true;
         }
