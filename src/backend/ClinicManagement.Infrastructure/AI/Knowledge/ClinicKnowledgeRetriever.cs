@@ -86,10 +86,11 @@ public sealed class ClinicKnowledgeRetriever(MarkdownKnowledgeCatalog catalog, O
         var min = Math.Clamp(options.Value.MinScore, 0, 1);
         var minCoverage = Math.Clamp(options.Value.MinQueryCoverage, 0, 1);
         var minTermIdf = Math.Max(0, options.Value.MinTermIdf);
-        var accepted = lexical.Where(h => h.Score >= min).ToArray();
+        var visitPreparation = KnowledgeQuestionPolicy.IsVisitPreparationQuestion(KnowledgeText.Normalize(maskedQuestion));
+        var accepted = lexical.Where(h => h.Score >= min && (!visitPreparation || h.Chunk.Source.DocId == "prepare-visit")).ToArray();
         if (accepted.Length == 0) return new([]);
         var bestLexical = accepted[0].Chunk;
-        var passedLexical = _bm25.MeetsCoverage(maskedQuestion, bestLexical, minCoverage, minTermIdf);
+        var passedLexical = _bm25.MeetsCoverage(maskedQuestion, bestLexical, minCoverage, visitPreparation ? 0 : minTermIdf);
         var fallbackCosine = passedLexical ? null : options.Value.LowIdfFallbackCosine;
         var vectors = Volatile.Read(ref _embeddings);
         if (!passedLexical && (fallbackCosine is null || !options.Value.IsEnabled || vectors is null ||
