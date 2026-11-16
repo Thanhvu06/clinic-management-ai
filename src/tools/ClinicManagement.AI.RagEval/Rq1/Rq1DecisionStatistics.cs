@@ -81,7 +81,7 @@ internal static class Rq1DecisionStatistics
             : overall.T3.Passed == true ? Better
             : "chưa đủ dữ liệu để tính tỉ lệ thông tin sai";
         return new(source.Name, expected, incomplete, unknownRetrieval, overall,
-            Analyze(observations.Where(item => item.Retrieved == true).ToArray()), conclusion);
+            Analyze(observations.Where(item => item.Retrieved == true && item.ExpectsAnswer).ToArray()), conclusion);
     }
 
     private static Rq1ChecklistAnalysis Analyze(IReadOnlyList<Observation> rows)
@@ -140,7 +140,7 @@ internal static class Rq1DecisionStatistics
     {
         await console.WriteLineAsync($"Checklist {report.Grader} ({(reviewed ? "sau xem lại" : "trước xem lại")}) | Cặp đủ/thiếu: {report.Overall.Pairs}/{report.IncompletePairs} | Chưa rõ truy xuất: {report.UnknownRetrieval}");
         await WriteGroup("Tổng", report.Overall);
-        await WriteGroup("Truy xuất thành công", report.SuccessfulRetrieval);
+        await WriteGroup("Truy xuất thành công (trong phạm vi/diễn đạt khác, ≥1 đoạn)", report.SuccessfulRetrieval);
         if (!reviewed) await console.WriteLineAsync($"Kết luận RQ1: {report.Conclusion}");
         await console.WriteLineAsync("Biên 5 điểm % là giới hạn do cỡ mẫu 150. Ngưỡng thông tin sai 5% do nhóm chọn trước, thầy duyệt, không theo chuẩn ngoài.");
 

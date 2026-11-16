@@ -185,7 +185,7 @@ public class RagRq1RubricTests
         Assert.Equal("grader2", stats.Grader);
         Assert.Equal(2, stats.Overall.Pairs);
         Assert.Equal(2, stats.Overall.T1.Wins);
-        Assert.Equal(1, stats.SuccessfulRetrieval.Pairs);
+        Assert.Equal(0, stats.SuccessfulRetrieval.Pairs);
         Assert.Equal(1, stats.Overall.T3.ContentAnswers.Total);
         Assert.Equal(0, stats.Overall.T3.ContentAnswers.Wrong);
         Assert.Equal(2, stats.Overall.T3.AllQuestions.Total);
