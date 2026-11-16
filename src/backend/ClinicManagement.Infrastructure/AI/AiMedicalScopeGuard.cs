@@ -63,7 +63,11 @@ public static class AiMedicalScopeGuard
         @"\bke\s+them\b|\bke\s+(?:thuoc|don)\s+moi\b|\bthem\s+(?:thuoc|don\s+thuoc)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
-    private const string DoseAmount = @"\b(?:bao\s+(?:nhiêu|nhieu)|mấy|may|liều|lieu\s+(?:dung|luong)|gấp\s+đôi|gap\s+doi)\b";
+    private const string QuantityQuestion = @"(?:bao\s+(?:nhiêu|nhieu)|mấy|may)";
+    private const string ExplicitDoseAmount = @"(?:liều|lieu\s+(?:dung|luong)|gấp\s+đôi|gap\s+doi)";
+    private const string DoseAmount = $@"\b(?:{QuantityQuestion}|{ExplicitDoseAmount})\b";
+    private const string MedicationUseAmount =
+        $@"\b(?:(?<!\b(?:nước|nuoc)\s){QuantityQuestion}(?!\s+(?:nước|nuoc)\b)|{ExplicitDoseAmount})\b";
     private const string MedicationUseVerb =
         @"\b(?:(?:uống|uong|dùng|dung|nhỏ|nho|bôi|boi|tiêm|tiem|ngậm|ngam|dán|dan|xịt|xit)\b|" +
         @"(?:đặt|dat)\b(?!\s+(?:lịch|lich|hẹn|hen)\b))";
@@ -72,7 +76,7 @@ public static class AiMedicalScopeGuard
         $@"\b(?:nên|nen)\b.{{0,40}}{DoseAmount}|{DoseAmount}.{{0,40}}\b(?:nên|nen)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex MedicationUseWithDose = new(
-        $@"{MedicationUseVerb}.{{0,40}}{DoseAmount}|{DoseAmount}.{{0,40}}{MedicationUseVerb}",
+        $@"{MedicationUseVerb}.{{0,40}}{MedicationUseAmount}|{MedicationUseAmount}.{{0,40}}{MedicationUseVerb}",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex DoseAdjustment = new(
         @"\b(?:tăng|giảm)\s+liều\b",
@@ -86,7 +90,7 @@ public static class AiMedicalScopeGuard
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private const string QualifiedDoseUnit = @"(?:gói|goi|ống|ong|liều|lieu)\b";
     private static readonly Regex MedicationDoseUnitContext = new(
-        $@"\b(?:\d+\s*|(?:mấy|may|bao\s+(?:nhiêu|nhieu))\s+){QualifiedDoseUnit}|" +
+        $@"\b(?:\d+\s*|{QuantityQuestion}\s+){QualifiedDoseUnit}|" +
         $@"\b{QualifiedDoseUnit}\s+(?:thuốc|thuoc|oresol|tiêm|tiem)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex MedicationRecommendation = new(
@@ -123,11 +127,12 @@ public static class AiMedicalScopeGuard
             var isReadClause = PreservedPrescriptionRead.IsMatch(clausePreserved) ||
                                FoldedPrescriptionRead.IsMatch(clauseFolded);
             var asksMedicationAmount = MedicationUseWithDose.IsMatch(clausePreserved);
-            if ((DosageSuggestion.IsMatch(clausePreserved) || (asksMedicationAmount && !isReadClause)) &&
-                (MedicationDoseContext.IsMatch(clauseFolded) ||
-                 MedicationDoseUnitContext.IsMatch(clausePreserved) ||
-                 DoseAdjustment.IsMatch(clausePreserved) ||
-                 (asksMedicationAmount && !TimingQuestion.IsMatch(clauseFolded))))
+            var hasDoseContext = MedicationDoseContext.IsMatch(clauseFolded) ||
+                                 MedicationDoseUnitContext.IsMatch(clausePreserved) ||
+                                 DoseAdjustment.IsMatch(clausePreserved);
+            if ((asksMedicationAmount && hasDoseContext && !isReadClause) ||
+                (DosageSuggestion.IsMatch(clausePreserved) &&
+                 (hasDoseContext || (asksMedicationAmount && !TimingQuestion.IsMatch(clauseFolded)))))
                 return true;
 
             var isSoftRequest = AccentedDoseRequest.IsMatch(clausePreserved) ||

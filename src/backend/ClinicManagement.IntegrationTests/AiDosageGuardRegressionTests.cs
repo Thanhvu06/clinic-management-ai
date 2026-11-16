@@ -40,4 +40,13 @@ public sealed class AiDosageGuardRegressionTests
     {
         Assert.Equal(refused, AiMedicalScopeGuard.IsPrescriptionRequest(message));
     }
+
+    [Theory]
+    [InlineData("siêu âm bụng uống bao nhiêu nước")]
+    [InlineData("Nên uống bao nhiêu nước trước khi siêu âm?")]
+    [InlineData("Truoc khi sieu am nen uong nuoc bao nhieu?")]
+    public void Dose_guard_allows_water_intake_questions_for_test_preparation(string message)
+    {
+        Assert.False(AiMedicalScopeGuard.IsPrescriptionRequest(message));
+    }
 }
