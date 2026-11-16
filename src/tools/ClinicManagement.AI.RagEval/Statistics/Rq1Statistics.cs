@@ -21,6 +21,7 @@ public sealed record Rq1Result(int IncompleteRows, string Methods, Rq1Group Over
     public JudgeSensitivity? AiSensitivity { get; init; }
     public Rq1DecisionReport? Checklist { get; init; }
     public Rq1DecisionReport? ReviewedChecklist { get; init; }
+    public Rq1AgreementReport? Agreement { get; init; }
 }
 
 public static class Rq1Statistics
@@ -80,7 +81,7 @@ public static class Rq1Statistics
             allSources[primary].Overall, allSources[primary].ByCategory)
         {
             Primary = primary, AllSources = allSources, AiSensitivity = JudgeSensitivity.Read(workbook),
-            Checklist = decision, ReviewedChecklist = reviewedDecision
+            Checklist = decision, ReviewedChecklist = reviewedDecision, Agreement = Rq1Agreement.Read(workbook)
         };
     }
 
@@ -145,6 +146,7 @@ public static class Rq1Statistics
         await console.WriteLineAsync(report.Methods);
         if (report.Checklist is not null) await Rq1DecisionStatistics.WriteAsync(report.Checklist, console);
         if (report.ReviewedChecklist is not null) await Rq1DecisionStatistics.WriteAsync(report.ReviewedChecklist, console, reviewed: true);
+        if (report.Agreement is not null) await Rq1Agreement.WriteAsync(report.Agreement, console);
         if (report.AiSensitivity is not null) await report.AiSensitivity.WriteAsync(console);
         await console.WriteLineAsync(output);
         async Task Row(string category, Rq1Group g)

@@ -2,7 +2,8 @@ using ClosedXML.Excel;
 
 namespace ClinicManagement.AI.RagEval;
 
-internal sealed record ChecklistPair(string Category, bool Db, bool? Retrieved, Rq1Checklist? A, Rq1Checklist? B, bool? RefusedA, bool? RefusedB);
+internal sealed record ChecklistPair(string Category, bool Db, bool? Retrieved, bool HasIdeas,
+    Rq1Checklist? A, Rq1Checklist? B, bool? RefusedA, bool? RefusedB);
 internal sealed record ChecklistSource(string Name, IReadOnlyDictionary<string, ChecklistPair> Rows);
 
 internal static class MergedChecklists
@@ -35,7 +36,7 @@ internal static class MergedChecklists
                 !SameText(source, row, Rq1Workbook.AnswerB, legacy, targetRow, Rq1Workbook.AnswerB))
                 throw new InvalidDataException("A v2 grading row does not match the master's question or A/B answers.");
 
-            foreach (var column in new[] { 1, 2, Rq1Workbook.Db, Rq1Workbook.RetrievalSuccess })
+            foreach (var column in new[] { 1, 2, Rq1Workbook.Ideas, Rq1Workbook.Db, Rq1Workbook.RetrievalSuccess })
                 target.Cell(targetRow, column).Value = source.Cell(row, column).Value;
             CopySide(Rq1Workbook.ChecklistA, pair.A, start);
             CopySide(Rq1Workbook.ChecklistB, pair.B, start + 1);
@@ -79,6 +80,7 @@ internal static class MergedChecklists
         QuestionCategories.Canonical(Rq1Workbook.Text(sheet.Cell(row, 2))),
         Rq1Workbook.DbFlag(sheet.Cell(row, Rq1Workbook.Db)),
         Rq1Workbook.YesNo(sheet.Cell(row, Rq1Workbook.RetrievalSuccess)),
+        Rq1Workbook.Text(sheet.Cell(row, Rq1Workbook.Ideas)).Length != 0,
         Rq1Checklist.Read(sheet, row, Rq1Workbook.ChecklistA), Rq1Checklist.Read(sheet, row, Rq1Workbook.ChecklistB),
         Rq1Workbook.YesNo(sheet.Cell(row, Rq1Workbook.ChecklistA + 5)), Rq1Workbook.YesNo(sheet.Cell(row, Rq1Workbook.ChecklistB + 5)));
 }
