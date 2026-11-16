@@ -175,8 +175,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
             }, cancellationToken);
             return new AiChatResponseDto
             {
-                Message = "Dấu hiệu bạn mô tả có thể là tình huống y tế khẩn cấp. Hãy gọi ngay 115 hoặc đến cơ sở cấp cứu gần nhất. Không chờ phản hồi qua trò chuyện.",
-                Reply = "Dấu hiệu có thể là tình huống cấp cứu. Hãy gọi 115 ngay.",
+                Message = AiSafetyGuard.PatientEmergencyMessage(safety),
                 Urgency = "EMERGENCY",
                 SafetyNotice = "TÌNH HUỐNG Y TẾ CẤP CỨU: Gọi 115 hoặc đến cơ sở cấp cứu gần nhất.",
                 PromptVersion = GeminiAiProvider.CurrentPromptVersion,
@@ -210,8 +209,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
         {
             return new AiChatResponseDto
             {
-                Message = "Tôi không thể kê đơn hoặc hướng dẫn liều dùng qua cuộc trò chuyện. Bạn có thể đặt lịch để được bác sĩ thăm khám, hoặc xem toa thuốc đã được cơ sở xác nhận trong tài khoản của mình.",
-                Reply = "Tôi không thể kê đơn hoặc hướng dẫn liều dùng qua cuộc trò chuyện.",
+                Message = AiMedicalScopeGuard.PatientRefusal,
                 Urgency = "ROUTINE",
                 PromptVersion = GeminiAiProvider.CurrentPromptVersion,
                 AssistantStatus = "Online",

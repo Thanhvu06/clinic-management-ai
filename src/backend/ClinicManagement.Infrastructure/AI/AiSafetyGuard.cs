@@ -14,8 +14,14 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
         "dấu hiệu đột quỵ", "méo miệng", "yếu liệt nửa người", "co giật", "chảy máu không cầm",
         "chảy máu nhiều", "sốc phản vệ", "dị ứng nặng", "tự tử", "muốn tự sát", "cấp cứu thai", "thai kỳ khẩn cấp",
         "trẻ tím tái", "trẻ khó thở", "tím tái", "trẻ co giật", "uống quá liều thuốc", "quá liều thuốc",
-        "có ý định tự làm hại bản thân", "muốn tự làm hại bản thân", "uống quá liều", "uống cả vỉ", "uống nhầm thuốc"
+        "có ý định tự làm hại bản thân", "muốn tự làm hại bản thân", "uống quá liều", "uống cả vỉ", "uống nhầm thuốc",
+        "nôn ra máu", "ói ra máu", "thở không nổi", "uống nhầm chai thuốc tẩy", "uống nhầm nước tẩy"
     };
+
+    private const string MedicalEmergency = "tình huống y tế khẩn cấp";
+    private static readonly Regex EmergencySchedulingQuestion = new(
+        @"\b(?:co nen|co can|co phai|nen) (?:doi|doi lai|huy|dat lai) lich\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private static readonly string[] InjectionPhrases =
     {
@@ -73,10 +79,45 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
         if (medicationMatches.Any(match => !IsNegated(normalized, tokens, match.StartTokenIndex)))
             return new AiSafetyGuardResult { IsEmergency = true, MatchedCategory = "uống nhiều thuốc một lúc" };
 
+        if (FindAdditionalEmergency(normalized, tokens) is { } emergency)
+            return new AiSafetyGuardResult { IsEmergency = true, MatchedCategory = emergency };
+
         if (ContainsPromptInjectionNormalized(normalized))
             return new AiSafetyGuardResult { IsPromptInjection = true, MatchedCategory = "prompt_injection" };
 
         return new AiSafetyGuardResult();
+    }
+
+    internal static string PatientEmergencyMessage(AiSafetyGuardResult safety) =>
+        safety.MatchedCategory == MedicalEmergency
+            ? "Trong tình huống y tế khẩn cấp, hãy gọi ngay 115 hoặc đến cơ sở cấp cứu gần nhất. Không chờ đổi lịch hay phản hồi qua trò chuyện."
+            : "Dấu hiệu có thể là tình huống cấp cứu. Hãy gọi 115 ngay.";
+
+    private static string? FindAdditionalEmergency(string text, IReadOnlyList<TextToken> tokens)
+    {
+        bool Has(string phrase) => FindPhraseMatches(tokens, phrase).Any(match =>
+            !IsNegated(text, tokens, match.StartTokenIndex) &&
+            !HasClauseBoundaryBetween(text, tokens[match.StartTokenIndex].EndIndex, tokens[match.EndTokenIndex].StartIndex));
+
+        var cannotStop = FindPhraseMatches(tokens, "không cầm được");
+        if (FindPhraseMatches(tokens, "chảy máu").Any(bleeding =>
+            !IsNegated(text, tokens, bleeding.StartTokenIndex) && cannotStop.Any(stop =>
+                stop.StartTokenIndex > bleeding.EndTokenIndex && stop.StartTokenIndex <= bleeding.EndTokenIndex + 6 &&
+                !HasClauseBoundaryBetween(text, tokens[bleeding.EndTokenIndex].EndIndex, tokens[stop.EndTokenIndex].StartIndex))))
+            return "chảy máu";
+
+        if (Has("ra máu nhiều") && (Has("mang thai") || Has("có thai")))
+            return "ra máu nhiều";
+        if (Has("sơ sinh") && (Has("sốt") || Has("bỏ bú") || Has("li bì")))
+            return "sơ sinh";
+        if (Has("bỏng") && (Has("tuột da") || Has("da phồng rộp và tuột") || Has("tróc da")))
+            return "bỏng";
+        if (Has("đau đầu dữ dội") && Has("đột ngột"))
+            return "đau đầu dữ dội";
+        if (Has(MedicalEmergency) && EmergencySchedulingQuestion.IsMatch(StripDiacritics(text)))
+            return MedicalEmergency;
+
+        return null;
     }
 
     /// <summary>Checks injection independently so conditional emergency guidance cannot hide it.</summary>
