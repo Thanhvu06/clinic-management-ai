@@ -64,10 +64,16 @@ public static class AiMedicalScopeGuard
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     private static readonly Regex DosageSuggestion = new(
-        @"\b(?:co\s+nen|nen)\b.{0,40}\b(?:bao\s+nhieu|may|lieu|tang|giam|gap\s+doi)\b|\b(?:bao\s+nhieu|may|lieu|tang|giam|gap\s+doi)\b.{0,40}\b(?:co\s+nen|nen)\b",
+        @"\b(?:co\s+nen|nen)\b.{0,40}\b(?:bao\s+nhieu|may|lieu|tang|giam|gap\s+doi)\b|" +
+        @"\b(?:bao\s+nhieu|may|lieu|tang|giam|gap\s+doi)\b.{0,40}\b(?:co\s+nen|nen)\b|" +
+        @"\buong\b.{0,40}\b(?:bao\s+nhieu|may)\s+goi\s+(?:thuoc|oresol)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    private static readonly Regex TimingQuestion = new(
+        @"\b(?:(?:bao\s+nhieu|may)\s+(?:phut|gio|tieng)|(?:den|toi|co\s+mat)\s+som)\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex MedicationDoseContext = new(
-        @"\b(?:thuoc|vien|mg|mcg|ml|lieu dung|lieu luong)\b",
+        @"\b(?:thuoc|vien|lieu|siro|goi|ong|giot|mieng\s+dan|khang\s+sinh|ha\s+sot|giam\s+dau|" +
+        @"paracetamol|ibuprofen|amoxicillin|aspirin|oresol)\b|(?<![\p{L}_])(?:mg|mcg|ml)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex MedicationRecommendation = new(
         @"\b(?:(?:thi co (?:can|nen) (?:cho )?uong thuoc|co (?:can|nen) (?:cho )?uong khang sinh) (?:hay )?khong|" +
@@ -101,7 +107,7 @@ public static class AiMedicalScopeGuard
             var clausePreserved = clause.Preserved;
             var clauseFolded = clause.Folded;
             if (DosageSuggestion.IsMatch(clauseFolded) &&
-                (MedicationDoseContext.IsMatch(clauseFolded) || Regex.IsMatch(clausePreserved, @"\bliều\b")))
+                (!TimingQuestion.IsMatch(clauseFolded) || MedicationDoseContext.IsMatch(clauseFolded)))
                 return true;
 
             var isReadClause = PreservedPrescriptionRead.IsMatch(clausePreserved) ||
@@ -126,7 +132,7 @@ public static class AiMedicalScopeGuard
             var start = 0;
             foreach (Match boundary in Regex.Matches(folded, @"\b(?:bay\s+gio|gio|nhung|sau\s+do)\b", RegexOptions.CultureInvariant))
             {
-                if (boundary.Value == "gio" && Regex.IsMatch(folded[..boundary.Index], @"\bmay\s*$", RegexOptions.CultureInvariant))
+                if (boundary.Value == "gio" && Regex.IsMatch(folded[..boundary.Index], @"\b(?:bao\s+nhieu|may)\s*$", RegexOptions.CultureInvariant))
                     continue;
 
                 if (boundary.Index > start)
