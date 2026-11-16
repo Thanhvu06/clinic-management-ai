@@ -66,17 +66,25 @@ public static class AiMedicalScopeGuard
     private const string QuantityQuestion = @"(?:bao\s+(?:nhiêu|nhieu)|mấy|may)";
     private const string ExplicitDoseAmount = @"(?:liều|lieu\s+(?:dung|luong)|gấp\s+đôi|gap\s+doi)";
     private const string DoseAmount = $@"\b(?:{QuantityQuestion}|{ExplicitDoseAmount})\b";
+    private const string Water = @"(?:nước|nuoc)";
+    private const string WaterVolumeUnit = @"(?:ml|lít|lit|cốc|coc|ly|chai)";
     private const string MedicationUseAmount =
-        $@"\b(?:(?<!\b(?:nước|nuoc)\s){QuantityQuestion}(?!\s+(?:nước|nuoc)\b)|{ExplicitDoseAmount})\b";
+        $@"\b(?:(?<!\b{Water}\s){QuantityQuestion}(?!\s+(?:{WaterVolumeUnit}\s+)?{Water}\b)|{ExplicitDoseAmount})\b";
     private const string MedicationUseVerb =
         @"\b(?:(?:uống|uong|dùng|dung|nhỏ|nho|bôi|boi|tiêm|tiem|ngậm|ngam|dán|dan|xịt|xit)\b|" +
         @"(?:đặt|dat)\b(?!\s+(?:lịch|lich|hẹn|hen)\b))";
+    private const string DoseAmountModifier =
+        @"(?:khoảng|khoang|tầm|tam|cỡ|co|(?:mỗi|moi|một|mot)\s+(?:lần|lan))";
 
     private static readonly Regex DosageSuggestion = new(
         $@"\b(?:nên|nen)\b.{{0,40}}{DoseAmount}|{DoseAmount}.{{0,40}}\b(?:nên|nen)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex MedicationUseWithDose = new(
         $@"{MedicationUseVerb}.{{0,40}}{MedicationUseAmount}|{MedicationUseAmount}.{{0,40}}{MedicationUseVerb}",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex MedicationUseWithoutObject = new(
+        $@"{MedicationUseVerb}\s+(?:{DoseAmountModifier}\s+){{0,2}}{MedicationUseAmount}|" +
+        $@"{MedicationUseAmount}\s+(?:(?:thì|thi)\s+)?(?:(?:nên|nen)\s+)?{MedicationUseVerb}",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex DoseAdjustment = new(
         @"\b(?:tăng|giảm)\s+liều\b",
@@ -86,12 +94,20 @@ public static class AiMedicalScopeGuard
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex MedicationDoseContext = new(
         @"\b(?:thuoc|vien|siro|giot|mieng\s+dan|khang\s+sinh|ha\s+sot|giam\s+dau|" +
-        @"paracetamol|ibuprofen|amoxicillin|aspirin|oresol)\b|(?<![\p{L}_])(?:mg|mcg|ml)\b",
+        @"paracetamol|ibuprofen|amoxicillin|aspirin|oresol)\b|(?<![\p{L}_])(?:mg|mcg|ml(?!\s+nuoc\b))\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
-    private const string QualifiedDoseUnit = @"(?:gói|goi|ống|ong|liều|lieu)\b";
+    private const string DoseUnitAmount = $@"\b(?:\d+\s*|{QuantityQuestion}\s+)";
+    private const string DoseUnitMedication = @"(?:thuốc|thuoc|oresol|tiêm|tiem)\b";
+    private const string QualifiedDoseUnit = @"(?:ống|ong|liều|lieu)\b";
+    private const string PacketUnit = @"(?:gói|goi)\b";
     private static readonly Regex MedicationDoseUnitContext = new(
-        $@"\b(?:\d+\s*|{QuantityQuestion}\s+){QualifiedDoseUnit}|" +
-        $@"\b{QualifiedDoseUnit}\s+(?:thuốc|thuoc|oresol|tiêm|tiem)\b",
+        $@"{DoseUnitAmount}{QualifiedDoseUnit}|\b{QualifiedDoseUnit}\s+{DoseUnitMedication}",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex MedicationPacketContext = new(
+        $@"{DoseUnitAmount}{PacketUnit}|\b{PacketUnit}\s+{DoseUnitMedication}",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex ServicePackage = new(
+        @"\b(?:gói|goi)\s+(?:khám|kham|(?:dịch|dich)\s+(?:vụ|vu)|(?:xét|xet)\s+(?:nghiệm|nghiem))\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex MedicationRecommendation = new(
         @"\b(?:(?:thi co (?:can|nen) (?:cho )?uong thuoc|co (?:can|nen) (?:cho )?uong khang sinh) (?:hay )?khong|" +
@@ -126,10 +142,13 @@ public static class AiMedicalScopeGuard
             var clauseFolded = clause.Folded;
             var isReadClause = PreservedPrescriptionRead.IsMatch(clausePreserved) ||
                                FoldedPrescriptionRead.IsMatch(clauseFolded);
-            var asksMedicationAmount = MedicationUseWithDose.IsMatch(clausePreserved);
             var hasDoseContext = MedicationDoseContext.IsMatch(clauseFolded) ||
                                  MedicationDoseUnitContext.IsMatch(clausePreserved) ||
+                                 (MedicationPacketContext.IsMatch(clausePreserved) && !ServicePackage.IsMatch(clausePreserved)) ||
                                  DoseAdjustment.IsMatch(clausePreserved);
+            var asksMedicationAmount = hasDoseContext
+                ? MedicationUseWithDose.IsMatch(clausePreserved)
+                : MedicationUseWithoutObject.IsMatch(clausePreserved);
             if ((asksMedicationAmount && hasDoseContext && !isReadClause) ||
                 (DosageSuggestion.IsMatch(clausePreserved) &&
                  (hasDoseContext || (asksMedicationAmount && !TimingQuestion.IsMatch(clauseFolded)))))

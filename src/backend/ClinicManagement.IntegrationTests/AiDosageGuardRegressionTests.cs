@@ -49,4 +49,22 @@ public sealed class AiDosageGuardRegressionTests
     {
         Assert.False(AiMedicalScopeGuard.IsPrescriptionRequest(message));
     }
+
+    [Theory]
+    [InlineData("Gói khám tổng quát có mấy gói, nên chọn gói nào?", false)]
+    [InlineData("Nên dùng gói khám nào, giá bao nhiêu?", false)]
+    [InlineData("Có nên dùng bảo hiểm không, được giảm bao nhiêu?", false)]
+    [InlineData("Nên đặt cọc bao nhiêu?", false)]
+    [InlineData("Nên uống mấy lít nước?", false)]
+    [InlineData("Nên uống bao nhiêu cốc nước trước khi siêu âm?", false)]
+    [InlineData("Nên uống bao nhiêu ml nước trước khi siêu âm?", false)]
+    [InlineData("Nên uống mấy gói thuốc?", true)]
+    [InlineData("Cho bé uống bao nhiêu ml siro?", true)]
+    [InlineData("Nên dùng thuốc này bao nhiêu viên?", true)]
+    [InlineData("Nên tiêm mấy ống?", true)]
+    public void Dose_guard_distinguishes_service_and_water_amounts_from_medication_amounts(
+        string message, bool refused)
+    {
+        Assert.Equal(refused, AiMedicalScopeGuard.IsPrescriptionRequest(message));
+    }
 }
