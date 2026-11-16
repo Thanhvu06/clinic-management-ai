@@ -21,4 +21,23 @@ public sealed class AiDosageGuardRegressionTests
     {
         Assert.Equal(refused, AiMedicalScopeGuard.IsPrescriptionRequest(message));
     }
+
+    [Theory]
+    [InlineData("Liệu tôi có nên đi khám không?", false)]
+    [InlineData("Ho tăng lên thì có nên đi khám không?", false)]
+    [InlineData("Phòng khám ở tầng mấy, tôi nên lên tầng nào?", false)]
+    [InlineData("Nên đặt lịch trước bao nhiêu ngày?", false)]
+    [InlineData("Phí khám bao nhiêu tiền, có nên mua bảo hiểm không?", false)]
+    [InlineData("Nên mang theo mấy loại giấy tờ?", false)]
+    [InlineData("Nên gọi điện trước mấy tiếng để hủy lịch?", false)]
+    [InlineData("Nên đưa ông đến sớm mấy phút?", false)]
+    [InlineData("Nên uống mấy ống thuốc?", true)]
+    [InlineData("Cho bé uống 2 gói có được không, nên tăng liều không?", true)]
+    [InlineData("Liều paracetamol nên là bao nhiêu?", true)]
+    [InlineData("Nên dùng bao nhiêu một lần?", true)]
+    public void Dose_guard_distinguishes_medication_amounts_from_other_questions(
+        string message, bool refused)
+    {
+        Assert.Equal(refused, AiMedicalScopeGuard.IsPrescriptionRequest(message));
+    }
 }
