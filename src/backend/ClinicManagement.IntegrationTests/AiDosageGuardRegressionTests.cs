@@ -67,4 +67,20 @@ public sealed class AiDosageGuardRegressionTests
     {
         Assert.Equal(refused, AiMedicalScopeGuard.IsPrescriptionRequest(message));
     }
+
+    [Theory]
+    [InlineData("Nên uống nó mấy lần một ngày?", true)]
+    [InlineData("Nên dùng cái này bao nhiêu một lần?", true)]
+    [InlineData("Nên bôi kem này mấy lần một ngày?", true)]
+    [InlineData("Nên xịt mũi mấy lần?", true)]
+    [InlineData("Nên nhỏ mắt mấy lần một ngày?", true)]
+    [InlineData("Nên dùng loại này mấy lần?", true)]
+    [InlineData("Nên dùng thẻ bảo hiểm mấy lần một năm?", false)]
+    [InlineData("Nên dùng dịch vụ này bao nhiêu tiền?", false)]
+    [InlineData("Nên đặt cọc khoảng bao nhiêu?", false)]
+    public void Dose_guard_allows_implicit_medication_objects_and_excludes_service_amounts(
+        string message, bool refused)
+    {
+        Assert.Equal(refused, AiMedicalScopeGuard.IsPrescriptionRequest(message));
+    }
 }
