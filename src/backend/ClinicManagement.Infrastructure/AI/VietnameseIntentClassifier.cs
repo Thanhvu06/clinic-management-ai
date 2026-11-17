@@ -244,6 +244,21 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             return result;
         }
 
+        if (Knowledge.KnowledgeQuestionPolicy.IsBookingLeadTimeQuestion(normalized) &&
+            !Knowledge.KnowledgeQuestionPolicy.HasSymptoms(trimmed))
+        {
+            result.Intent = AiChatIntentTypes.UnclearOrOutOfScope;
+            result.IsClear = false;
+            return result;
+        }
+
+        var mentionsPackage = Knowledge.PatientChatPricing.MentionsHealthPackage(normalized);
+        if (mentionsPackage && !hasNewBookingCue && !Knowledge.PatientChatPricing.HasReportedSymptoms(trimmed, normalized))
+        {
+            result.Intent = AiChatIntentTypes.PricingInquiry;
+            return result;
+        }
+
         // A question about which doctor is suitable for a symptom is not a
         // doctor-name lookup. Resolve the symptom first and leave DoctorName
         // empty; the service will ground recommendations against real data.
@@ -259,7 +274,7 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         // 6. Pricing Inquiry ("giá bao nhiêu", "chi phí khám"). Do not use
         // bare "giá/gia" or "phí/phi" substrings: "đánh giá triệu chứng"
         // and "đánh giá ca khám" are not price questions.
-        if (HasPricingEvidence(lower, normalized))
+        if (!mentionsPackage && Knowledge.PatientChatPricing.HasPricingEvidence(lower, normalized))
         {
             result.Intent = AiChatIntentTypes.PricingInquiry;
             return result;
@@ -916,24 +931,6 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         Regex.Split(normalized, @"(?:[.!?;:]|\b(?:va|roi|sau do|dong thoi)\b)")
             .Select(clause => clause.Trim())
             .Where(clause => clause.Length > 0);
-
-    private static bool HasPricingEvidence(string lower, string normalized)
-    {
-        if (lower.Contains("bảng giá") || lower.Contains("chi phí khám") || lower.Contains("giá khám") ||
-            lower.Contains("bao nhiêu tiền") || lower.Contains("hết bao nhiêu tiền") || lower.Contains("tiền khám") ||
-            lower.Contains("phí khám") || lower.Contains("giá dịch vụ") || lower.Contains("viện phí") ||
-            lower.Contains("giá bao nhiêu"))
-            return true;
-
-        // Remove the non-price compound "đánh giá" before looking for a
-        // standalone price token. Keep genuine phrases such as "đánh giá chi
-        // phí" price-positive through the explicit/compound checks above.
-        var priceText = Regex.Replace(normalized, @"\bdanh\s+gia\b", " ", RegexOptions.CultureInvariant);
-        return Regex.IsMatch(
-            priceText,
-            @"\b(?:gia|phi|chi\s+phi)\b[^.!?]{0,60}\b(?:kham|dich\s+vu|goi|thuoc|sieu\s+am|noi\s+soi|chup|xet\s+nghiem|bao\s+nhieu|tien|chi\s+phi)\b|\b(?:kham|dich\s+vu|goi|thuoc|sieu\s+am|noi\s+soi|chup|xet\s+nghiem|bao\s+nhieu|tien)\b[^.!?]{0,60}\b(?:gia|phi)\b",
-            RegexOptions.CultureInvariant);
-    }
 
     private static bool LooksLikePromptInjection(string text) =>
         text.Contains("execute_confirmed_action", StringComparison.OrdinalIgnoreCase) ||

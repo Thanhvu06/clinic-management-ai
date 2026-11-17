@@ -2383,14 +2383,12 @@ public partial class AiSpecialtyService : IAiSpecialtyService
         int nextDraftVersion,
         CancellationToken cancellationToken)
     {
-        var specialtiesWithFee = await _dbContext.Specialties
-            .AsNoTracking()
-            .Where(s => s.IsActive && s.AiEnabled && s.ConsultationFee > 0)
-            .OrderBy(s => s.Id)
-            .ToListAsync(cancellationToken);
-
+        var mentionsPackage = Knowledge.PatientChatPricing.MentionsHealthPackage(AiTextNormalizer.NormalizeForComparison(cleanMessage));
         var response = new AiChatResponseDto
         {
+            Message = mentionsPackage
+                ? await Knowledge.PatientChatPricing.GetPackageCatalogAsync(_dbContext, cancellationToken)
+                : await Knowledge.PatientChatPricing.GetConsultationFeesAsync(_dbContext, cleanMessage, request.PendingSpecialtyId, cancellationToken),
             Urgency = "ROUTINE",
             PromptVersion = GeminiAiProvider.CurrentPromptVersion,
             DialogueOutcome = "PricingInquiryResolved",
@@ -2399,55 +2397,30 @@ public partial class AiSpecialtyService : IAiSpecialtyService
             ProviderStatus = "NotCalled"
         };
 
-        var lower = cleanMessage.ToLowerInvariant();
-        ClinicManagement.Domain.Entities.Specialty? targetSpec = specialtiesWithFee
-            .FirstOrDefault(s => lower.Contains(s.Name.ToLowerInvariant())
-                || (!string.IsNullOrWhiteSpace(s.SpecialtyCode) && lower.Contains(s.SpecialtyCode.ToLowerInvariant()))
-                || (!string.IsNullOrWhiteSpace(s.Name.ToLowerInvariant().Replace("khoa", "").Trim()) &&
-                    Regex.IsMatch(lower, $@"\b{Regex.Escape(s.Name.ToLowerInvariant().Replace("khoa", "").Trim())}\b")));
-
-        if (targetSpec == null && request.PendingSpecialtyId.HasValue)
+        if (!mentionsPackage)
         {
-            targetSpec = specialtiesWithFee.FirstOrDefault(s => s.Id == request.PendingSpecialtyId.Value);
-        }
-
-        if (targetSpec != null)
-        {
-            response.Message = $"Chi phí khám chuyên khoa **{targetSpec.Name}** tại ClinicCare là **{Common.BusinessDisplay.Money(targetSpec.ConsultationFee)}** / lượt khám (chưa bao gồm các dịch vụ cận lâm sàng hoặc thuốc nếu có chỉ định của bác sĩ).";
-        }
-        else
-        {
-            var sb = new StringBuilder();
-            sb.AppendLine("Bảng giá chi phí khám tham khảo tại Phòng khám ClinicCare theo từng chuyên khoa:");
-            foreach (var s in specialtiesWithFee.Take(6))
+            response.Actions.Add(new AiActionDto
             {
-                sb.AppendLine($"- **Khoa {s.Name}**: {Common.BusinessDisplay.Money(s.ConsultationFee)} / lượt khám");
-            }
-            sb.AppendLine("\n*Lưu ý: Chi phí trên là phí khám ban đầu, chưa bao gồm các chỉ định cận lâm sàng phát sinh nếu có.*");
-            response.Message = sb.ToString();
+                Id = "act-start-booking",
+                Type = AiActionTypes.StartBooking,
+                Label = "Đặt lịch khám ngay",
+                Style = "primary",
+                RequiresAuthentication = false,
+                RequiresConfirmation = false,
+                Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.BookAppointment }
+            });
+
+            response.Actions.Add(new AiActionDto
+            {
+                Id = "act-view-invoices",
+                Type = AiActionTypes.ViewBills,
+                Label = "Xem hóa đơn của tôi",
+                Style = "secondary",
+                RequiresAuthentication = true,
+                RequiresConfirmation = false,
+                Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Invoices }
+            });
         }
-
-        response.Actions.Add(new AiActionDto
-        {
-            Id = "act-start-booking",
-            Type = AiActionTypes.StartBooking,
-            Label = "Đặt lịch khám ngay",
-            Style = "primary",
-            RequiresAuthentication = false,
-            RequiresConfirmation = false,
-            Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.BookAppointment }
-        });
-
-        response.Actions.Add(new AiActionDto
-        {
-            Id = "act-view-invoices",
-            Type = AiActionTypes.ViewBills,
-            Label = "Xem hóa đơn của tôi",
-            Style = "secondary",
-            RequiresAuthentication = true,
-            RequiresConfirmation = false,
-            Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Invoices }
-        });
 
         await PreserveExistingDraftAsync(request, response, cancellationToken);
         return WithDraftVersionSync(response, nextDraftVersion);
