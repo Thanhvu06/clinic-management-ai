@@ -7,8 +7,16 @@ public sealed class ClinicKnowledgeAnswerer(IClinicKnowledgeRetriever retriever,
     : IClinicKnowledgeAnswerer
 {
     private static readonly Regex NoInformationAnswer = new(
-        @"\b(?:chua co thong tin|khong co thong tin|tai lieu (?:cong khai )?(?:khong|chua) (?:co thong tin|de cap|neu)|khong tim thay thong tin|ngoai pham vi tai lieu)\b",
+        @"\b(?:(?:chua co|khong co|khong tim thay) thong tin|khong co du lieu ve|" +
+        @"khong (?:co|nam|(?:duoc )?(?:de cap|neu|nhac den)) trong tai lieu|" +
+        @"tai lieu (?:cong khai )?(?:duoc cung cap )?(?:khong|chua) (?:de cap|neu|nhac den)|" +
+        // Normalization removes the comma in attributions like "theo tài liệu, không có phí".
+        @"(?<!theo )tai lieu (?:cong khai )?(?:duoc cung cap )?khong co|" +
+        @"ngoai pham vi (?:cua )?tai lieu)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    internal static bool IsNoInformationAnswer(string generated) =>
+        NoInformationAnswer.IsMatch(KnowledgeText.Normalize(generated));
 
     public async Task<KnowledgeAnswer?> AnswerAsync(string question, CancellationToken ct = default)
     {
@@ -22,7 +30,7 @@ public sealed class ClinicKnowledgeAnswerer(IClinicKnowledgeRetriever retriever,
             $"[{h.Chunk.Source.DocId}] {h.Chunk.Source.Title} — {h.Chunk.Source.Heading}\n{h.Chunk.Text}"));
         var generated = await ollama.ChatAsync(maskedQuestion, documents, ct);
         var hasAnswer = !string.IsNullOrWhiteSpace(generated.Value);
-        if (hasAnswer && NoInformationAnswer.IsMatch(KnowledgeText.Normalize(generated.Value!))) return null;
+        if (hasAnswer && IsNoInformationAnswer(generated.Value!)) return null;
         var text = hasAnswer ? Limit(generated.Value!) : Limit(retrieval.Hits[0].Chunk.Text);
         var sources = (hasAnswer ? supported : retrieval.Hits.Take(1))
             .Select(h => h.Chunk.Source).Distinct().ToArray();
