@@ -309,7 +309,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     ) => {
         const trimmed = textToSend.trim();
         if (!trimmed || loading || submittingBooking) return;
-        if (trimmed.length > 500) {
+        const maxMessageLength = 500;
+        if (trimmed.length > maxMessageLength) {
             setErrorMsg("Tin nhắn quá dài (tối đa 500 ký tự).");
             return;
         }
@@ -347,13 +348,12 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         }
 
         const userMsg: ChatMessage = { role: "user", content: trimmed };
-        const newMessages = prefixMessage
-            ? [...messages, prefixMessage, userMsg]
-            : [...messages, userMsg];
+        const newMessages = [...messages, ...(prefixMessage ? [prefixMessage] : []), userMsg];
 
-        const historyMessages: Array<{ role: "user" | "model"; content: string }> = newMessages
-            .slice(-9, -1)
-            .map(m => ({ role: m.role, content: m.content }));
+        const historyMessages = newMessages.slice(-9, -1).map(({ role, content }) => {
+            const sliceEnd = (content.codePointAt(maxMessageLength - 1) ?? 0) > 0xffff ? maxMessageLength - 1 : maxMessageLength;
+            return { role, content: content.slice(0, sliceEnd) };
+        });
 
         if (retryError) setMessages(previous => previous.filter(message => message !== retryError || !message.isError));
         else setMessages(newMessages);
