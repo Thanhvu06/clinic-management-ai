@@ -104,18 +104,21 @@ public static class AiMedicalScopeGuard
     private const string ServiceNoun = @"(?:dịch|dich)\s+(?:vụ|vu)";
     private const string ServicePackageName =
         $@"(?:gói|goi)\s+(?:khám|kham|{ServiceNoun}|(?:xét|xet)\s+(?:nghiệm|nghiem))";
-    private const string ServiceOrPaymentNoun =
-        $@"\b(?:{ServicePackageName}|{ServiceNoun}|(?:bảo|bao)\s+(?:hiểm|hiem)|" +
-        @"cọc|coc|tiền|tien|giá|gia|phí|phi|lịch|lich|hẹn|hen|thẻ|the)\b";
     private static readonly Regex ServicePackage = new(
         $@"\b{ServicePackageName}\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
-    private static readonly Regex ServiceOrPaymentObject = new(
-        ServiceOrPaymentNoun,
-        RegexOptions.Compiled | RegexOptions.CultureInvariant);
-    private static readonly Regex ServiceOrPaymentAmountSuffix = new(
-        $@"^\s+{ServiceOrPaymentNoun}",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private const string AccentedServiceOrPaymentNoun =
+        @"\b(?:gói\s+(?:khám|dịch\s+vụ|xét\s+nghiệm)|dịch\s+vụ|bảo\s+hiểm|cọc|tiền|giá|phí|lịch|hẹn|thẻ)\b";
+    private const string UnaccentedServiceOrPaymentNoun =
+        @"\b(?:goi\s+(?:kham|dich\s+vu|xet\s+nghiem)|dich\s+vu|bao\s+hiem|coc|tien|gia|phi|lich)\b";
+    private static readonly (Regex Object, Regex AmountSuffix) AccentedServiceOrPayment = (
+        new(AccentedServiceOrPaymentNoun, RegexOptions.Compiled | RegexOptions.CultureInvariant),
+        new($@"^\s+{AccentedServiceOrPaymentNoun}", RegexOptions.Compiled | RegexOptions.CultureInvariant));
+    private static readonly (Regex Object, Regex AmountSuffix) UnaccentedServiceOrPayment = (
+        new(UnaccentedServiceOrPaymentNoun, RegexOptions.Compiled | RegexOptions.CultureInvariant),
+        new($@"^\s+{UnaccentedServiceOrPaymentNoun}", RegexOptions.Compiled | RegexOptions.CultureInvariant));
+
     private static readonly Regex MedicationRecommendation = new(
         @"\b(?:(?:thi co (?:can|nen) (?:cho )?uong thuoc|co (?:can|nen) (?:cho )?uong khang sinh) (?:hay )?khong|" +
         @"co (?:nen )?uong (?:thuoc|khang sinh)(?: (?!sau\b|truoc\b|luc\b)\p{L}+){0,3} duoc (?:khong|ko|k)|" +
@@ -155,7 +158,7 @@ public static class AiMedicalScopeGuard
                                  DoseAdjustment.IsMatch(clausePreserved);
             var asksMedicationAmount = hasDoseContext
                 ? MedicationUseWithDose.IsMatch(clausePreserved)
-                : HasMedicationAmountWithoutService(clausePreserved);
+                : HasMedicationAmountWithoutService(clausePreserved, clausePreserved == clauseFolded);
             if ((asksMedicationAmount && hasDoseContext && !isReadClause) ||
                 (DosageSuggestion.IsMatch(clausePreserved) &&
                  (hasDoseContext || (asksMedicationAmount && !TimingQuestion.IsMatch(clauseFolded)))))
@@ -171,15 +174,16 @@ public static class AiMedicalScopeGuard
         return false;
     }
 
-    private static bool HasMedicationAmountWithoutService(string clause)
+    private static bool HasMedicationAmountWithoutService(string clause, bool isUnaccented)
     {
+        var serviceOrPayment = isUnaccented ? UnaccentedServiceOrPayment : AccentedServiceOrPayment;
         // A rejected pair can overlap a later medication verb in the same clause.
         for (var match = MedicationUseWithDose.Match(clause); match.Success;
              match = MedicationUseWithDose.Match(clause, match.Index + 1))
         {
             var amount = match.Groups["amount"];
-            if (!ServiceOrPaymentObject.IsMatch(match.Groups["between"].ValueSpan) &&
-                !ServiceOrPaymentAmountSuffix.IsMatch(clause.AsSpan(amount.Index + amount.Length)))
+            if (!serviceOrPayment.Object.IsMatch(match.Groups["between"].ValueSpan) &&
+                !serviceOrPayment.AmountSuffix.IsMatch(clause.AsSpan(amount.Index + amount.Length)))
                 return true;
         }
 

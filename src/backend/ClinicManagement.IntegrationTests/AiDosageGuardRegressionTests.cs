@@ -83,4 +83,18 @@ public sealed class AiDosageGuardRegressionTests
     {
         Assert.Equal(refused, AiMedicalScopeGuard.IsPrescriptionRequest(message));
     }
+
+    [Theory]
+    [InlineData("Nên xịt hen mấy lần một ngày?", true)]
+    [InlineData("Nên dùng ống hít hen mấy lần?", true)]
+    [InlineData("nen dung the nay may lan", true)]
+    [InlineData("Nên bôi thế này mấy lần một ngày?", true)]
+    [InlineData("Nên dùng thẻ mấy lần một năm?", false)]
+    [InlineData("nen dat coc bao nhieu", false)]
+    [InlineData("Nên dùng dịch vụ này bao nhiêu tiền?", false)]
+    public void Dose_guard_distinguishes_asthma_and_dose_references_from_service_nouns(
+        string message, bool refused)
+    {
+        Assert.Equal(refused, AiMedicalScopeGuard.IsPrescriptionRequest(message));
+    }
 }
