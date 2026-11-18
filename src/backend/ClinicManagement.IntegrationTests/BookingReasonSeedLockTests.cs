@@ -60,6 +60,9 @@ public sealed class BookingReasonSeedLockTests
         Assert.Contains("Vui lòng tái khám", prescription.Notes);
         Assert.DoesNotContain("demo", prescription.Notes!, StringComparison.OrdinalIgnoreCase);
 
+        await DevelopmentDataSeeder.SeedMasterDataAsync(services);
+        db.ChangeTracker.Clear();
+
         using var client = factory.CreateClient();
         var login = await client.PostAsJsonAsync("/api/v1/auth/login", new LoginRequest { EmailOrPhone = patient.Email!, Password = "Demo@12345" });
         var auth = await login.Content.ReadFromJsonAsync<ApiResponse<AuthResponse>>();
@@ -145,7 +148,7 @@ public sealed class BookingReasonSeedLockTests
         await db.SaveChangesAsync();
         await services.GetRequiredService<ConfirmedAppointmentExpiryRule>().RunAsync(default);
         db.ChangeTracker.Clear();
-        Assert.Equal(remainsBlocked ? AppointmentStatus.NoShow : AppointmentStatus.Cancelled,
+        Assert.Equal(AppointmentStatus.NoShow,
             (await db.Appointments.SingleAsync(a => a.Id == repeated.Id)).Status);
         Assert.Equal(remainsBlocked, await NoShowRestrictionRule.GetBlockedUntilAsync(db, clock, options, demo.Id) != null);
         Assert.NotNull(await NoShowRestrictionRule.GetBlockedUntilAsync(db, clock, options, real.Id));

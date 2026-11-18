@@ -62,6 +62,14 @@ internal static class TwentyFourSevenDemoTopUp
         var dayEndHour = Math.Clamp(options.DemoPatientDayEndHour, 1, 24);
         if (dayStartHour >= dayEndHour) (dayStartHour, dayEndHour) = (7, 20);
         bool DemoDaytime(TimeOnly time) => time.Hour >= dayStartHour && time.Hour < dayEndHour;
+        var nextTopUp = now.AddMinutes(Math.Clamp(options.TopUpIntervalMinutes, 1, 1440));
+        bool IsSafeDemoTime(DateOnly date, TimeOnly time)
+        {
+            var at = date.ToDateTime(time);
+            return at > nextTopUp && (initialSeed
+                ? at >= now.AddHours(1) && at <= now.AddHours(6)
+                : date > today && DemoDaytime(time));
+        }
         var doctorIds = doctors.Select(x => x.Id).ToArray();
         var existingFutureSlotIds = await db.AppointmentSlots
             .Where(slot => doctorIds.Contains(slot.DoctorId) && slot.SlotDate >= today && slot.SlotDate <= demoLastDay)
@@ -79,12 +87,14 @@ internal static class TwentyFourSevenDemoTopUp
         var departments = await db.Departments.Where(x => x.IsActive).ToListAsync(ct);
         var available = (await db.AppointmentSlots.Where(x => doctorIds.Contains(x.DoctorId) && !x.IsBooked && x.SlotDate >= today && x.SlotDate <= demoLastDay).ToListAsync(ct))
             .Where(x => x.SlotDate.ToDateTime(x.StartTime) >= earliest && x.SlotDate.ToDateTime(x.StartTime) < demoHorizon &&
-                (x.SlotDate.ToDateTime(x.StartTime) < horizon || existingFutureSlotIds.Contains(x.Id)) &&
                 x.EndTime.ToTimeSpan() - x.StartTime.ToTimeSpan() == TimeSpan.FromMinutes(30) &&
                 schedules.Any(s => s.DoctorId == x.DoctorId && s.WorkDate == x.SlotDate && s.StartTime <= x.StartTime && s.EndTime >= x.EndTime) &&
                 !leaves.Any(l => l.DoctorId == x.DoctorId && l.StartDateTime < x.SlotDate.ToDateTime(x.EndTime) && l.EndDateTime > x.SlotDate.ToDateTime(x.StartTime)) &&
                 !appointments.Any(a => a.DoctorId == x.DoctorId && a.AppointmentDate == x.SlotDate && AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status) && a.StartTime < x.EndTime && a.EndTime > x.StartTime))
             .OrderBy(x => x.SlotDate).ThenBy(x => x.StartTime).ThenBy(x => x.DoctorId).ToList();
+        var hasCapacityWithinHorizon = available.Any(x => x.SlotDate.ToDateTime(x.StartTime) < horizon);
+        available = available.Where(x => x.SlotDate.ToDateTime(x.StartTime) < horizon || existingFutureSlotIds.Contains(x.Id) ||
+            hasCapacityWithinHorizon && IsSafeDemoTime(x.SlotDate, x.StartTime)).ToList();
         var candidates = available.Where(x => x.SlotDate.ToDateTime(x.StartTime) < horizon).ToList();
         var start = new DateTime(earliest.Year, earliest.Month, earliest.Day, earliest.Hour, earliest.Minute < 30 ? 0 : 30, 0);
         if (start < earliest) start = start.AddMinutes(30);
@@ -102,16 +112,15 @@ internal static class TwentyFourSevenDemoTopUp
         var targetConfirmed = Math.Clamp(options.MinUpcomingConfirmed, 0, 100);
         var targetPending = Math.Clamp(options.MinPendingConfirmations, 0, 100);
         var demoBooked = appointments.Any(x => x.PatientId == demoPatient.Id &&
-            (initialSeed ? Upcoming(x) : doctorIds.Contains(x.DoctorId) &&
-                x.AppointmentDate.ToDateTime(x.StartTime) >= now && x.AppointmentDate.ToDateTime(x.StartTime) < demoHorizon &&
-                DemoDaytime(x.StartTime)) && x.Status is AppointmentStatus.Confirmed or AppointmentStatus.Pending);
+            doctorIds.Contains(x.DoctorId) && x.AppointmentDate.ToDateTime(x.StartTime) < demoHorizon &&
+            IsSafeDemoTime(x.AppointmentDate, x.StartTime) && x.Status is AppointmentStatus.Confirmed or AppointmentStatus.Pending);
         if (!initialSeed && !demoBooked)
         {
             var demoSlot = available.FirstOrDefault(slot =>
             {
                 var doctor = doctors.Single(x => x.Id == slot.DoctorId);
                 var specialty = doctor.DoctorSpecialties.FirstOrDefault(x => x.IsPrimary && x.Specialty.IsActive)?.Specialty;
-                return DemoDaytime(slot.StartTime) && specialty is not null && !used.Contains((demoPatient.Id, slot.SlotDate)) &&
+                return IsSafeDemoTime(slot.SlotDate, slot.StartTime) && specialty is not null && !used.Contains((demoPatient.Id, slot.SlotDate)) &&
                     DemoPatientDevelopmentSeed.Allows(demoPatient, specialty.SpecialtyCode, slot.SlotDate) &&
                     assignments.Any(a => a.UserId == doctor.UserId && departments.Any(d => d.FacilityId == a.FacilityId && d.SpecialtyId == specialty.Id));
             });
@@ -125,8 +134,7 @@ internal static class TwentyFourSevenDemoTopUp
             if (specialty is null) continue;
             var facility = assignments.FirstOrDefault(x => x.UserId == doctor.UserId && departments.Any(d => d.FacilityId == x.FacilityId && d.SpecialtyId == specialty.Id));
             if (facility is null) continue;
-            var at = slot.SlotDate.ToDateTime(slot.StartTime);
-            var chooseDemo = !demoBooked && (initialSeed ? at >= now.AddHours(1) && at <= now.AddHours(6) : DemoDaytime(slot.StartTime)) && !used.Contains((demoPatient.Id, slot.SlotDate)) && DemoPatientDevelopmentSeed.Allows(demoPatient, specialty.SpecialtyCode, slot.SlotDate);
+            var chooseDemo = !demoBooked && IsSafeDemoTime(slot.SlotDate, slot.StartTime) && !used.Contains((demoPatient.Id, slot.SlotDate)) && DemoPatientDevelopmentSeed.Allows(demoPatient, specialty.SpecialtyCode, slot.SlotDate);
             var patient = chooseDemo ? demoPatient : slot.SlotDate.ToDateTime(slot.StartTime) < horizon
                 ? patients.FirstOrDefault(x => x.Id != demoPatient.Id && !used.Contains((x.Id, slot.SlotDate)) && DemoPatientDevelopmentSeed.Allows(x, specialty.SpecialtyCode, slot.SlotDate)) : null;
             if (patient is null) continue;

@@ -1567,7 +1567,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
         order.VerifiedByUserName = null;
         order.VerifiedByRole = null;
         order.ReturnedByUserName = null;
-        PatientDiagnosticNotes.ClearInternalNotes(order);
+        order.VerificationNote = null;
         order.ReturnReason = null;
         order.HasDeltaFailure = false;
         foreach (var item in order.Items)
