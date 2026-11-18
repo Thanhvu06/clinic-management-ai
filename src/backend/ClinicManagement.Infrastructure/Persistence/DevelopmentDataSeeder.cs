@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Hosting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -702,6 +703,8 @@ public static class DevelopmentDataSeeder
             db.ChangeTracker.Clear();
             logger.LogInformation("Expiry completed after seed: changed={Changed}", changed);
         }
+        if (serviceProvider.GetRequiredService<IHostEnvironment>().IsDevelopment())
+            await DevelopmentPatientBookingSeed.RepairAsync(db, dateTimeProvider);
         logger.LogInformation("Development Data Seeding completed.");
     }
 

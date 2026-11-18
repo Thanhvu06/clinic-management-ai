@@ -203,7 +203,8 @@ internal static class TwentyFourSevenDemoTopUp
         {
             prescription.Status = PrescriptionStatus.Expired;
             var previousNotes = prescription.Notes?.Trim();
-            prescription.Notes = string.IsNullOrEmpty(previousNotes) ? reason : $"{previousNotes}\n{reason}";
+            prescription.Notes = string.IsNullOrEmpty(previousNotes) ? DevelopmentPatientBookingSeed.ExpiredPrescriptionAdvice
+                : $"{previousNotes}\n{DevelopmentPatientBookingSeed.ExpiredPrescriptionAdvice}";
             AddAudit(db, clock, nameof(Prescription), prescription.Id, BusinessDisplay.PrescriptionCode(prescription, clock), reason);
         }
 

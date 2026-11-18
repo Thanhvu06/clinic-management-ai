@@ -4,6 +4,7 @@ import { isBookingRejected } from './bookingRejection';
 import { toLocalDateString, formatDateOnly } from '../../utils/formatters';
 import React, { useState, useEffect, useRef } from "react";
 import { BookingExpiryHeader } from './BookingExpiryHeader';
+import { OnlineBookingNotice } from './OnlineBookingNotice';
 import { Alert, Avatar, Button, Card, Descriptions, Empty, Form, Input, Result, Spin, Steps, Tag } from 'antd';
 import '../../theme/browserCompat';
 import { useLocation, useNavigate } from "react-router-dom";
@@ -495,7 +496,7 @@ export const BookAppointment: React.FC = () => {
                 slotDate: slot.slotDate,
                 startTime: slot.startTime.substring(0, 5),
                 endTime: slot.endTime.substring(0, 5),
-                reason: normalizeBookingReason(reason),
+                reason,
                 isComplete: isValidBookingReason(reason),
                 version: previous?.version !== undefined ? (unchangedSlot ? previous.version : previous.version + 1) : undefined,
                 confirmationId: unchangedSlot ? previous?.confirmationId : undefined
@@ -520,13 +521,13 @@ export const BookAppointment: React.FC = () => {
 
     const handleReasonChange = (nextReason: string) => {
         const normalizedReason = normalizeBookingReason(nextReason);
-        setPageReason(normalizedReason);
+        setPageReason(nextReason);
         setActiveDraft(previous => {
             if (!previous) return previous;
             const unchangedReason = normalizeBookingReason(previous.reason) === normalizedReason;
             return {
                 ...previous,
-                reason: normalizedReason,
+                reason: nextReason,
                 isComplete: Boolean(
                     previous.specialtyId &&
                     previous.doctorId &&
@@ -858,7 +859,7 @@ export const BookAppointment: React.FC = () => {
         return <div className={styles.pageWrapper}><Card><div className={styles.loadingPanel}><Spin /><span>Đang tải dữ liệu phòng khám...</span></div></Card></div>;
     }
 
-    return (
+    return (<OnlineBookingNotice key={currentAccountKey}>
         <div className={styles.pageWrapper}>
             <Breadcrumb items={[{ label: 'Trang chủ', path: '/' }, { label: 'Đặt lịch khám' }]} />
             <BookingExpiryHeader revisitRequestId={revisitRequestId} />
@@ -986,6 +987,6 @@ export const BookAppointment: React.FC = () => {
                     </Card>
                 </aside>
             </div>
-        </div>
+        </div></OnlineBookingNotice>
     );
 };
