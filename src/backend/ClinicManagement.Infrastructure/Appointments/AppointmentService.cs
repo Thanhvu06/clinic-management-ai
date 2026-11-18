@@ -746,7 +746,7 @@ public class AppointmentService : IAppointmentService
                 Action = h.Action.ToString(),
                 OldStatus = h.OldStatus.HasValue ? h.OldStatus.Value.ToString() : null,
                 NewStatus = h.NewStatus.HasValue ? h.NewStatus.Value.ToString() : null,
-                Note = h.Note,
+                Note = h.Note == "Dọn dữ liệu demo cũ" ? DevelopmentPatientBookingSeed.CancellationReason : h.Note,
                 PerformedByUserId = h.PerformedByUserId,
                 CreatedAt = h.CreatedAt
             })
