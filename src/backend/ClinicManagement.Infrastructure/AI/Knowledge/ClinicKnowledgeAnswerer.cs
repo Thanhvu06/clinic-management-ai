@@ -6,6 +6,9 @@ namespace ClinicManagement.Infrastructure.AI.Knowledge;
 public sealed class ClinicKnowledgeAnswerer(IClinicKnowledgeRetriever retriever, OllamaKnowledgeClient ollama)
     : IClinicKnowledgeAnswerer
 {
+    private static readonly Regex NumberedListItem = new(
+        @"(?<!\S)\d+[.)]\s+(?=\S)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     private static readonly Regex NoInformationAnswer = new(
         @"\b(?:(?:chua co|khong co|khong tim thay) thong tin|khong co du lieu ve|" +
         @"khong (?:co|nam|(?:duoc )?(?:de cap|neu|nhac den)) trong tai lieu|" +
@@ -37,5 +40,11 @@ public sealed class ClinicKnowledgeAnswerer(IClinicKnowledgeRetriever retriever,
         return new(text, sources, hasAnswer, generated.WasCalled || retrieval.EmbeddingWasCalled);
     }
 
-    private static string Limit(string text) => string.Join(" ", Regex.Split(text.Trim(), @"(?<=[.!?])\s+").Take(5));
+    private static string Limit(string text)
+    {
+        var trimmed = text.Trim();
+        return NumberedListItem.Matches(trimmed).Count >= 2
+            ? trimmed
+            : string.Join(" ", Regex.Split(trimmed, @"(?<=[.!?])\s+").Take(5));
+    }
 }
