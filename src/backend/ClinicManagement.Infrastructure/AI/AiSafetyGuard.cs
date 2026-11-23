@@ -15,7 +15,8 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
         "chảy máu nhiều", "sốc phản vệ", "dị ứng nặng", "tự tử", "muốn tự sát", "cấp cứu thai", "thai kỳ khẩn cấp",
         "trẻ tím tái", "trẻ khó thở", "tím tái", "trẻ co giật", "uống quá liều thuốc", "quá liều thuốc",
         "có ý định tự làm hại bản thân", "muốn tự làm hại bản thân", "uống quá liều", "uống cả vỉ", "uống nhầm thuốc",
-        "nôn ra máu", "ói ra máu", "thở không nổi", "uống nhầm chai thuốc tẩy", "uống nhầm nước tẩy"
+        "nôn ra máu", "ói ra máu", "thở không nổi", "uống nhầm chai thuốc tẩy", "uống nhầm nước tẩy",
+        "ngộ độc", "uống nhầm", "nuốt nhầm", "uống phải hóa chất", "uống phải thuốc tẩy", "uống phải thuốc diệt", "quá liều"
     };
 
     private const string MedicalEmergency = "tình huống y tế khẩn cấp";
@@ -68,6 +69,8 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
         {
             foreach (var match in FindPhraseMatches(tokens, phrase))
             {
+                if (phrase == "ngộ độc" && IsMildFoodPoisoningMention(normalized, tokens, match))
+                    continue;
                 var fullMatch = chestPainMatches.Concat(medicationMatches).FirstOrDefault(span => span.StartTokenIndex <= match.StartTokenIndex && span.EndTokenIndex >= match.EndTokenIndex);
                 if (!IsNegated(normalized, tokens, fullMatch?.StartTokenIndex ?? match.StartTokenIndex))
                     return new AiSafetyGuardResult { IsEmergency = true, MatchedCategory = phrase };
@@ -87,6 +90,11 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
 
         return new AiSafetyGuardResult();
     }
+
+    private static bool IsMildFoodPoisoningMention(string text, IReadOnlyList<TextToken> tokens, PhraseMatch poisoning) =>
+        FindPhraseMatches(tokens, "ngộ độc thực phẩm nhẹ").Any(mild =>
+            mild.StartTokenIndex == poisoning.StartTokenIndex &&
+            !HasClauseBoundaryBetween(text, tokens[mild.StartTokenIndex].EndIndex, tokens[mild.EndTokenIndex].StartIndex));
 
     internal static string PatientEmergencyMessage(AiSafetyGuardResult safety) =>
         safety.MatchedCategory == MedicalEmergency
