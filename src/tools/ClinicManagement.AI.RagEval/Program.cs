@@ -10,6 +10,21 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 var mode = args.FirstOrDefault() ?? "bm25";
+if (mode == "rq1-regrade")
+{
+    try { await Rq1RegradeCommand.RunAsync(args.Skip(1).ToArray(), Console.Out); }
+    catch (Rq1RegradeException error)
+    {
+        Console.Error.WriteLine(error.Message);
+        Environment.ExitCode = 1;
+    }
+    catch (Exception)
+    {
+        Console.Error.WriteLine("Regrade analysis failed. Check locked input paths, mapping and a new output path.");
+        Environment.ExitCode = 1;
+    }
+    return;
+}
 if (mode is "dev-groups" or "dev-overlap" or "dev-split" or "dev-plant")
 {
     Environment.ExitCode = await DevCalibrationCommands.RunAsync(mode, args.Skip(1).ToArray(), Console.Out, Console.Error);

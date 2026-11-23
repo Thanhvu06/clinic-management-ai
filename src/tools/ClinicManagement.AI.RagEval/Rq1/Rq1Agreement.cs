@@ -6,6 +6,8 @@ public sealed record Rq1ScoreAgreement(int N, double? PercentAgreement, double? 
 public sealed record Rq1ItemAgreement(int N, double? PercentAgreement, double? Kappa);
 public sealed record Rq1AgreementReport(Rq1ScoreAgreement Overall, IReadOnlyDictionary<string, Rq1ScoreAgreement> ByCategory,
     IReadOnlyDictionary<string, Rq1ItemAgreement> Items);
+internal sealed record Rq1RatingComparison(string Category, bool HasIdeas, Rq1Checklist First, Rq1Checklist Second,
+    bool? FirstRefused, bool? SecondRefused);
 
 internal static class Rq1Agreement
 {
@@ -31,6 +33,15 @@ internal static class Rq1Agreement
             ratings.Add(new(person.Category, hasIdeas, codexB, humanB, automated.RefusedB, person.RefusedB));
         }
 
+        return Summarize(ratings);
+    }
+
+    internal static Rq1AgreementReport Compare(IEnumerable<Rq1RatingComparison> pairs) =>
+        Summarize(pairs.Select(pair => new Rating(pair.Category, pair.HasIdeas, pair.First, pair.Second,
+            pair.FirstRefused, pair.SecondRefused)).ToArray());
+
+    private static Rq1AgreementReport Summarize(IReadOnlyCollection<Rating> ratings)
+    {
         var groups = ratings.ToLookup(rating => rating.Category);
         var byCategory = QuestionCategories.All.Where(groups.Contains)
             .ToDictionary(category => category, category => Scores(groups[category]));
@@ -46,7 +57,7 @@ internal static class Rq1Agreement
         });
     }
 
-    private static string C2(Rq1Checklist checklist, bool hasIdeas) =>
+    internal static string C2(Rq1Checklist checklist, bool hasIdeas) =>
         !hasIdeas && checklist.C2 == Rq1Checklist.NotApplicable ? Rq1Checklist.Full : checklist.C2;
 
     private static Rq1ScoreAgreement Scores(IEnumerable<Rating> ratings)
