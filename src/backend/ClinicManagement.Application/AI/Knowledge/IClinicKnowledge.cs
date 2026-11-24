@@ -16,3 +16,13 @@ public interface IClinicKnowledgeAnswerer
 {
     Task<KnowledgeAnswer?> AnswerAsync(string question, CancellationToken ct = default);
 }
+
+public interface IClinicSemanticKnowledgeRetriever : IClinicKnowledgeRetriever
+{
+    Task<KnowledgeRetrieval> RetrieveSemanticAsync(string question, CancellationToken ct = default);
+}
+
+public interface IClinicSemanticKnowledgeAnswerer : IClinicKnowledgeAnswerer
+{
+    Task<KnowledgeAnswer?> AnswerThroughIntentGateAsync(string question, CancellationToken ct = default);
+}

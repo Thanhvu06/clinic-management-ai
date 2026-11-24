@@ -13,10 +13,24 @@ public partial class AiSpecialtyService
     private async Task<AiChatResponseDto?> ResolveKnowledgeAsync(AiChatRequestDto request, string message,
         string intent, ClinicManagement.Application.AI.Interfaces.IntentClassificationResult classification, int version, CancellationToken ct, bool early = false)
     {
-        if (_knowledgeAnswerer is null || early != KnowledgeQuestionPolicy.IsEarlyGuidance(message, classification) ||
-            !KnowledgeQuestionPolicy.IsCandidate(message, intent, !string.IsNullOrWhiteSpace(request.Intent), classification))
+        var expanded = ClinicQuestionNormalizer.Expand(message);
+        var fresh = IsFreshKnowledgeQuestion(request);
+        if (ClinicKnowledgeGatePolicy.IsOutsideClinic(expanded)) return null;
+        if (early && fresh && ClinicKnowledgeGatePolicy.CanUseSemanticFallback(expanded) &&
+            (!classification.IsClear || !string.Equals(expanded, message, StringComparison.Ordinal)) &&
+            ClinicKnowledgeGatePolicy.InformationTopic(expanded) is { } topic && topic != ClinicInformationTopic.None)
+            return await ResolveRecoveredClinicInformationAsync(request, expanded, topic, version, ct);
+
+        var legacy = KnowledgeQuestionPolicy.IsCandidate(message, intent, !string.IsNullOrWhiteSpace(request.Intent), classification);
+        var recover = fresh && ClinicKnowledgeGatePolicy.CanUseSemanticFallback(expanded) &&
+            (!classification.IsClear || ClinicKnowledgeGatePolicy.IsInformationQuestion(expanded)) &&
+            (intent != AiChatIntentTypes.StartBooking || ClinicKnowledgeGatePolicy.IsProcedureQuestion(expanded));
+        var earlyGuidance = KnowledgeQuestionPolicy.IsEarlyGuidance(message, classification);
+        if (_knowledgeAnswerer is null || early != earlyGuidance || !legacy && !recover)
             return null;
-        var answer = await _knowledgeAnswerer.AnswerAsync(message, ct);
+        var answer = recover && _knowledgeAnswerer is IClinicSemanticKnowledgeAnswerer semantic
+            ? await semantic.AnswerThroughIntentGateAsync(expanded, ct)
+            : legacy ? await _knowledgeAnswerer.AnswerAsync(message, ct) : null;
         if (answer is null) return null;
         var block = AiProviderOutputGuard.Inspect(AiActorRole.Patient, answer.Text);
         var response = new AiChatResponseDto
@@ -44,4 +58,10 @@ public partial class AiSpecialtyService
         await PreserveExistingDraftAsync(request, response, ct);
         return WithDraftVersionSync(response, version);
     }
+
+    private static bool IsFreshKnowledgeQuestion(AiChatRequestDto request) =>
+        string.IsNullOrWhiteSpace(request.Intent) && string.IsNullOrWhiteSpace(request.ContextSnapshotId) &&
+        string.IsNullOrWhiteSpace(request.DraftId) && string.IsNullOrWhiteSpace(request.PendingSlotDate) &&
+        !request.PendingSpecialtyId.HasValue && !request.PendingDoctorId.HasValue && !request.PendingSlotId.HasValue &&
+        string.IsNullOrWhiteSpace(request.Reason);
 }

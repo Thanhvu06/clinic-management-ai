@@ -40,8 +40,7 @@ public static class KnowledgeQuestionPolicy
         if (explicitIntent || intent == AiChatIntentTypes.PricingInquiry)
             return false;
         var text = KnowledgeText.Normalize(message);
-        if (HasSymptoms(message) || Regex.IsMatch(text,
-            @"\b(?:mo mau|duong huyet|huyet ap) (?:cao|thap)\b.*\b(?:an uong|kieng an|che do an)\b")) return false;
+        if (HasSymptoms(message) || IsTreatmentDietQuestion(message)) return false;
         if (intent != AiChatIntentTypes.ConfirmBooking &&
             (IsBookingLeadTimeQuestion(text) || IsPublicClinicQuestion(message, text, classification))) return true;
         if (Regex.IsMatch(text, @"\b(?:gia kham|gia bao nhieu|chi phi|phi kham|gio lam|mo cua|dia chi|so dien thoai)\b")) return false;
@@ -77,6 +76,9 @@ public static class KnowledgeQuestionPolicy
     internal static bool IsVisitPreparationQuestion(string text) => Regex.IsMatch(text,
         @"^(?:(?:can|nen) )?chuan bi(?: gi)? truoc khi (?:di )?kham(?: (?:can gi|nen lam gi|the nao|nhu the nao))?$");
 
+    internal static bool IsTreatmentDietQuestion(string message) => Regex.IsMatch(KnowledgeText.Normalize(message),
+        @"\b(?:mo mau|duong huyet|huyet ap) (?:cao|thap)\b.*\b(?:an uong|kieng an|che do an)\b");
+
     private static bool IsPublicClinicQuestion(string message, string text, IntentClassificationResult? classification)
     {
         if (HasSelection(message, classification, ignoreDoctorProse: true) ||
@@ -99,7 +101,7 @@ public static class KnowledgeQuestionPolicy
     {
         var accented = KnowledgeText.Normalize(message, false);
         if (Regex.IsMatch(accented, @"\b(?:đau|sốt|ngứa|nôn|chóng mặt|tê tay|mệt mỏi|khó thở)\b")) return true;
-        return Regex.IsMatch(KnowledgeText.Normalize(message),
+        return Regex.IsMatch(KnowledgeText.Normalize(message), @"\bngo doc thuc pham nhe\b") || Regex.IsMatch(KnowledgeText.Normalize(message),
             @"\b(?:bi ho|ho khan|ho nhieu|ho keo dai|ho \d+ ngay|dau dau|dau bung|dau nguc|bi dau|bi sot|buon non|bi non|chong mat|te tay|met moi|kho tho|o chua|day bung|hoi hop|danh trong nguc|tim dap nhanh|u tai|nghe kem|mo mat|khat nhieu|tieu nhieu|tre kinh|cham kinh|roi loan kinh|khi hu|ra huyet|noi man|man ngua|noi ban|phat ban|viem da|rung toc|nam da|me day|nghet mui|viem xoang|viem amidan|chay mau cam|sung khop|cung khop|te bi|run tay|mat ngu|do mat|nhin mo|kho mat|o nong|tieu chay|tao bon|trao nguoc|cam cum)\b");
     }
 }
