@@ -4,6 +4,7 @@ using ClinicManagement.Application.AI;
 using ClinicManagement.Application.AI.DTOs;
 using ClinicManagement.Application.AI.Interfaces;
 using ClinicManagement.Application.AI.Tools;
+using ClinicManagement.Infrastructure.AI.Knowledge;
 
 namespace ClinicManagement.Infrastructure.AI;
 
@@ -30,7 +31,7 @@ public sealed class AiConversationPipeline : IAiConversationPipeline
         // before the guard turns distinct words such as "ngất" and "ngạt"
         // into the same token.
         var safety = _safetyGuard.Inspect(rawMessage);
-        var intent = _classifier.Classify(normalized, context);
+        var intent = _classifier.Classify(ClinicQuestionNormalizer.Expand(normalized), context);
         var entities = ExtractEntities(normalized, intent);
 
         return new AiConversationAnalysis

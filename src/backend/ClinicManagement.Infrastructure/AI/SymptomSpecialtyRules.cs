@@ -42,7 +42,7 @@ public static class SymptomSpecialtyRules
         new("SP08", "đau đầu", "chóng mặt", "tê tay", "run tay", "đau nửa đầu", "tê bì", "mất ngủ", "động kinh"),
         new("SP09", "khát nhiều", "tiểu nhiều", "đường huyết", "đái tháo đường", "bướu cổ", "tuyến giáp", "tiểu đường", "mỡ máu", "cường giáp"),
         new("SP10", "mờ mắt", "đau mắt", "đỏ mắt", "nhìn mờ", "ngứa mắt", "cận thị", "viễn thị", "loạn thị", "khô mắt"),
-        new("SP11", "ợ chua", "đầy bụng", "đau bụng", "ợ nóng", "tiêu chảy", "táo bón", "dạ dày", "trào ngược", "đi ngoài"),
+        new("SP11", "ợ chua", "đầy bụng", "đau bụng", "ợ nóng", "tiêu chảy", "táo bón", "dạ dày", "trào ngược", "đi ngoài", "ngộ độc thực phẩm nhẹ"),
         new("SP01", "mệt mỏi", "sốt nhẹ", "sốt", "khám tổng quát", "mệt kéo dài", "ho", "cảm cúm", "khám sức khỏe", "sức khỏe tổng quát", "khám sức khỏe ... tổng quát")
     ];
 

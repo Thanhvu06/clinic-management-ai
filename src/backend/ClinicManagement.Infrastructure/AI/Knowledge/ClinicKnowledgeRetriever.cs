@@ -10,8 +10,11 @@ namespace ClinicManagement.Infrastructure.AI.Knowledge;
 
 public sealed class ClinicKnowledgeRetriever(MarkdownKnowledgeCatalog catalog, OllamaKnowledgeClient ollama,
     IOptions<OllamaOptions> options, IHostEnvironment environment, ILogger<ClinicKnowledgeRetriever> logger)
-    : BackgroundService, IClinicKnowledgeRetriever
+    : BackgroundService, IClinicSemanticKnowledgeRetriever
 {
+    // The intent fallback requires stronger evidence than the normal hybrid reranker (0.20).
+    // Fresh clinic paraphrases exceeded 0.60; six fresh far-out-of-scope controls stayed below 0.42.
+    public const double SemanticIntentGateMinCosine = 0.55;
     private readonly Bm25KnowledgeIndex _bm25 = new(catalog.Chunks);
     private float[][]? _embeddings;
     public bool EmbeddingsReady => Volatile.Read(ref _embeddings) is not null;
@@ -125,4 +128,22 @@ public sealed class ClinicKnowledgeRetriever(MarkdownKnowledgeCatalog catalog, O
     private static bool ValidVectors(float[][]? vectors, int count) => vectors is { Length: > 0 } && vectors.Length == count &&
         vectors[0] is { Length: > 0 } && vectors.All(vector => vector is not null && vector.Length == vectors[0].Length &&
             vector.All(float.IsFinite) && vector.Any(v => v != 0));
+
+    public async Task<KnowledgeRetrieval> RetrieveSemanticAsync(string question, CancellationToken ct = default)
+    {
+        if (!options.Value.IsEnabled || !ClinicKnowledgeGatePolicy.CanUseSemanticFallback(question)) return new([]);
+        var vectors = Volatile.Read(ref _embeddings);
+        if (vectors is null) return new([]);
+        var masked = KnowledgePrivacyMask.Mask(ClinicQuestionNormalizer.Expand(question));
+        if (string.IsNullOrWhiteSpace(masked)) return new([]);
+        var query = await ollama.EmbedAsync([masked], ct);
+        if (!ValidVectors(query.Value, 1) || query.Value![0].Length != vectors[0].Length)
+            return new([], query.WasCalled);
+        var minimum = Math.Max(SemanticIntentGateMinCosine, Math.Clamp(options.Value.MinCosine, 0, 1));
+        var hits = catalog.Chunks.Select((chunk, i) => new KnowledgeHit(chunk, Bm25KnowledgeIndex.Cosine(query.Value[0], vectors[i])))
+            .Where(hit => hit.Score >= minimum)
+            .OrderByDescending(hit => hit.Score).ThenBy(hit => hit.Chunk.Id, StringComparer.Ordinal)
+            .Take(Math.Clamp(options.Value.TopK, 1, 10)).ToArray();
+        return new(hits, query.WasCalled, true);
+    }
 }

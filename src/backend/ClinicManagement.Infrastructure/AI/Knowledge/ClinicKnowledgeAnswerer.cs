@@ -4,7 +4,7 @@ using ClinicManagement.Application.AI.Knowledge;
 namespace ClinicManagement.Infrastructure.AI.Knowledge;
 
 public sealed class ClinicKnowledgeAnswerer(IClinicKnowledgeRetriever retriever, OllamaKnowledgeClient ollama)
-    : IClinicKnowledgeAnswerer
+    : IClinicSemanticKnowledgeAnswerer
 {
     private static readonly Regex NumberedListItem = new(
         @"(?<!\S)\d+[.)]\s+(?=\S)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -26,6 +26,23 @@ public sealed class ClinicKnowledgeAnswerer(IClinicKnowledgeRetriever retriever,
         var maskedQuestion = KnowledgePrivacyMask.Mask(question);
         if (string.IsNullOrWhiteSpace(maskedQuestion)) return null;
         var retrieval = await retriever.RetrieveAsync(maskedQuestion, ct);
+        return await AnswerRetrievedAsync(maskedQuestion, retrieval, ct);
+    }
+
+    public async Task<KnowledgeAnswer?> AnswerThroughIntentGateAsync(string question, CancellationToken ct = default)
+    {
+        var expanded = ClinicQuestionNormalizer.Expand(question);
+        if (!ClinicKnowledgeGatePolicy.CanUseSemanticFallback(expanded)) return null;
+        var masked = KnowledgePrivacyMask.Mask(expanded);
+        if (string.IsNullOrWhiteSpace(masked)) return null;
+        var retrieval = await retriever.RetrieveAsync(masked, ct);
+        if (retrieval.Hits.Count == 0 && retriever is IClinicSemanticKnowledgeRetriever semantic)
+            retrieval = await semantic.RetrieveSemanticAsync(masked, ct);
+        return await AnswerRetrievedAsync(masked, retrieval, ct);
+    }
+
+    private async Task<KnowledgeAnswer?> AnswerRetrievedAsync(string maskedQuestion, KnowledgeRetrieval retrieval, CancellationToken ct)
+    {
         if (retrieval.Hits.Count == 0) return null;
         var supported = retrieval.Hits.Where(hit => hit.Score >= retrieval.Hits[0].Score * 0.6)
             .DistinctBy(hit => (hit.Chunk.Source.DocId, hit.Chunk.Source.Heading)).Take(2).ToArray();
