@@ -56,7 +56,7 @@ public sealed class ServerOwnedSuggestionFilter : IActionFilter
         {
             var role = Enum.GetValues<AiActorRole>().FirstOrDefault(role => context.HttpContext.User.IsInRole(role.ToString()));
             var suggestion = AiSuggestionCatalog.Find(request.SuggestionCode, role);
-            if (suggestion is not null)
+            if (suggestion is not null && !(role == AiActorRole.Patient && request.IsTypedInput))
             {
                 request.Message = suggestion.Label;
                 context.ModelState.Remove(nameof(request.Message));

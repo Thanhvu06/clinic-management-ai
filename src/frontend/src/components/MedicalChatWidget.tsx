@@ -106,6 +106,7 @@ const PatientMedicalChatWidget: React.FC = () => {
     const previousMessagesRef = useRef<typeof messages>([]);
     const previousWizardRef = useRef<typeof wizard>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const emergencyCardRef = useRef<HTMLDivElement>(null);
     const location = useLocation();
     const { user } = useAuth();
 
@@ -158,6 +159,11 @@ const PatientMedicalChatWidget: React.FC = () => {
         previousMessagesRef.current = messages;
         previousWizardRef.current = wizard;
         if (!isOpen || (messages === previous && !wizardChanged)) return;
+        if (messages.length > previous.length && messages.at(-1)?.urgency === 'EMERGENCY') {
+            emergencyCardRef.current?.scrollIntoView({ behavior: 'instant', block: 'nearest' });
+            setHasNewMessages(false);
+            return;
+        }
         if (wizard && wizard.step !== previousWizard?.step) {
             const area = messageAreaRef.current;
             if (area) nearBottomRef.current = area.scrollHeight - area.scrollTop - area.clientHeight <= 80;
@@ -259,13 +265,13 @@ const PatientMedicalChatWidget: React.FC = () => {
 
                                     {/* Emergency Card */}
                                     {msg.urgency === "EMERGENCY" && (
-                                        <div className={styles.emergencyCard}>
+                                        <div ref={idx === latestAssistantIndex ? emergencyCardRef : undefined} className={styles.emergencyCard}>
                                             <div className={styles.emergencyHeader}>
                                                 <AlertTriangle size={20} />
                                                 <span>CẢNH BÁO NGUY HIỂM</span>
                                             </div>
                                             {isAdditionalCopy(msg.safetyNotice || "Dấu hiệu bạn mô tả có thể là tình huống khẩn cấp. Hãy gọi 115 hoặc đến cơ sở y tế gần nhất ngay lập tức.", msg.content) && <div>{msg.safetyNotice || "Dấu hiệu bạn mô tả có thể là tình huống khẩn cấp. Hãy gọi 115 hoặc đến cơ sở y tế gần nhất ngay lập tức."}</div>}
-                                            <a href="tel:115" className={styles.call115Btn}>
+                                            <a href="tel:115" aria-label="Gọi cấp cứu 115" className={styles.call115Btn}>
                                                 <Phone size={18} />
                                                 Gọi Cấp cứu 115 ngay
                                             </a>
