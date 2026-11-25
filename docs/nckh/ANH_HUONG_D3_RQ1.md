@@ -61,3 +61,27 @@ Các tệp dữ liệu và log được mở chỉ đọc. Giá trị trong cộ
 | `E:/NCKH/bo-cau-hoi-an/ket-qua/khoa.csv` | `979399d64ebc999b201c53615114147ce5ace7c7b68fef845abce97c6e516200` | TRÙNG |
 | `E:/NCKH/bo-cau-hoi-an/ket-qua/chay-thu.json` | `6dc593b5e5f06eba514db6e1a958290e585175fde0c0c4e3c4a90134e0b60b33` | TRÙNG |
 | `E:/NCKH/bo-cau-hoi-an/ket-qua/excerpt-replay.json` | `9dd7fa1d7ba6a7167d7e4921a9dba5ab5eba56a37331b992480ced875b8d9a72` | TRÙNG |
+
+## Phân tích độ nhạy T1
+
+Phân tích làm sau khi đã biết kết quả; kết quả chính RQ1 vẫn là K0.
+
+Dùng `rq1-stats --primary grader2` của RagEval tại commit `ca53e9d8da2fb3c163d72d873e4f6f21eac53714`. Các số dưới đây lấy từ `checklist.overall.t1` trên đủ 150 cặp trước xem lại. Δ là chênh lệch trung bình điểm LLM trừ điểm trích đoạn. T1 đạt khi Wilcoxon cặp hai phía có p < 0,05 theo hướng có lợi cho LLM. [Định nghĩa RQ1](DINH_NGHIA_RQ1.md)
+
+- **K0 — gốc.** Đọc trực tiếp phiếu gộp. Điểm A/B của STT 6 là 1/2 và của STT 31 là 0/2. K0 tái lập p làm tròn bằng 0,38 và 12/131/7 trước khi chạy hai kịch bản giả định.
+- **K1 — cho hòa.** Đặt điểm LLM bằng điểm trích đoạn cho STT 6 và 31. Cả hai điểm trích đoạn đều là 2.
+- **K2 — tối đa cho LLM.** Đặt điểm LLM của hai STT bằng 2, mức tối đa của rubric. K1 và K2 dùng cùng hai mức điểm và được chạy riêng.
+
+Với K1 và K2, chỉ sửa bản sao tạm ở ngoài repo. Hai ô C2 phía A trong `Checklist NguoiCham2` được đặt thành `Đủ` để công cụ hiện có tính ra 2 điểm, đồng thời cập nhật hai ô điểm grader2 tương ứng trong `Phiếu chấm`. Đây là thay đổi giả định cho T1. Các bản sao đã được xóa sau khi chạy và chỉ giữ `K0.json`, `K1.json`, `K2.json` tại `E:/test-thu/do-nhay-d3/`.
+
+| Kịch bản | Wilcoxon p | Δ trung bình | KTC bootstrap 95% | Thắng/hòa/thua của LLM | Kết luận T1 |
+|---|---:|---:|---|---:|---|
+| K0 | 0,382416 | 0,040000 | −0,033333 đến 0,113333 | 12/131/7 | Không đạt |
+| K1 | 0,130493 | 0,060000 | −0,006667 đến 0,133333 | 12/133/5 | Không đạt |
+| K2 | 0,130493 | 0,060000 | −0,006667 đến 0,133333 | 12/133/5 | Không đạt |
+
+Hai giả định tăng Δ từ 0,04 lên 0,06 điểm và chuyển hai cặp thua thành hòa. Cả ba kịch bản đều dẫn đến kết luận T1 “không có bằng chứng LLM tốt hơn”.
+
+| Tệp nguồn mở chỉ đọc | SHA-256 trước = sau | Đối chiếu |
+|---|---|---|
+| `E:/NCKH/ket-qua-rq1/RQ1_gop_truoc_xem_lai.xlsx` | `1ff11dbad744d533c3791c8672a91c599ff29e24b15f5222918ca47402a47539` | TRÙNG |
