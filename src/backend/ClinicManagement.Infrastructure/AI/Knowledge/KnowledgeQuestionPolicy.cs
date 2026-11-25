@@ -128,7 +128,9 @@ internal static class PatientChatPricing
 
         // "Đánh giá" alone is not a price cue.
         var priceText = Regex.Replace(normalized, @"\bdanh\s+gia\b", " ", RegexOptions.CultureInvariant);
-        return Regex.IsMatch(
+        return Regex.IsMatch(priceText,
+            @"\b(?:bac si|bs|chuyen khoa|khoa kham)\b[^.!?]{0,60}\b(?:dang |se )?thu\s+(?:nhu the nao|the nao|ra sao|bao nhieu|muc nao)\b",
+            RegexOptions.CultureInvariant) || Regex.IsMatch(
             priceText,
             @"\b(?:gia|phi|chi\s+phi)\b[^.!?]{0,60}\b(?:kham|dich\s+vu|goi|thuoc|sieu\s+am|noi\s+soi|chup|xet\s+nghiem|bao\s+nhieu|tien|chi\s+phi)\b|\b(?:kham|dich\s+vu|goi|thuoc|sieu\s+am|noi\s+soi|chup|xet\s+nghiem|bao\s+nhieu|tien)\b[^.!?]{0,60}\b(?:gia|phi)\b",
             RegexOptions.CultureInvariant);
