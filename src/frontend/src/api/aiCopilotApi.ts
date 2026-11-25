@@ -100,6 +100,7 @@ export interface AiCopilotRequest {
     timezone?: string;
     /** Server-owned suggestion code; when set, the server ignores `message` for routing. */
     suggestionCode?: string;
+    isTypedInput?: boolean;
 }
 
 export async function sendRoleCopilotMessage(request: AiCopilotRequest | string, signal?: AbortSignal): Promise<AiCopilotResponse> {

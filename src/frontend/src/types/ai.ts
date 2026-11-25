@@ -429,6 +429,7 @@ export interface AiBookingWizardRequest {
     sessionId: string;
     step: "start" | "pick" | "back" | "reason" | "text";
     text?: string;
+    typedMessage?: string;
     optionToken?: string;
     reason?: string;
     currentRoute?: string;

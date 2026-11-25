@@ -44,8 +44,17 @@ public sealed class AiBookingWizardService(
     public async Task<AiBookingWizardResponseDto> StepAsync(AiBookingWizardRequestDto request, CancellationToken ct = default)
     {
         var user = currentUser.UserId;
+        var typedInput = request.Step switch
+        {
+            "start" => request.TypedMessage,
+            "text" => request.TypedMessage ?? request.Text,
+            "reason" => request.Reason,
+            _ => null
+        };
+        var guard = user.HasValue && typedInput is not null ? safety.Inspect(typedInput) : null;
         AiBookingWizardResponseDto response;
         if (!user.HasValue) response = Error("AUTHENTICATION_REQUIRED", "Bạn cần đăng nhập để đặt lịch.");
+        else if (guard?.IsEmergency == true) response = Emergency(guard);
         else if (request.Step == "start")
             response = await StartAsync(request.Hint, user.Value, request.SessionId, ct);
         else
@@ -54,9 +63,10 @@ public sealed class AiBookingWizardService(
             if (selection is null)
                 response = Error("WIZARD_TOKEN_INVALID_OR_EXPIRED", "Lựa chọn không hợp lệ hoặc đã hết hạn. Vui lòng bắt đầu lại.");
             else if (request.Step == "text")
-                response = await TextAsync(selection, request.Text, user.Value, request.SessionId, ct);
+                response = await TextAsync(selection, typedInput, user.Value, request.SessionId, ct);
             else if (request.Step == "reason" || selection.Preset > 0)
-                response = await ReasonAsync(selection, request.Step == "reason" ? request.Reason : Reasons[selection.Preset - 1], user.Value, request.SessionId, ct);
+                response = await ReasonAsync(selection, request.Step == "reason" ? typedInput : Reasons[selection.Preset - 1],
+                    guard?.IsPromptInjection == true, user.Value, request.SessionId, ct);
             else response = await RenderAsync(selection, user.Value, request.SessionId, ct);
         }
 
@@ -71,7 +81,7 @@ public sealed class AiBookingWizardService(
                 MetadataJson = JsonSerializer.Serialize(new
                 {
                     source = "booking-wizard", operation = "text", status = response.Step,
-                    textLength = request.Text?.Length ?? 0, providerWasCalled = false
+                    textLength = typedInput?.Length ?? 0, providerWasCalled = false
                 })
             });
             await db.SaveChangesAsync(ct);
@@ -395,20 +405,19 @@ public sealed class AiBookingWizardService(
         return new TimeOnly(hour, minute);
     }
 
-    private async Task<AiBookingWizardResponseDto> ReasonAsync(BookingWizardSelection state, string? reason, Guid user, string session, CancellationToken ct)
+    private static AiBookingWizardResponseDto Emergency(AiSafetyGuardResult guard)
+    {
+        var emergency = Error("EMERGENCY", AiSafetyGuard.PatientEmergencyMessage(guard));
+        emergency.Step = "stopped";
+        emergency.AssistantMode = "SafetyBlocked";
+        emergency.Actions.Add(new AiActionDto { Id = "act-emergency-115", Type = AiActionTypes.CallEmergency, Label = "Gọi cấp cứu 115", Style = "danger", Payload = new() { TargetUrl = "tel:115" } });
+        return emergency;
+    }
+
+    private async Task<AiBookingWizardResponseDto> ReasonAsync(BookingWizardSelection state, string? reason, bool isPromptInjection, Guid user, string session, CancellationToken ct)
     {
         reason = reason?.Trim() ?? "";
-        // Same emergency/injection guard and PII rules as the patient assistant.
-        var guard = safety.Inspect(reason);
-        if (guard.IsEmergency)
-        {
-            var emergency = Error("EMERGENCY", "Dấu hiệu có thể là tình huống cấp cứu. Hãy gọi ngay 115 hoặc đến cơ sở cấp cứu gần nhất.");
-            emergency.Step = "stopped";
-            emergency.AssistantMode = "SafetyBlocked";
-            emergency.Actions.Add(new AiActionDto { Id = "act-emergency-115", Type = AiActionTypes.CallEmergency, Label = "Gọi cấp cứu 115", Style = "danger", Payload = new() { TargetUrl = "tel:115" } });
-            return emergency;
-        }
-        if (guard.IsPromptInjection)
+        if (isPromptInjection)
             return await ReasonErrorAsync("PROMPT_INJECTION", "Yêu cầu vượt phạm vi đã bị chặn. Vui lòng nhập nhu cầu khám.", state, user, session, ct);
         if (AiMedicalScopeGuard.IsPrescriptionRequest(reason))
             return await ReasonErrorAsync("MEDICAL_PRESCRIPTION_OUT_OF_SCOPE", "Tôi không thể kê đơn hoặc hướng dẫn liều dùng qua cuộc trò chuyện. Vui lòng nhập nhu cầu khám.", state, user, session, ct);

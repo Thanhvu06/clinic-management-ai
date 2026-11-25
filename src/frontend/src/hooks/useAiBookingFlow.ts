@@ -13,6 +13,7 @@ import axiosClient from "../api/axiosClient";
 import { isLocalHelpPhrase, isPatientReadAlias, isSafeClientRoute } from "../components/copilot/patientPresentation";
 import { classifyPatientTypedIntent, doctorScheduleHint, extractBookingHint, isConsultationPriceQuestion, isFilteredPatientRead } from "../components/copilot/patientTypedIntent";
 import { patientAppointmentChangeCard } from "../components/copilot/patientAppointmentChangeCard";
+import { patientCopilotTurn, wizardTextFields } from "../components/copilot/patientChatTurns";
 import { aiChatFailureMessage } from "../api/aiErrorMessages";
 import { sendRoleCopilotMessage } from "../api/aiCopilotApi";
 import type { ApiResponse } from "../types";
@@ -334,14 +335,14 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 if (intent === 'booking' || scheduleHint) {
                     setMessages(previous => [...previous, { role: 'user', content: trimmed }]);
                     const suggestions = messages.findLast(message => message.role === 'model')?.suggestions;
-                    await handleWizardStep('start', undefined, undefined, false, scheduleHint ?? extractBookingHint(trimmed) ?? (suggestions?.length === 1 ? suggestions[0].specialtyName : undefined));
+                    await handleWizardStep('start', undefined, undefined, false, scheduleHint ?? extractBookingHint(trimmed) ?? (suggestions?.length === 1 ? suggestions[0].specialtyName : undefined), trimmed);
                 } else if (intent) {
                     const codes = {
                         appointments: 'patient.my_appointments', visits: 'patient.my_visits',
                         prescriptions: 'patient.my_prescriptions', results: 'patient.my_diagnostic_results',
                         bills: 'patient.my_bills'
                     };
-                    await handleSuggestion({ code: codes[intent], label: trimmed }, false, retryError);
+                    await handleSuggestion({ code: codes[intent], label: trimmed }, false, retryError, true);
                 }
                 return;
             }
@@ -661,12 +662,12 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         }
     };
 
-    // Suggestion buttons run a server-owned read through the role Copilot.
-    const handleWizardStep = async (step: AiBookingWizardRequest['step'], optionToken?: string, reason?: string, retrying = false, hint?: string, text?: string): Promise<void> => {
+    const handleWizardStep = async (step: AiBookingWizardRequest['step'], optionToken?: string, reason?: string, retrying = false, hint?: string, text?: string, retrySession?: string): Promise<void> => {
         if (loading || submittingBooking || wizardBusyRef.current) return;
         wizardBusyRef.current = true;
-        if (step === 'start' && !retrying) {
-            wizardSessionRef.current = generateSessionIdentity();
+        const sessionId = retrySession ?? (step === 'start' ? generateSessionIdentity() : wizardSessionRef.current);
+        if (step === 'start' && !retrying && !text) {
+            wizardSessionRef.current = sessionId;
             setActiveDraft(null);
             setWizard(null);
         }
@@ -679,15 +680,23 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         clearFailure();
         try {
             const response = await axiosClient.post<AiBookingWizardRequest, ApiResponse<AiBookingWizardResponse>>('/ai/booking-wizard', {
-                sessionId: wizardSessionRef.current, step, optionToken, reason,
+                sessionId, step, optionToken, reason,
                 currentRoute: location.pathname, locale: 'vi-VN',
                 ...(step === 'start' && hint ? { hint } : {}),
-                ...(step === 'text' ? { text } : {})
+                ...wizardTextFields(step, text)
             }, { signal: controller.signal, suppressForbiddenRedirect: true });
             if (controller.signal.aborted || requestId !== activeRequestIdRef.current || account !== accountKeyRef.current) return;
             const data = response.data;
             if (!data) throw new Error('Không nhận được dữ liệu đặt lịch. Vui lòng thử lại.');
             clearFailure();
+            if (data.errorCode === 'EMERGENCY') {
+                setMessages(previous => [...previous, { role: 'model', content: data.message, urgency: 'EMERGENCY', actions: data.actions }]);
+                return;
+            }
+            if (step === 'start') {
+                wizardSessionRef.current = sessionId;
+                setActiveDraft(null);
+            }
             setWizard(data);
             if (data.reviewAction) {
                 const payload = data.reviewAction.payload;
@@ -699,15 +708,12 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 setActiveDraft(draft);
                 setMessages(previous => [...previous, { role: 'model', content: data.message,
                     bookingDraft: draft, actions: [data.reviewAction!], providerWasCalled: false, providerAttemptCount: 0 }]);
-            } else if (data.step === 'stopped') {
-                setActiveDraft(null);
-                setMessages(previous => [...previous, { role: 'model', content: data.message, urgency: 'EMERGENCY', actions: data.actions }]);
             } else if (step === 'back') {
                 setActiveDraft(null);
             }
         } catch (error: unknown) {
             if (controller.signal.aborted || requestId !== activeRequestIdRef.current || account !== accountKeyRef.current) return;
-            rememberFailure(error, () => handleWizardStep(step, optionToken, reason, true, undefined, text));
+            rememberFailure(error, () => handleWizardStep(step, optionToken, reason, true, undefined, text, sessionId));
             setErrorMsg(aiChatFailureMessage(error));
         } finally {
             if (requestId === activeRequestIdRef.current) {
@@ -719,7 +725,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     };
 
     // Only the code is authoritative; the label is shown as the user's turn.
-    const handleSuggestion = async (suggestion: AiSuggestionItem, freeText = false, retryError?: ChatMessage): Promise<void> => {
+    const handleSuggestion = async (suggestion: AiSuggestionItem, freeText = false, retryError?: ChatMessage, isTypedInput = false): Promise<void> => {
         if (suggestion.code === 'patient.start_booking') {
             await handleWizardStep('start');
             return;
@@ -747,6 +753,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             const response = await sendRoleCopilotMessage({
                 message: label,
                 suggestionCode: freeText ? undefined : suggestion.code,
+                ...(isTypedInput ? { isTypedInput } : {}),
                 sessionId: copilotSessionRef.current.id,
                 currentRoute: location.pathname,
                 clientTurnId: `turn_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
@@ -755,19 +762,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             }, requestController.signal);
             if (requestController.signal.aborted || !isCurrentRequest()) return;
             clearFailure();
-            setMessages(previous => [...previous, {
-                role: "model",
-                content: response.message,
-                providerState: response.providerState,
-                executionMode: response.executionMode,
-                fallbackActive: response.fallbackActive,
-                providerWasCalled: response.providerWasCalled,
-                providerAttemptCount: response.providerAttemptCount,
-                primaryIntent: response.intent,
-                clarificationPrompt: response.clarification ?? undefined,
-                copilotCards: response.cards ?? [],
-                suggestionChips: response.suggestions ?? []
-            }]);
+            setMessages(previous => [...previous, patientCopilotTurn(response)]);
         } catch (err: unknown) {
             if (requestController.signal.aborted || !isCurrentRequest()) return;
             const status = (err as { status?: number; response?: { status?: number } })?.status ??
@@ -780,7 +775,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 urgency: "ROUTINE",
                 assistantStatus: status === 429 ? "Degraded" : "Offline"
             };
-            rememberFailure(err, () => handleSuggestion(suggestion, freeText, failedMessage));
+            rememberFailure(err, () => handleSuggestion(suggestion, freeText, failedMessage, isTypedInput));
             setMessages(previous => [...previous, failedMessage]);
         } finally {
             if (requestId === activeRequestIdRef.current) {
