@@ -23,7 +23,9 @@ public static class KnowledgeRegistration
         services.AddSingleton<ClinicKnowledgeRetriever>();
         services.AddSingleton<IClinicKnowledgeRetriever>(sp => sp.GetRequiredService<ClinicKnowledgeRetriever>());
         services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<ClinicKnowledgeRetriever>());
-        services.AddSingleton<IClinicKnowledgeAnswerer, ClinicKnowledgeAnswerer>();
+        services.AddSingleton<IClinicKnowledgeAnswerer>(sp => new ClinicKnowledgeAnswerer(
+            sp.GetRequiredService<IClinicKnowledgeRetriever>(), sp.GetRequiredService<OllamaKnowledgeClient>(),
+            filterUserCitations: true));
         return services;
     }
 }
