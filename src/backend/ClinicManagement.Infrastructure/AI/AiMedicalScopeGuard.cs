@@ -12,6 +12,7 @@ namespace ClinicManagement.Infrastructure.AI;
 public static class AiMedicalScopeGuard
 {
     internal const string PatientRefusal = "Tôi không thể kê đơn hoặc hướng dẫn liều dùng qua cuộc trò chuyện. Vui lòng liên hệ bác sĩ, dược sĩ hoặc phòng khám để được hướng dẫn.";
+    internal const string PatientPickingRefusal = "Tôi không thể gợi ý hay chọn thuốc cho bạn và không thể kê đơn qua cuộc trò chuyện. Vui lòng liên hệ bác sĩ hoặc dược sĩ để được hướng dẫn.";
 
     // Output is not a user question: numeric dosing and authored prescriptions
     // must be rejected even without request words such as "bao nhiêu".
@@ -126,6 +127,16 @@ public static class AiMedicalScopeGuard
         @"uong (?:thuoc|khang sinh) (?:may|bao nhieu) ngay\b.{0,35}\b(?:ngung|dung))\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
+    private static readonly Regex MedicinePicking = new(
+        @"\b(?:chon|lua chon|goi y|de xuat|gioi thieu)\s+(?:(?:giup|cho|toi|minh|em|mot|vai|loai|thu|ten)\s+){0,6}(?:thuoc|duoc pham)\b|" +
+        @"\b(?:uong (?:thuoc |duoc pham )?(?:gi|loai nao)|uong (?:thuoc|duoc pham) nao|mua gi (?:de )?uong)\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    internal static bool IsMedicinePickingRequest(string? message) =>
+        !string.IsNullOrWhiteSpace(message) && SplitClauses(message).Any(clause =>
+            !PreservedPrescriptionRead.IsMatch(clause.Preserved) && !FoldedPrescriptionRead.IsMatch(clause.Folded) &&
+            MedicinePicking.IsMatch(clause.Folded));
+
     public static bool IsPrescriptionRequest(string? message) =>
         IsPrescriptionRequest(AiActorRole.Patient, message);
 
@@ -171,7 +182,7 @@ public static class AiMedicalScopeGuard
             if (isSoftRequest && !isReadClause)
                 return true;
         }
-        return false;
+        return IsMedicinePickingRequest(message);
     }
 
     private static bool HasMedicationAmountWithoutService(string clause, bool isUnaccented)

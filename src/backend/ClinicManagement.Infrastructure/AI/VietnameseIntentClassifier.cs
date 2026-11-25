@@ -259,6 +259,12 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
             return result;
         }
 
+        if (!mentionsPackage && Knowledge.PatientChatPricing.HasPricingEvidence(lower, normalized))
+        {
+            result.Intent = AiChatIntentTypes.PricingInquiry;
+            return result;
+        }
+
         // A question about which doctor is suitable for a symptom is not a
         // doctor-name lookup. Resolve the symptom first and leave DoctorName
         // empty; the service will ground recommendations against real data.
@@ -268,15 +274,6 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
                 ? AiChatIntentTypes.FindDoctorForSymptom
                 : AiChatIntentTypes.SpecialtyRecommendation;
             result.ExtractedReason = recommendationReason;
-            return result;
-        }
-
-        // 6. Pricing Inquiry ("giá bao nhiêu", "chi phí khám"). Do not use
-        // bare "giá/gia" or "phí/phi" substrings: "đánh giá triệu chứng"
-        // and "đánh giá ca khám" are not price questions.
-        if (!mentionsPackage && Knowledge.PatientChatPricing.HasPricingEvidence(lower, normalized))
-        {
-            result.Intent = AiChatIntentTypes.PricingInquiry;
             return result;
         }
 
@@ -370,34 +367,14 @@ public class VietnameseIntentClassifier : IVietnameseIntentClassifier
         }
 
         // 11. Doctor Selection / Search with explicit doctor mention
-        var doctorMatch = Regex.Match(trimmed, @"(?:chọn\s+)?(?:bác sĩ|bac si|bs\.|bs|bác sỹ|bac sy)\s+([A-Za-z0-9À-ỹ\s]+)", RegexOptions.IgnoreCase);
-        if (!doctorMatch.Success)
-            doctorMatch = Regex.Match(trimmed, @"(?:tìm|xem\s+lịch)\s+bác\s+([A-Za-zÀ-ỹ][A-Za-zÀ-ỹ\s]+?)(?:\s+giúp\s+(?:tôi|mình|em))?[\.!?]*$", RegexOptions.IgnoreCase);
-        if (doctorMatch.Success)
+        var candidateName = PatientChatDoctorName.ExtractCandidate(trimmed);
+        if (PatientChatDoctorName.LooksLikeName(candidateName))
         {
-            var rawName = doctorMatch.Groups[1].Value;
-            var delimiterMatch = Regex.Match(rawName, @"^(.*?)(?:\s+(?:vào|từ|lúc|ngày|khoa|chuyên khoa|sáng|chiều|tối)\b|[,\.\?!])", RegexOptions.IgnoreCase);
-            var candidateName = (delimiterMatch.Success ? delimiterMatch.Groups[1].Value : rawName).Trim();
-
-            if (Regex.IsMatch(candidateName, @"\b(?:nào|ai|người nào|vị nào|bác sĩ gì|ở đâu|của|cua|cho|giúp|giup)\b", RegexOptions.IgnoreCase) ||
-                Regex.IsMatch(lower, @"(?:có|nên chọn)\s+bác sĩ\s+nào", RegexOptions.IgnoreCase))
-            {
-                candidateName = string.Empty;
-            }
-
-            if (!string.IsNullOrWhiteSpace(candidateName) && candidateName.Length >= 2)
-            {
-                result.ExtractedDoctorName = candidateName;
-                if (lower.Contains("có khám không") || lower.Contains("thông tin") || lower.Contains("tìm bác sĩ") || lower.Contains("xem bác sĩ") || lower.StartsWith("tìm bác ") || lower.StartsWith("xem lịch bác "))
-                {
-                    result.Intent = AiChatIntentTypes.DoctorSearch;
-                }
-                else
-                {
-                    result.Intent = AiChatIntentTypes.SelectDoctor;
-                }
-                return result;
-            }
+            result.ExtractedDoctorName = candidateName;
+            result.Intent = lower.Contains("có khám không") || lower.Contains("thông tin") || lower.Contains("tìm bác sĩ") ||
+                lower.Contains("xem bác sĩ") || lower.StartsWith("tìm bác ") || lower.StartsWith("xem lịch bác ")
+                ? AiChatIntentTypes.DoctorSearch : AiChatIntentTypes.SelectDoctor;
+            return result;
         }
 
         if (lower.Contains("danh sách bác sĩ") || lower.Contains("đội ngũ bác sĩ") || lower.Contains("tìm bác sĩ") || lower.Contains("xem bác sĩ"))

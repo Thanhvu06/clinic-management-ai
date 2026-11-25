@@ -205,23 +205,8 @@ public partial class AiSpecialtyService : IAiSpecialtyService
             };
         }
 
-        if (AiMedicalScopeGuard.IsPrescriptionRequest(rawMessage))
-        {
-            return new AiChatResponseDto
-            {
-                Message = AiMedicalScopeGuard.PatientRefusal,
-                Urgency = "ROUTINE",
-                PromptVersion = GeminiAiProvider.CurrentPromptVersion,
-                AssistantStatus = "Online",
-                ProviderStatus = AiProviderStatusContract.NotCalled,
-                ProviderState = AiProviderStatusContract.NotCalled,
-                ExecutionMode = AiProviderStatusContract.ExecutionDeterministicFallback,
-                FallbackActive = true,
-                DialogueOutcome = "OutOfScopeMedicalRequest",
-                PrimaryIntent = AiChatIntentTypes.UnclearOrOutOfScope,
-                ManualSelectionRequired = true
-            };
-        }
+        if (await ResolveMedicationRequestAsync(rawMessage, cancellationToken) is { } medicationResponse)
+            return medicationResponse;
 
         // A client may start a new tab with no session ID, but an existing session
         // can never be silently rebound to another account or revived after expiry.
@@ -1463,12 +1448,8 @@ public partial class AiSpecialtyService : IAiSpecialtyService
                 return;
             }
         }
-        else if (!string.IsNullOrWhiteSpace(localClassification.ExtractedDoctorName) || !string.IsNullOrWhiteSpace(aiResult.ExtractedDoctorName))
+        else if (ResolveDoctorSearchName(cleanMessage, localClassification.ExtractedDoctorName, aiResult.ExtractedDoctorName, allActiveDoctors) is { } doctorSearchName)
         {
-            var doctorSearchName = !string.IsNullOrWhiteSpace(localClassification.ExtractedDoctorName)
-                ? localClassification.ExtractedDoctorName
-                : aiResult.ExtractedDoctorName!;
-
             // Negation filter: If user negated a doctor, exclude from search
             var negatedName = localClassification.NegatedDoctorName ?? aiResult.NegatedDoctorName;
             var searchableDoctors = allActiveDoctors;
@@ -1490,7 +1471,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
                     ? request.Reason.Trim()
                     : RecoverInitialReason(cleanMessage, request.Context, request.Reason, aiResult.ExtractedReason);
 
-                responseDto.Message = $"Hệ thống không tìm thấy bác sĩ nào có tên \"{aiResult.ExtractedDoctorName.Trim()}\" tại phòng khám ClinicCare. Bạn có thể xem danh sách bác sĩ của phòng khám hoặc cho tôi biết chuyên khoa/triệu chứng để được hỗ trợ nhé.";
+                responseDto.Message = $"Hệ thống không tìm thấy bác sĩ nào có tên \"{doctorSearchName}\" tại phòng khám ClinicCare. Bạn có thể xem danh sách bác sĩ của phòng khám hoặc cho tôi biết chuyên khoa/triệu chứng để được hỗ trợ nhé.";
                 responseDto.BookingDraft = new AiBookingDraftDto
                 {
                     SpecialtyId = targetSpecialty?.Id,
@@ -2771,16 +2752,10 @@ public partial class AiSpecialtyService : IAiSpecialtyService
         });
 
         // Ground doctor check in degraded mode if user mentioned a doctor
-        var doctorNamePattern = new Regex(@"(?:bác sĩ|bac si|bs\.|bs|bác sỹ|bac sy)\s+([A-Za-z0-9À-ỹ\s]+)", RegexOptions.IgnoreCase);
-        var docMatch = doctorNamePattern.Match(cleanMessage);
-        if (docMatch.Success)
+        var candidateName = PatientChatDoctorName.ExtractCandidate(cleanMessage);
+        if (candidateName is not null)
         {
-            var rawName = AiBookingWizardService.StripScheduleQuestion(docMatch.Groups[1].Value);
-            var delimiterMatch = Regex.Match(rawName, @"^(.*?)(?:\s+(?:vào|từ|lúc|ngày|khoa|chuyên khoa|sáng|chiều|tối)\b|[,\.\?!])", RegexOptions.IgnoreCase);
-            var candidateName = (delimiterMatch.Success ? delimiterMatch.Groups[1].Value : rawName).Trim();
-            var normCandidate = NormalizeVietnamese(candidateName);
-            var nonNames = new HashSet<string> { "", "oi", "a", "nhe", "cho", "hoi", "oi cho toi hoi", "giup", "tu van", "kham" };
-            if (!string.IsNullOrWhiteSpace(normCandidate) && normCandidate.Length >= 2 && !nonNames.Contains(normCandidate))
+            if (PatientChatDoctorName.IsCandidate(candidateName))
             {
                 var allDoctors = await QueryActiveDoctorsAsync(cancellationToken);
                 var matches = MatchDoctors(candidateName, allDoctors);
@@ -2839,7 +2814,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
                         });
                     }
                 }
-                else if (normCandidate.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 2 || normCandidate.Length >= 4)
+                else if (PatientChatDoctorName.LooksLikeName(candidateName) && candidateName.Length >= 4)
                 {
                     userMessage = $"{userMessage}\n\nNgoài ra, hệ thống không tìm thấy bác sĩ nào có tên \"{candidateName}\" tại phòng khám ClinicCare. Bạn có thể xem danh sách bác sĩ của phòng khám hoặc chọn chuyên khoa bên dưới.";
                     response.Message = userMessage;
