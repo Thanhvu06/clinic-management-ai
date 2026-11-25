@@ -8,6 +8,7 @@ internal static class KnowledgeCitationSelector
     private const double MinimumClaimScore = 0.25;
     private const double RelativeClaimScore = 0.70;
     private const int MinimumMatchedTerms = 3;
+    private const int DirectEvidenceTerms = 5;
     private static readonly Regex ClaimBoundary = new(
         @"(?<=[.!?])\s+|\r?\n", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex Attribution = new(
@@ -20,10 +21,20 @@ internal static class KnowledgeCitationSelector
             return promptHits.Select(hit => hit.Chunk.Source).ToArray();
 
         var index = new Bm25KnowledgeIndex(promptHits.Select(hit => hit.Chunk).ToArray());
+        var directEvidence = promptHits
+            .SelectMany(hit => ClaimBoundary.Split(hit.Chunk.Text).SelectMany(EvidencePhrases)
+                .Distinct(StringComparer.Ordinal).Select(phrase => (Phrase: phrase, Source: hit.Chunk.Source)))
+            .GroupBy(item => item.Phrase, StringComparer.Ordinal)
+            .Where(group => group.Count() == 1)
+            .ToDictionary(group => group.Key, group => group.First().Source, StringComparer.Ordinal);
         var matches = new HashSet<KnowledgeSource>();
         foreach (var segment in ClaimBoundary.Split(answer))
         {
             var claim = Attribution.Replace(segment, " ");
+            foreach (var phrase in EvidencePhrases(claim))
+                if (directEvidence.TryGetValue(phrase, out var source))
+                    matches.Add(source);
+
             var termCount = KnowledgeText.ContentTerms(claim).Length;
             if (termCount < MinimumMatchedTerms) continue;
 
@@ -42,5 +53,16 @@ internal static class KnowledgeCitationSelector
             return [promptHits[0].Chunk.Source];
 
         return promptHits.Select(hit => hit.Chunk.Source).Where(matches.Contains).Distinct().ToArray();
+    }
+
+    private static IEnumerable<string> EvidencePhrases(string text)
+    {
+        var terms = KnowledgeText.OrderedContentTerms(text).ToArray();
+        for (var start = 0; start <= terms.Length - DirectEvidenceTerms; start++)
+        {
+            var phrase = terms.AsSpan(start, DirectEvidenceTerms).ToArray();
+            if (phrase.Distinct(StringComparer.Ordinal).Count() == DirectEvidenceTerms)
+                yield return string.Join(' ', phrase);
+        }
     }
 }
