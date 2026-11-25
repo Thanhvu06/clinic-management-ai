@@ -3,7 +3,7 @@ using ClinicManagement.Application.AI.Knowledge;
 
 namespace ClinicManagement.Infrastructure.AI.Knowledge;
 
-public sealed class ClinicKnowledgeAnswerer(IClinicKnowledgeRetriever retriever, OllamaKnowledgeClient ollama)
+public sealed class ClinicKnowledgeAnswerer(IClinicKnowledgeRetriever retriever, OllamaKnowledgeClient ollama, bool filterUserCitations = false)
     : IClinicSemanticKnowledgeAnswerer
 {
     private static readonly Regex NumberedListItem = new(
@@ -52,8 +52,9 @@ public sealed class ClinicKnowledgeAnswerer(IClinicKnowledgeRetriever retriever,
         var hasAnswer = !string.IsNullOrWhiteSpace(generated.Value);
         if (hasAnswer && IsNoInformationAnswer(generated.Value!)) return null;
         var text = hasAnswer ? Limit(generated.Value!) : Limit(retrieval.Hits[0].Chunk.Text);
-        var sources = (hasAnswer ? supported : retrieval.Hits.Take(1))
-            .Select(h => h.Chunk.Source).Distinct().ToArray();
+        var sources = !hasAnswer ? [retrieval.Hits[0].Chunk.Source]
+            : filterUserCitations ? KnowledgeCitationSelector.Select(text, supported)
+            : supported.Select(hit => hit.Chunk.Source).Distinct().ToArray();
         return new(text, sources, hasAnswer, generated.WasCalled || retrieval.EmbeddingWasCalled);
     }
 
