@@ -38,6 +38,8 @@ public sealed class AiCopilotRequestDto
     /// </summary>
     [MaxLength(64)]
     public string? SuggestionCode { get; set; }
+
+    public bool IsTypedInput { get; set; }
 }
 
 public sealed class AiSuggestionItemDto

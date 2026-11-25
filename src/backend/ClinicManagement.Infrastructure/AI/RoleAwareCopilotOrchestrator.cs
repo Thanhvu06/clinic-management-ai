@@ -80,17 +80,19 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
         var conversationId = NormalizeId(request.ConversationId ?? request.SessionId, "conv");
         var sessionId = NormalizeId(request.SessionId ?? request.ConversationId, "sess");
         var turnId = NormalizeId(request.ClientTurnId, "turn");
-        var memory = await _memoryStore.LoadAsync(sessionId, _currentUser.UserId, role, cancellationToken);
+        var typedSafety = request.IsTypedInput && role == AiActorRole.Patient && !string.IsNullOrWhiteSpace(request.SuggestionCode)
+            ? _pipeline.Analyze(request.Message).Safety
+            : null;
         var suggestion = AiSuggestionCatalog.Find(request.SuggestionCode, role);
-        // Discard untrusted text before analysis, resolution, memory or audit.
+        // A suggestion code owns routing even when the composer supplied the original text for emergency screening.
         if (suggestion is not null) request.Message = suggestion.Label;
         var analysis = _pipeline.Analyze(request.Message);
         var suggestionRequested = !string.IsNullOrWhiteSpace(request.SuggestionCode);
         var auditSource = suggestionRequested ? SuggestionAuditSource : FreeTextAuditSource;
 
-        if (analysis.Safety.IsEmergency || analysis.Safety.IsPromptInjection)
+        var emergency = typedSafety?.IsEmergency == true || analysis.Safety.IsEmergency;
+        if (emergency || analysis.Safety.IsPromptInjection)
         {
-            var emergency = analysis.Safety.IsEmergency;
             var response = new AiCopilotResponseDto
             {
                 ConversationId = conversationId,
@@ -137,6 +139,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
             return response;
         }
 
+        var memory = await _memoryStore.LoadAsync(sessionId, _currentUser.UserId, role, cancellationToken);
         var resolved = await _contextResolver.ResolveAsync(request, memory, role, _currentUser.UserId, cancellationToken);
         if (!resolved.IsValid)
         {

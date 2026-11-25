@@ -10,6 +10,7 @@ public sealed class AiBookingWizardRequestDto
     public string Step { get; set; } = "start";
     [MaxLength(512)] public string? OptionToken { get; set; }
     [MaxLength(200)] public string? Text { get; set; }
+    [MaxLength(500)] public string? TypedMessage { get; set; }
     // Length and safety errors are returned without reflecting the submitted text.
     [MaxLength(2000)] public string? Reason { get; set; }
     [MaxLength(256)] public string? CurrentRoute { get; set; }
