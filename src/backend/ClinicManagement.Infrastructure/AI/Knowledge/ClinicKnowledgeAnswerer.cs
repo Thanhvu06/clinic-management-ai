@@ -52,8 +52,7 @@ public sealed class ClinicKnowledgeAnswerer(IClinicKnowledgeRetriever retriever,
         var hasAnswer = !string.IsNullOrWhiteSpace(generated.Value);
         if (hasAnswer && IsNoInformationAnswer(generated.Value!)) return null;
         var text = hasAnswer ? Limit(generated.Value!) : Limit(retrieval.Hits[0].Chunk.Text);
-        var sources = (hasAnswer ? supported : retrieval.Hits.Take(1))
-            .Select(h => h.Chunk.Source).Distinct().ToArray();
+        var sources = hasAnswer ? KnowledgeCitationSelector.Select(text, supported) : [retrieval.Hits[0].Chunk.Source];
         return new(text, sources, hasAnswer, generated.WasCalled || retrieval.EmbeddingWasCalled);
     }
 
