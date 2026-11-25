@@ -24,12 +24,12 @@ public static class KnowledgeText
         return Regex.Replace(value, @"[^\p{L}\p{N}]+", " ").Trim();
     }
 
-    public static string[] ContentTerms(string value)
-    {
-        var clean = StripMasked(value);
-        var accented = Normalize(clean, false).Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return accented.Where(w => !IsStopWord(w) && !char.IsDigit(w[0])).Distinct(StringComparer.Ordinal).ToArray();
-    }
+    public static string[] ContentTerms(string value) =>
+        OrderedContentTerms(value).Distinct(StringComparer.Ordinal).ToArray();
+
+    internal static IEnumerable<string> OrderedContentTerms(string value) =>
+        Normalize(StripMasked(value), false).Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(word => !IsStopWord(word) && !char.IsDigit(word[0]));
 
     public static string[] Terms(string value)
     {
