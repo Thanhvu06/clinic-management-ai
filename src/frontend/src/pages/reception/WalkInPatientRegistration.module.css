@@ -72,6 +72,12 @@
     color: var(--cc-color-text-secondary);
 }
 
+.fieldError {
+    display: block;
+    margin-top: var(--cc-space-xxs);
+    color: var(--cc-color-danger);
+}
+
 .nativeSelect[aria-invalid="true"] {
     border-color: var(--cc-color-danger);
 }

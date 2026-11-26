@@ -192,12 +192,17 @@ export const ReceptionChangeRequests: React.FC = () => {
         }
     };
 
-    const translateType = (type: string) => <StatusBadge status={type === 'Cancellation' ? 'Cancelled' : 'Confirmed'} label={type === 'Reschedule' ? 'Đổi lịch' : type === 'Cancellation' ? 'Hủy lịch' : '—'} />;
+    const formatSlotRange = (date: string, start?: string, end?: string) => {
+        const range = [start, end].filter(Boolean).map(time => time!.substring(0, 5)).join('–');
+        return range ? `${formatDateOnly(date)} ${range}` : formatDateOnly(date);
+    };
+
+    const translateType =(type: string) => <StatusBadge status={type === 'Cancellation' ? 'Cancelled' : 'Confirmed'} label={type === 'Reschedule' ? 'Đổi lịch' : type === 'Cancellation' ? 'Hủy lịch' : '—'} />;
     const translateStatus = (status: string) => <StatusBadge status={status} label={({Pending:'Chờ xử lý',Approved:'Đã duyệt',Rejected:'Đã từ chối',Withdrawn:'Đã rút',Expired:'Hết hạn xử lý'} as Record<string,string>)[status] || '—'} />;
     const totalPages = Math.max(1, Math.ceil(totalItems / 10));
     const columns: DataTableColumn<ChangeRequest>[] = [
-        {header:'Lịch gốc',accessor:req => <><div className={styles.appointmentCode}>{req.appointmentCode ? `${req.appointmentCode}` : `ID: #${req.appointmentId}`}</div>{req.patientName && <div>BN: <strong>{req.patientName}</strong></div>}{req.doctorName && <div className={styles.secondaryText}>BS: {req.doctorName}</div>}</>},
-        {header:'Loại yêu cầu & chi tiết',accessor:req => <>{translateType(req.requestType)}{req.requestType === 'Reschedule' && <div className={styles.requestDetail}>{req.requestedSlotDate ? <span>Đổi sang: <strong>{formatDateOnly(req.requestedSlotDate)}</strong> ({req.requestedStartTime?.substring(0, 5)} - {req.requestedEndTime?.substring(0, 5)})</span> : <span>Slot mong muốn: #{req.requestedSlotId}</span>}</div>}<div className={styles.requestReason}>Lý do: {req.reason || 'Không ghi chú'}</div></>},
+        {header:'Lịch gốc',accessor:req => <><div className={styles.appointmentCode}>{req.appointmentCode ? `${req.appointmentCode}` : `ID: #${req.appointmentId}`}</div>{req.currentSlotDate && <div>Thời gian: <strong>{formatSlotRange(req.currentSlotDate, req.currentStartTime, req.currentEndTime)}</strong></div>}{req.patientName && <div>BN: <strong>{req.patientName}</strong></div>}{req.doctorName && <div className={styles.secondaryText}>BS: {req.doctorName}</div>}</>},
+        {header:'Loại yêu cầu & chi tiết',accessor:req => <>{translateType(req.requestType)}{req.requestType === 'Reschedule' && <div className={styles.requestDetail}>{req.requestedSlotDate ? <span>Đổi sang: <strong>{formatSlotRange(req.requestedSlotDate, req.requestedStartTime, req.requestedEndTime)}</strong></span> : <span>Slot mong muốn: #{req.requestedSlotId}</span>}</div>}<div className={styles.requestReason}>Lý do: {req.reason || 'Không ghi chú'}</div></>},
         {header:'Thời điểm tạo',accessor:req => formatDateTime(req.createdAt)},
         {header:'Trạng thái',accessor:req => translateStatus(req.status)},
         {header:'Thao tác',align:'right',accessor:req => <Button onClick={() => openDetail(req)} icon={<Eye size={14} />}>{req.status === 'Pending' ? 'Xử lý' : 'Xem chi tiết'}</Button>},
