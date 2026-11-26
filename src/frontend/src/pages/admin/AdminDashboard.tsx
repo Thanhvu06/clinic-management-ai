@@ -1,5 +1,6 @@
 import { formatAuditTime } from '../../utils/auditTime';
 import { getAuditActionLabel, getAuditEntityLabel } from '../../utils/auditLogLabels';
+import { getAuditActorRoleLabel } from '../../utils/auditActor';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from 'antd';
@@ -31,6 +32,7 @@ interface AuditLogEntry {
     entityName: string;
     id: number;
     userFullName: string;
+    userRole?: string;
     description: string;
     createdAt: string;
 }
@@ -97,7 +99,7 @@ export const AdminDashboard: React.FC = () => {
 
     const logColumns: DataTableColumn<AuditLogEntry>[] = [
         { header: 'Thời gian', accessor: item => <span className={styles.numeric}>{formatAuditTime(item.createdAt)}</span> },
-        { header: 'Người làm', accessor: 'userFullName', className: styles.actor },
+        { header: 'Người làm', className: styles.actor, accessor: item => <>{item.userFullName}{item.userRole && <span className={styles.actorRole}>{getAuditActorRoleLabel(item.userRole)}</span>}</> },
         { header: 'Mô tả', className: styles.description, accessor: item => <>
             <span className={styles.activityHeading}><strong>{getAuditActionLabel(item.action)}</strong><span className={styles.activityEntity}>{getAuditEntityLabel(item.entityName)}</span></span>
             {item.description && <span className={styles.activityText}>{item.description}</span>}

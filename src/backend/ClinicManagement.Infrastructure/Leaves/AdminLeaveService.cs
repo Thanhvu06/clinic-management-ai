@@ -9,6 +9,9 @@ using ClinicManagement.Application.Leaves.Interfaces;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using ClinicManagement.Domain.Entities;
+using ClinicManagement.Application.Authentication.Interfaces;
+using ClinicManagement.Infrastructure.Common;
 
 namespace ClinicManagement.Infrastructure.Leaves;
 
@@ -16,12 +19,18 @@ public class AdminLeaveService : IAdminLeaveService
 {
     private readonly AppDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly ICurrentUserService _currentUser;
 
-    public AdminLeaveService(AppDbContext dbContext, IDateTimeProvider dateTimeProvider)
+    public AdminLeaveService(AppDbContext dbContext, IDateTimeProvider dateTimeProvider, ICurrentUserService currentUser)
     {
         _dbContext = dbContext;
         _dateTimeProvider = dateTimeProvider;
+        _currentUser = currentUser;
     }
+
+    private void RecordLeaveAudit(string action, DoctorLeaveRequest leave, string description) =>
+        UserActionAudit.Record(_dbContext, _currentUser.UserId, action, nameof(DoctorLeaveRequest), leave.Id,
+            $"{description} NP{leave.Id} ({leave.StartDateTime:dd/MM/yyyy HH:mm} - {leave.EndDateTime:dd/MM/yyyy HH:mm})", _dateTimeProvider.UtcNow);
 
     public async Task<PagedResult<LeaveRequestDto>> GetLeaveRequestsAsync(long? doctorId, string? status, int page, int pageSize)
     {
@@ -138,6 +147,7 @@ public class AdminLeaveService : IAdminLeaveService
 
             leave.Status = DoctorLeaveRequestStatus.Approved;
             leave.AdminNote = request.AdminNote;
+            RecordLeaveAudit(UserActionAudit.ApproveLeaveRequest, leave, "Quản trị duyệt đơn nghỉ phép");
 
             var doctorUserId = await _dbContext.Doctors
                 .Where(d => d.Id == leave.DoctorId)
@@ -181,6 +191,7 @@ public class AdminLeaveService : IAdminLeaveService
 
         leave.Status = DoctorLeaveRequestStatus.Rejected;
         leave.AdminNote = request.AdminNote;
+        RecordLeaveAudit(UserActionAudit.RejectLeaveRequest, leave, "Quản trị từ chối đơn nghỉ phép");
 
         var doctorUserId = await _dbContext.Doctors
             .Where(d => d.Id == leave.DoctorId)

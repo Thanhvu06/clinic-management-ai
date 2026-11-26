@@ -3,6 +3,7 @@ import type { AiBookingWizardRequest, AiBookingWizardResponse } from "../types/a
 import styles from "./MedicalChatWidget.module.css";
 import { Check } from 'lucide-react';
 import { Alert, Button } from "antd";
+import { formatDateOnly } from "../utils/formatters";
 
 const allSteps = ['specialty', 'doctor', 'day', 'slot', 'facility', 'reason', 'review'] as const;
 const allLabels = ['Chuyên khoa', 'Bác sĩ', 'Ngày', 'Giờ', 'Cơ sở', 'Lý do', 'Xem lại'];
@@ -37,7 +38,7 @@ export const BookingWizard = ({ state, busy, onStep, reviewContent }: Props) => 
     const index = steps.indexOf(state.step as typeof steps[number]);
     const selected = (step: string) => selections[allSteps.indexOf(step as typeof allSteps[number])];
     const completed = [state.summary?.specialtyName ?? selected('specialty'), state.summary?.doctorName ?? selected('doctor'),
-        state.summary?.slotDate ?? selected('day'), state.summary?.startTime ? `${state.summary.startTime} – ${state.summary.endTime}` : selected('slot'),
+        state.summary?.slotDate ? formatDateOnly(state.summary.slotDate) : selected('day'), state.summary?.startTime ? `${state.summary.startTime} – ${state.summary.endTime}` : selected('slot'),
         ...(hasFacilityStep ? [state.summary?.facilityName ?? selected('facility')] : []),
         reason ? 'Đã nhập lý do' : selected('reason')];
     return <section ref={card} className={styles.wizard} data-wizard-step={state.step} aria-label="Đặt lịch khám từng bước" aria-busy={busy}>

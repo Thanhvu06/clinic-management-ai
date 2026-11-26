@@ -370,6 +370,7 @@ using (var scope = app.Services.CreateScope())
         await app.Services.GetRequiredService<DevelopmentDemoTopUpWorker>().RunOnceAsync(app.Lifetime.ApplicationStopping);
         await ClinicManagement.Infrastructure.Persistence.DevelopmentSpecialtyCoverageSeed.EnsureAsync(db,
             scope.ServiceProvider.GetRequiredService<ClinicManagement.Application.Common.Interfaces.IDateTimeProvider>(), app.Lifetime.ApplicationStopping);
+        await ClinicManagement.Infrastructure.Persistence.DevelopmentDemoBirthdaySeed.EnsureAsync(db, app.Lifetime.ApplicationStopping);
     }
 }
 

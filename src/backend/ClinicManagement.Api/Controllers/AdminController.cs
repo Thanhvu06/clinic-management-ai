@@ -108,6 +108,7 @@ public class AdminController : ControllerBase
             .ToListAsync();
 
         await ClinicManagement.Infrastructure.Admin.AuditBusinessReferences.PopulateAsync(dbContext, clock, items);
+        await ClinicManagement.Infrastructure.Admin.AuditActorRoles.PopulateAsync(dbContext, items);
         return Ok(ApiResponse<PagedResult<SystemAuditLogDto>>.Ok(new PagedResult<SystemAuditLogDto>(items, totalItems, page, pageSize)));
     }
 

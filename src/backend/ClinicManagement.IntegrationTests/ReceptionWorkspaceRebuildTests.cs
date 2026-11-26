@@ -676,7 +676,7 @@ public class ReceptionWorkspaceRebuildTests : IntegrationTestBase
         var completeRes = await docClient.PostAsJsonAsync($"/api/v1/doctor/visits/{visitId}/complete", new CompleteConsultationRequest
         {
             Diagnosis = "Viêm họng cấp",
-            TreatmentPlan = "Dùng thuốc theo đơn"
+            TreatmentPlan = "Dùng thuốc theo đơn", Summary = "Viêm họng cấp, dùng thuốc theo đơn"
         });
         Assert.Equal(HttpStatusCode.OK, completeRes.StatusCode);
 

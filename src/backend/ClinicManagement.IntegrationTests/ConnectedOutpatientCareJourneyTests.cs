@@ -247,7 +247,7 @@ public class ConnectedOutpatientCareJourneyTests : IntegrationTestBase
         var completeRes = await Client.PostAsJsonAsync($"/api/v1/doctor/visits/{visitId}/complete", new CompleteConsultationRequest
         {
             Diagnosis = "Sốt virus cấp tính",
-            TreatmentPlan = "Nghỉ ngơi, dùng thuốc theo đơn"
+            TreatmentPlan = "Nghỉ ngơi, dùng thuốc theo đơn", Summary = "Sốt virus cấp tính, điều trị ngoại trú"
         });
         Assert.Equal(HttpStatusCode.OK, completeRes.StatusCode);
 

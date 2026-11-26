@@ -5,6 +5,7 @@
 .panelTitle { font-size: 1rem; font-weight: 600; color: var(--cc-color-text-dark); margin: 0; }
 .numeric { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .actor { min-width: 96px; }
+.actorRole { display: block; color: var(--cc-color-text-secondary); font-size: 0.8rem; }
 .description { min-width: 160px; overflow-wrap: anywhere; }
 .activityHeading { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--cc-space-xxs) var(--cc-space-xs); }
 .activityEntity { color: var(--cc-color-text-secondary); }

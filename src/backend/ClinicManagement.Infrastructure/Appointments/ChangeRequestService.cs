@@ -12,6 +12,7 @@ using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using ClinicManagement.Infrastructure.Common;
 
 namespace ClinicManagement.Infrastructure.Appointments;
 
@@ -250,6 +251,7 @@ public class ChangeRequestService : IChangeRequestService
                     PerformedByUserId = userId,
                     CreatedAt = _dateTimeProvider.UtcNow
                 });
+                UserActionAudit.Appointment(_dbContext, userId, UserActionAudit.RequestAppointmentReschedule, appointment, "Gửi yêu cầu đổi lịch hẹn", _dateTimeProvider.UtcNow);
 
                 await _dbContext.SaveChangesAsync();
 
@@ -357,6 +359,7 @@ public class ChangeRequestService : IChangeRequestService
                     PerformedByUserId = userId,
                     CreatedAt = _dateTimeProvider.UtcNow
                 });
+                UserActionAudit.Appointment(_dbContext, userId, UserActionAudit.RequestAppointmentCancellation, appointment, "Gửi yêu cầu hủy lịch hẹn", _dateTimeProvider.UtcNow);
 
                 await _dbContext.SaveChangesAsync();
 
@@ -772,6 +775,7 @@ public class ChangeRequestService : IChangeRequestService
                 PerformedByUserId = userId,
                 CreatedAt = _dateTimeProvider.UtcNow
             });
+            UserActionAudit.Appointment(_dbContext, userId, UserActionAudit.RescheduleAppointment, appointment, $"Duyệt đổi lịch sang {targetSlot.SlotDate:dd/MM/yyyy} {targetSlot.StartTime:HH\\:mm} cho lịch hẹn", _dateTimeProvider.UtcNow);
 
             await NotifyPatientForAppointmentAsync(
                 appointment.Id,
@@ -841,6 +845,7 @@ public class ChangeRequestService : IChangeRequestService
                 PerformedByUserId = userId,
                 CreatedAt = _dateTimeProvider.UtcNow
             });
+            UserActionAudit.Appointment(_dbContext, userId, UserActionAudit.CancelAppointment, appointment, "Duyệt hủy lịch hẹn", _dateTimeProvider.UtcNow);
 
             await NotifyPatientForAppointmentAsync(
                 appointment.Id,

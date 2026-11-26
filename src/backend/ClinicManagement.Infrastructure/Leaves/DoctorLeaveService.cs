@@ -12,6 +12,7 @@ using ClinicManagement.Domain.Entities;
 using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using ClinicManagement.Infrastructure.Common;
 
 namespace ClinicManagement.Infrastructure.Leaves;
 
@@ -199,6 +200,8 @@ public class DoctorLeaveService : IDoctorLeaveService
 
         _dbContext.DoctorLeaveRequests.Add(leave);
         await _dbContext.SaveChangesAsync();
+        RecordLeaveAudit(doctor.UserId, UserActionAudit.CreateLeaveRequest, leave, "Bác sĩ tạo đơn nghỉ phép");
+        await _dbContext.SaveChangesAsync();
 
         var user = await _dbContext.Users.FirstAsync(u => u.Id == doctor.UserId);
 
@@ -225,6 +228,11 @@ public class DoctorLeaveService : IDoctorLeaveService
             throw new BusinessException("INVALID_STATE", "Chỉ có thể rút yêu cầu đang chờ duyệt.");
 
         leave.Status = DoctorLeaveRequestStatus.Cancelled;
+        RecordLeaveAudit(doctor.UserId, UserActionAudit.WithdrawLeaveRequest, leave, "Bác sĩ rút đơn nghỉ phép");
         await _dbContext.SaveChangesAsync();
     }
+
+    private void RecordLeaveAudit(Guid userId, string action, DoctorLeaveRequest leave, string description) =>
+        UserActionAudit.Record(_dbContext, userId, action, nameof(DoctorLeaveRequest), leave.Id,
+            $"{description} NP{leave.Id} ({leave.StartDateTime:dd/MM/yyyy HH:mm} - {leave.EndDateTime:dd/MM/yyyy HH:mm})", _dateTimeProvider.UtcNow);
 }

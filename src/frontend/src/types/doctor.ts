@@ -61,6 +61,8 @@ export interface DoctorScheduleSlotDto {
     startTime: string;
     endTime: string;
     isBooked: boolean;
+    isPast?: boolean;
+    slotState?: 'Booked' | 'NoShow' | 'Past' | 'Free';
     appointmentId?: number | null;
     appointmentCode?: string | null;
     patientName?: string | null;

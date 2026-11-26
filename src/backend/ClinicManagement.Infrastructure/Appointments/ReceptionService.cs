@@ -14,6 +14,7 @@ using ClinicManagement.Domain.Enums;
 using ClinicManagement.Infrastructure.Billing;
 using ClinicManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using ClinicManagement.Infrastructure.Common;
 
 namespace ClinicManagement.Infrastructure.Appointments;
 
@@ -258,6 +259,7 @@ public class ReceptionService : IReceptionService
             PerformedByUserId = userId,
             CreatedAt = DateTime.UtcNow
         });
+        UserActionAudit.Appointment(_dbContext, userId, UserActionAudit.ConfirmAppointment, appointment, "Xác nhận lịch hẹn", _dateTimeProvider.UtcNow);
 
         // Notify patient
         var patientUserId = await _dbContext.Patients
@@ -339,6 +341,7 @@ public class ReceptionService : IReceptionService
             PerformedByUserId = userId,
             CreatedAt = DateTime.UtcNow
         });
+        UserActionAudit.Appointment(_dbContext, userId, UserActionAudit.CheckInPatient, appointment, "Tiếp nhận bệnh nhân theo lịch hẹn", _dateTimeProvider.UtcNow);
 
         // Notify doctor
         var doctorUserId = await _dbContext.Doctors
@@ -399,9 +402,11 @@ public class ReceptionService : IReceptionService
                                           (!a.FacilityId.HasValue && a.PatientVisit == null && _dbContext.StaffFacilityAssignments.Any(s => s.UserId == a.Doctor.UserId && s.IsActive && allowedFacilityIds.Contains(s.FacilityId))));
         }
 
+        // Must mirror the "today" and "pending" worklist tab filters so badge counts equal the rows shown.
         var appointmentsToday = await apptQuery
-            .Where(a => a.AppointmentDate == today)
+            .Where(a => a.AppointmentDate == today && a.Status != AppointmentStatus.Cancelled)
             .ToListAsync();
+        var pendingAppointmentsTotal = await apptQuery.CountAsync(a => a.Status == AppointmentStatus.Pending);
 
         var changeRequests = _dbContext.AppointmentChangeRequests.AsNoTracking()
             .Where(c => c.Status == AppointmentChangeRequestStatus.Pending);
@@ -436,6 +441,7 @@ public class ReceptionService : IReceptionService
         {
             AppointmentsToday = appointmentsToday.Count,
             PendingAppointmentsToday = appointmentsToday.Count(a => a.Status == AppointmentStatus.Pending),
+            PendingAppointmentsTotal = pendingAppointmentsTotal,
             ConfirmedAppointmentsToday = appointmentsToday.Count(a => a.Status == AppointmentStatus.Confirmed),
             CompletedAppointmentsToday = await ReceptionCompletedVisits.CountAsync(_dbContext, apptQuery, today, facilityId, isGlobalAdmin, allowedFacilityIds),
             PendingChangeRequests = pendingChangeRequests,

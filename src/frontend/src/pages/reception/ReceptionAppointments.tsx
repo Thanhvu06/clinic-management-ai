@@ -14,6 +14,8 @@ import { CheckInTicketModal } from '../../components/CheckInTicketModal';
 import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
 import { formatDateOnly, toLocalDateString } from '../../utils/formatters';
 import { getApiErrorMessage } from '../../utils/apiError';
+import { useInRouterContext } from 'react-router-dom';
+import { AppointmentDeepLink } from './AppointmentDeepLink';
 
 interface ReceptionAppointment {
     id: number;
@@ -36,6 +38,7 @@ interface ReceptionAppointment {
 
 export const ReceptionAppointments: React.FC = () => {
     const { setSelection } = useCopilotResource();
+    const inRouter = useInRouterContext();
     const [appointments, setAppointments] = useState<ReceptionAppointment[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
@@ -306,6 +309,7 @@ export const ReceptionAppointments: React.FC = () => {
     return (
         <>
             <PageHeader title="Quản lý lịch hẹn" actions={<Button onClick={() => fetchAppointments()} icon={<RefreshCw size={14} />}>Làm mới</Button>} />
+            {inRouter && <AppointmentDeepLink<ReceptionAppointment> openedAppointmentId={modal.isOpen ? modal.apt?.id ?? null : null} onOpen={openDetail} />}
             <form onSubmit={handleSearchSubmit} className={styles.filterForm}>
                 <Input className={styles.searchInput} prefix={<Search size={16} aria-hidden="true" />} placeholder="Tìm theo mã lịch, tên, SĐT..." value={search} onChange={e => setSearch(e.target.value)} />
                 <Select className={styles.statusFilter} value={statusFilter} onChange={value => { setStatusFilter(value); setPage(1); }} options={[{ value: '', label: 'Tất cả trạng thái' }, ...['Pending', 'Confirmed', 'Completed', 'Cancelled'].map(value => ({ value, label: getAppointmentStatusLabel(value) }))]} />
