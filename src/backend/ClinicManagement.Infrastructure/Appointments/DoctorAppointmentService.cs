@@ -88,16 +88,15 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
                                   join u in _dbContext.Users on p.UserId equals (Guid?)u.Id into uGroup
                                   from u in uGroup.DefaultIfEmpty()
                                   where a.DoctorId == doctor.Id && a.AppointmentDate >= fromDate && a.AppointmentDate <= toDate
-                                  select new
-                                  {
+                                  select new DoctorScheduleAppointmentRow(
                                       a.Id,
                                       a.AppointmentSlotId,
                                       a.AppointmentCode,
                                       a.Status,
-                                      PatientName = u != null ? u.FullName : (p.FullName ?? string.Empty)
-                                  }).ToListAsync();
+                                      u != null ? u.FullName : (p.FullName ?? string.Empty))).ToListAsync();
 
-        var apptMap = appointments.ToDictionary(a => a.AppointmentSlotId);
+        var apptMap = DoctorScheduleSlotStates.OccupyingAppointments(appointments);
+        var vietnamNow = _dateTimeProvider.VietnamNow;
 
         var groupedDays = new List<DoctorScheduleDayDto>();
         for (var d = fromDate; d <= toDate; d = d.AddDays(1))
@@ -111,22 +110,8 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
             {
                 var schSlots = daySlots
                     .Where(s => s.StartTime >= sch.StartTime && s.EndTime <= sch.EndTime)
-                    .Select(s =>
-                    {
-                        apptMap.TryGetValue(s.Id, out var appt);
-                        return new DoctorSlotDetailDto
-                        {
-                            SlotId = s.Id,
-                            SlotDate = s.SlotDate,
-                            StartTime = s.StartTime,
-                            EndTime = s.EndTime,
-                            IsBooked = s.IsBooked,
-                            AppointmentId = appt?.Id,
-                            AppointmentCode = appt?.AppointmentCode,
-                            PatientName = appt?.PatientName,
-                            Status = appt?.Status.ToString()
-                        };
-                    }).ToList();
+                    .Select(s => DoctorScheduleSlotStates.Build(s, apptMap.GetValueOrDefault(s.Id), vietnamNow))
+                    .ToList();
 
                 var shiftName = DoctorDashboardShifts.ShiftName(sch, _dbContext.OperatingHours.IsTwentyFourSeven);
                 var bookedCount = schSlots.Count(s => s.IsBooked);
@@ -534,7 +519,7 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
                 AppointmentId = appointment.Id,
                 DoctorId = doctor.Id,
                 ChiefComplaint = appointment.Reason,
-                Summary = "Đang trong quá trình thăm khám.",
+                Summary = string.Empty,
                 CreatedAtUtc = DateTime.UtcNow
             };
             _dbContext.VisitSummaries.Add(appointment.VisitSummary);
@@ -550,6 +535,7 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
             PerformedByUserId = userId,
             CreatedAt = DateTime.UtcNow
         });
+        RecordConsultationStarted(userId, nameof(Appointment), appointment.Id, $"lịch hẹn {appointment.AppointmentCode}");
 
         await _dbContext.SaveChangesAsync();
     }
@@ -761,7 +747,7 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
                 Diagnosis = request.Diagnosis,
                 DiagnosisCode = request.DiagnosisCode,
                 TreatmentPlan = request.TreatmentPlan,
-                Summary = request.Summary ?? "Ghi chép lâm sàng",
+                Summary = request.Summary ?? string.Empty,
                 FollowUpInstruction = request.FollowUpInstruction,
                 CreatedAtUtc = DateTime.UtcNow
             };
@@ -1080,7 +1066,7 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
         Diagnosis = vs.Diagnosis,
         DiagnosisCode = vs.DiagnosisCode,
         TreatmentPlan = vs.TreatmentPlan,
-        Summary = vs.Summary,
+        Summary = ConsultationSummaryRules.HideLegacyPlaceholder(vs.Summary) ?? string.Empty,
         FollowUpInstruction = vs.FollowUpInstruction,
         CreatedAtUtc = vs.CreatedAtUtc,
         UpdatedAtUtc = vs.UpdatedAtUtc,
@@ -1163,6 +1149,8 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
             throw new BusinessException("INVALID_STATE_TRANSITION", "Chỉ có thể bắt đầu khám khi bệnh nhân đang chờ hoặc đã có kết quả cận lâm sàng.");
         }
 
+        if (visit.Status != VisitStatus.InConsultation)
+            RecordConsultationStarted(userId, nameof(PatientVisit), visit.Id, $"lượt khám {visit.VisitCode}");
         visit.Status = VisitStatus.InConsultation;
         visit.AssignedDoctorId = doctor.Id;
 
@@ -1191,7 +1179,7 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
                 AppointmentId = visit.AppointmentId,
                 DoctorId = doctor.Id,
                 ChiefComplaint = visit.ChiefComplaint,
-                Summary = "Đang trong quá trình thăm khám.",
+                Summary = string.Empty,
                 CreatedAtUtc = DateTime.UtcNow
             };
             _dbContext.VisitSummaries.Add(visit.VisitSummary);
@@ -1264,7 +1252,7 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
                 Diagnosis = request.Diagnosis,
                 DiagnosisCode = request.DiagnosisCode,
                 TreatmentPlan = request.TreatmentPlan,
-                Summary = request.Summary ?? "Ghi chép lâm sàng",
+                Summary = request.Summary ?? string.Empty,
                 FollowUpInstruction = request.FollowUpInstruction,
                 CreatedAtUtc = DateTime.UtcNow
             };

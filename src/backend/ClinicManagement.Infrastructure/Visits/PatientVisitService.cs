@@ -260,6 +260,7 @@ public partial class PatientVisitService : IPatientVisitService
             PerformedByUserId = currentUserId,
             CreatedAt = _dateTimeProvider.UtcNow
         });
+        UserActionAudit.Appointment(_dbContext, currentUserId, UserActionAudit.CheckInPatient, appointment, $"Tiếp nhận bệnh nhân (lượt khám {visitCode}, STT {queueNumber}) theo lịch hẹn", _dateTimeProvider.UtcNow);
 
         // If patient has UserId, send notification
         if (appointment.Patient?.UserId.HasValue == true)

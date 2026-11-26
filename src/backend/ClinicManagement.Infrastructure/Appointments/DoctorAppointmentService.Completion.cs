@@ -64,17 +64,11 @@ public partial class DoctorAppointmentService
 
         if (appointment == null) throw new NotFoundException("Lịch hẹn không tồn tại hoặc không thuộc quyền quản lý.");
 
-        if (string.IsNullOrWhiteSpace(request.Summary) && string.IsNullOrWhiteSpace(request.Diagnosis))
-            throw new BusinessException("VALIDATION_ERROR", "Tóm tắt kết luận khám không được để trống.");
+        ConsultationSummaryRules.EnsureProvided(request.Summary);
 
         if (string.IsNullOrWhiteSpace(request.Diagnosis))
         {
-            request.Diagnosis = !string.IsNullOrWhiteSpace(request.Summary) ? request.Summary : "Khám lâm sàng";
-        }
-
-        if (string.IsNullOrWhiteSpace(request.Summary))
-        {
-            request.Summary = request.Diagnosis;
+            request.Diagnosis = request.Summary;
         }
 
         var issuedBefore = await FindIssuedPrescriptionIdsAsync(appointment.Id, null);
@@ -284,14 +278,10 @@ public partial class DoctorAppointmentService
 
         visit = await ValidateVisitDoctorAccessAsync(visit, doctor);
 
-        if (string.IsNullOrWhiteSpace(request.Summary) && string.IsNullOrWhiteSpace(request.Diagnosis))
-            throw new BusinessException("VALIDATION_ERROR", "Tóm tắt kết luận khám không được để trống.");
+        ConsultationSummaryRules.EnsureProvided(request.Summary);
 
         if (string.IsNullOrWhiteSpace(request.Diagnosis))
-            request.Diagnosis = !string.IsNullOrWhiteSpace(request.Summary) ? request.Summary : "Khám lâm sàng";
-
-        if (string.IsNullOrWhiteSpace(request.Summary))
-            request.Summary = request.Diagnosis;
+            request.Diagnosis = request.Summary;
 
         var issuedBefore = await FindIssuedPrescriptionIdsAsync(visit.AppointmentId, visit.Id);
         using var transaction = await _dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);

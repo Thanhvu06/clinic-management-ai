@@ -7,11 +7,13 @@ import { RefreshCw, Clock, User } from 'lucide-react';
 import { Button, Select, Tag, Typography } from 'antd';
 import { PageHeader, FilterBar, DataTable, Pagination, EmptyState, LoadingState, InlineError } from '../../components/common';
 import styles from './AdminAuditLogs.module.css';
+import { getAuditActorRoleLabel } from '../../utils/auditActor';
 
 interface AuditLog {
     id: number;
     userId: string;
     userFullName: string;
+    userRole?: string;
     action: string;
     entityName: string;
     entityId: string;
@@ -95,7 +97,7 @@ export const AdminAuditLogs: React.FC = () => {
                     <div className={styles.auditTable}>
                         <DataTable data={logs} keyExtractor={log => log.id} columns={[
                             { header: 'Thời gian', accessor: log => <div className={styles.auditTime}><Clock size={14} /><span>{formatDateTime(log.createdAt)}</span></div> },
-                            { header: 'Người thực hiện', accessor: log => <div className={styles.auditActor}><User size={14} /><span>{log.userFullName}</span></div> },
+                            { header: 'Người thực hiện', accessor: log => <div className={styles.auditActor}><User size={14} /><span>{log.userFullName}</span>{log.userRole && <span className={styles.auditActorRole}>{getAuditActorRoleLabel(log.userRole)}</span>}</div> },
                             { header: 'Hành động', accessor: log => getActionBadge(log.action) },
                             { header: 'Thực thể', accessor: log => <Tag>{getAuditEntityLabel(log.entityName)}</Tag> },
                             { header: 'Mã tham chiếu', accessor: log => <Typography.Text code>{log.referenceCode || '-'}</Typography.Text> },

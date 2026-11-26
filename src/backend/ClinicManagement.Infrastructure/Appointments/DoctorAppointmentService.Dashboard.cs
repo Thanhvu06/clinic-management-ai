@@ -45,7 +45,7 @@ public partial class DoctorAppointmentService
                     join u in _dbContext.Users on p.UserId equals (Guid?)u.Id into uGroup
                     from u in uGroup.DefaultIfEmpty()
                     join s in _dbContext.Specialties on a.SpecialtyId equals s.Id
-                    where a.DoctorId == doctor.Id && (a.AppointmentDate == targetDate ||
+                    where a.DoctorId == doctor.Id && a.Status != AppointmentStatus.Cancelled && (a.AppointmentDate == targetDate ||
                         targetDate == _dateTimeProvider.VietnamToday && a.AppointmentDate < targetDate && a.Status == AppointmentStatus.InConsultation)
                     orderby a.StartTime ascending
                     select new DoctorQueueItemDto
@@ -106,7 +106,7 @@ public partial class DoctorAppointmentService
             .Include(v => v.Patient)
             .Include(v => v.Department)
                 .ThenInclude(d => d.Specialty)
-            .Where(v => v.AppointmentId == null &&
+            .Where(v => v.AppointmentId == null && v.Status != VisitStatus.Cancelled &&
                         (v.VisitDate == targetDate || targetDate == _dateTimeProvider.VietnamToday && v.VisitDate < targetDate && v.Status == VisitStatus.InConsultation) &&
                         (v.AssignedDoctorId == doctor.Id || (!v.AssignedDoctorId.HasValue && allDoctorDeptIds.Contains(v.DepartmentId))))
             .ToListAsync();

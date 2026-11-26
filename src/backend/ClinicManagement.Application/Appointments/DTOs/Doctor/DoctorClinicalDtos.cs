@@ -81,6 +81,8 @@ public class DoctorSlotDetailDto
     public TimeOnly StartTime { get; set; }
     public TimeOnly EndTime { get; set; }
     public bool IsBooked { get; set; }
+    public bool IsPast { get; set; }
+    public string SlotState { get; set; } = "Free";
     public long? AppointmentId { get; set; }
     public string? AppointmentCode { get; set; }
     public string? PatientName { get; set; }

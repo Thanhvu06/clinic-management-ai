@@ -19,7 +19,7 @@ import { MpiPatientSearchModal } from './MpiPatientSearchModal';
 import { CheckInTicketModal } from '../../components/CheckInTicketModal';
 import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
 import styles from './ReceptionWorkspace.module.css';
-import { toLocalDateString } from '../../utils/formatters';
+import { formatDateOnly, toLocalDateString } from '../../utils/formatters';
 
 interface AppointmentItem {
     id: number;
@@ -56,6 +56,7 @@ export const ReceptionWorkspace: React.FC = () => {
     const [stats, setStats] = useState<{
         appointmentsToday: number;
         pendingAppointmentsToday: number;
+        pendingAppointmentsTotal?: number;
         confirmedAppointmentsToday: number;
         completedAppointmentsToday: number;
         unbilledCount?: number;
@@ -273,7 +274,7 @@ export const ReceptionWorkspace: React.FC = () => {
     const renderStatusBadge = (status: string) => <StatusBadge status={status === 'CheckedIn' || status === 'InProgress' ? 'inconsultation' : status} label={getAppointmentStatusLabel(status)} />;
     const totalPages = Math.ceil(totalItems / pageSize) || 1;
     const queueColumns: DataTableColumn<AppointmentItem>[] = [
-        { header: 'Mã / giờ hẹn', accessor: item => <><span className={styles.appointmentCode}>{item.appointmentCode}</span><div className={styles.appointmentTime}>{item.startTime.substring(0, 5)} - {item.endTime.substring(0, 5)}</div></> },
+        { header: 'Mã / giờ hẹn', accessor: item => <><span className={styles.appointmentCode}>{item.appointmentCode}</span><div className={styles.appointmentWhen}><span className={styles.appointmentTime}>{item.startTime.substring(0, 5)} - {item.endTime.substring(0, 5)}</span>{item.appointmentDate !== toLocalDateString() && <span className={styles.appointmentDate}>{formatDateOnly(item.appointmentDate)}</span>}</div></> },
         { header: 'Người bệnh', accessor: item => <><div className={styles.patientName}>{item.patientName}</div><div className={styles.patientIdentifiers}>{item.medicalRecordNumber ? `Mã bệnh án: ${item.medicalRecordNumber}` : ''}{item.patientPhone ? ` • ${item.patientPhone}` : ''}</div></> },
         { header: 'Chuyên khoa / bác sĩ', accessor: item => <><div className={styles.specialtyName}>{item.specialtyName}</div><div className={styles.doctorName}>BS: {item.doctorName || 'Chưa phân công'}</div></> },
         { header: 'Lý do khám', accessor: item => item.reason || '-', className: styles.visitReason },
@@ -290,7 +291,7 @@ export const ReceptionWorkspace: React.FC = () => {
                 )}
                 <Button htmlType="button" onClick={() => selectAppointmentForCopilot(item)} title="Chọn lịch hẹn này để hỏi trợ lý">Hỏi trợ lý</Button>
                 {item.patientVisitId && <Button htmlType="button" onClick={() => handleViewTicket(item.patientVisitId!)} title="Xem lại phiếu khám và in vé số thứ tự"><Printer size={13} /> Vé khám</Button>}
-                <Link to={`/reception/appointments`} className={styles.detailLink} title="Xem chi tiết lịch hẹn"><Eye size={13} /></Link>
+                <Link to={`/reception/appointments?appointmentId=${item.id}`} className={styles.detailLink} title="Xem chi tiết lịch hẹn" aria-label={`Xem chi tiết lịch hẹn ${item.appointmentCode}`}><Eye size={13} /></Link>
             </>
         ) }
     ];
@@ -325,7 +326,7 @@ export const ReceptionWorkspace: React.FC = () => {
                 ariaLabel="Số liệu tiếp nhận hôm nay"
                 items={[
                     { label: 'Lịch khám hôm nay', value: statsError ? '—' : stats?.appointmentsToday ?? 0 },
-                    { label: 'Chờ xác nhận', value: statsError ? '—' : stats?.pendingAppointmentsToday ?? 0, tone: 'attention' },
+                    { label: 'Chờ xác nhận hôm nay', value: statsError ? '—' : stats?.pendingAppointmentsToday ?? 0, tone: 'attention' },
                     { label: 'Chờ tiếp đón / đang khám', value: statsError ? '—' : stats?.confirmedAppointmentsToday ?? 0 },
                     { label: 'Đã khám xong hôm nay', value: statsError ? '—' : stats?.completedAppointmentsToday ?? 0 },
                 ]}
@@ -341,7 +342,7 @@ export const ReceptionWorkspace: React.FC = () => {
             <section className={styles.worklistCard}>
                     <div className={styles.worklistTabs}>
                         <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'today' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('today'); setPage(1); }}><span>Hôm nay (ưu tiên tiếp nhận)</span><span className={styles.tabCount}>{activeTab === 'today' ? totalItems : (stats?.appointmentsToday ?? 0)}</span></Button>
-                        <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'pending' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('pending'); setPage(1); }}><span>Chờ xác nhận</span><span className={styles.tabCount}>{stats?.pendingAppointmentsToday ?? 0}</span></Button>
+                        <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'pending' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('pending'); setPage(1); }}><span>Chờ xác nhận</span><span className={styles.tabCount}>{activeTab === 'pending' ? totalItems : (stats?.pendingAppointmentsTotal ?? 0)}</span></Button>
                         <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'upcoming' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('upcoming'); setPage(1); }}><span>Sắp tới</span></Button>
                         <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'recent' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('recent'); setPage(1); }}><span>Gần đây</span></Button>
                         <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'history' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('history'); setPage(1); }}><span>Toàn bộ lịch sử</span></Button>

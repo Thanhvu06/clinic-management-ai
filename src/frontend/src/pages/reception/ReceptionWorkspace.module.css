@@ -25,7 +25,9 @@
 .queueTable { overflow-x: auto; }
 .queueTable :global(.ant-table) { min-width: 980px; }
 .appointmentCode { font-weight: 600; color: var(--cc-color-text); }
-.appointmentTime { margin-top: var(--cc-space-xxs); font-size: 0.8rem; color: var(--cc-color-text-secondary); white-space: nowrap; }
+.appointmentWhen { display: flex; flex-wrap: wrap; gap: var(--cc-space-xs); margin-top: var(--cc-space-xxs); font-size: 0.8rem; white-space: nowrap; }
+.appointmentTime { color: var(--cc-color-text-secondary); }
+.appointmentDate { font-weight: 600; color: var(--cc-color-text); }
 .patientName { font-weight: 600; color: var(--cc-color-text); }
 .patientIdentifiers, .doctorName { font-size: 0.8rem; color: var(--cc-color-text-secondary); overflow-wrap: anywhere; }
 .specialtyName { font-weight: 500; color: var(--cc-color-text); }

@@ -148,8 +148,8 @@ public class BookingLabChangeRequestRegressionTests(CustomWebApplicationFactory 
         var current = new Mock<ICurrentUserService>(); current.SetupGet(c => c.UserId).Returns(doctor.UserId);
         var doctorContext = new Mock<IDoctorContextService>(); doctorContext.Setup(c => c.GetCurrentActiveDoctorAsync()).ReturnsAsync(doctor);
         var service = new DoctorAppointmentService(db, doctorContext.Object, clock, current.Object, Mock.Of<IPatientVisitService>());
-        if (scheduled) await service.CompleteAppointmentAsync(visit.AppointmentId!.Value, new CompleteConsultationRequest { Diagnosis = "Đau đầu" });
-        else await service.CompleteVisitConsultationAsync(visit.Id, new CompleteConsultationRequest { Diagnosis = "Đau đầu" });
+        if (scheduled) await service.CompleteAppointmentAsync(visit.AppointmentId!.Value, new CompleteConsultationRequest { Diagnosis = "Đau đầu", Summary = "Đau đầu, điều trị ngoại trú" });
+        else await service.CompleteVisitConsultationAsync(visit.Id, new CompleteConsultationRequest { Diagnosis = "Đau đầu", Summary = "Đau đầu, điều trị ngoại trú" });
         Assert.Equal($"Bác sĩ hoàn tất khám lượt {visit.VisitCode}",
             (await db.SystemAuditLogs.SingleAsync(a => a.Action == "COMPLETE_CONSULTATION" && a.EntityId == visit.Id.ToString())).Description);
         var notification = await db.Notifications.SingleAsync(n => n.RelatedEntityType == "PatientVisit" && n.RelatedEntityId == visit.Id.ToString() && n.UserId == ReceptionistId);

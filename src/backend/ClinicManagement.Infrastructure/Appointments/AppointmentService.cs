@@ -22,6 +22,7 @@ using ClinicManagement.Application.Common.Interfaces;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using ClinicManagement.Infrastructure.Common;
 
 namespace ClinicManagement.Infrastructure.Appointments;
 
@@ -417,6 +418,7 @@ public class AppointmentService : IAppointmentService
             };
 
             _dbContext.AppointmentHistories.Add(history);
+            UserActionAudit.Appointment(_dbContext, currentUserId.Value, UserActionAudit.CreateAppointment, appointment, "Đặt lịch hẹn", _dateTimeProvider.UtcNow);
 
             // Create in-app notification for patient
             _dbContext.Notifications.Add(new Notification

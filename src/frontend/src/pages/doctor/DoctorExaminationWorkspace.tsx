@@ -1,4 +1,5 @@
 import { ClinicalEditor } from './ClinicalEditor';
+import { completionFieldMissingMessage, isSummaryMissing, loadedSummaryValue } from './examinationSummary';
 import { getGenderLabel } from '../../utils/genderLabels';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { toLocalDateString, formatDateOnly, formatDisplayDate } from '../../utils/formatters';
@@ -256,7 +257,7 @@ const DoctorExaminationContent: React.FC = () => {
                         setDiagnosis(data.encounter.diagnosis || '');
                         setDiagnosisCode(data.encounter.diagnosisCode || '');
                         setTreatmentPlan(data.encounter.treatmentPlan || '');
-                        setSummary(data.encounter.summary || '');
+                        setSummary(loadedSummaryValue(data.encounter.summary));
                         setFollowUpInstruction(data.encounter.followUpInstruction || '');
                         setEncounterRowVersion(data.encounter.rowVersion || null);
                     } else {
@@ -608,14 +609,9 @@ const DoctorExaminationContent: React.FC = () => {
 
     // Handle Complete Consultation with Diagnostic Guards
     const handleOpenCompleteModal = () => {
-        if (!diagnosis.trim()) {
-            showAlert('Vui lòng nhập chẩn đoán bệnh trước khi hoàn tất khám.', 'Thiếu thông tin', 'warning');
-            setActiveTab('encounter');
-            return;
-        }
-
-        if (!summary.trim()) {
-            showAlert('Vui lòng nhập tóm tắt kết luận khám trước khi hoàn tất.', 'Thiếu thông tin', 'warning');
+        const missingField = completionFieldMissingMessage(diagnosis, summary);
+        if (missingField) {
+            showAlert(missingField, 'Thiếu thông tin', 'warning');
             setActiveTab('encounter');
             return;
         }
@@ -644,14 +640,9 @@ const DoctorExaminationContent: React.FC = () => {
     };
 
     const handleCompleteConsultation = async (overrideReason?: string) => {
-        if (!diagnosis.trim()) {
-            showAlert('Vui lòng nhập chẩn đoán bệnh trước khi hoàn tất khám.', 'Thiếu thông tin', 'warning');
-            setActiveTab('encounter');
-            return;
-        }
-
-        if (!summary.trim()) {
-            showAlert('Vui lòng nhập tóm tắt kết luận khám trước khi hoàn tất.', 'Thiếu thông tin', 'warning');
+        const missingField = completionFieldMissingMessage(diagnosis, summary);
+        if (missingField) {
+            showAlert(missingField, 'Thiếu thông tin', 'warning');
             setActiveTab('encounter');
             return;
         }
@@ -1852,7 +1843,7 @@ const DoctorExaminationContent: React.FC = () => {
                             <Button type="primary"
                                 htmlType="button"
                                 onClick={() => void handleCompleteConsultation()}
-                                disabled={completing || !diagnosis.trim() || !summary.trim() || Boolean(pendingDiagnosticOrder) || Boolean(unreviewedDiagnosticOrder)}
+                                disabled={completing || !diagnosis.trim() || isSummaryMissing(summary) || Boolean(pendingDiagnosticOrder) || Boolean(unreviewedDiagnosticOrder)}
                                 className={tabStyles.iconActionButton}
                             >
                                 {completing ? 'Đang hoàn tất...' : 'Xác nhận hoàn tất'}

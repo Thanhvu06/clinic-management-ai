@@ -14,13 +14,13 @@ internal static class TwentyFourSevenDemoSeed
         for (var index = 0; index < 32; index++)
         {
             var mrn = $"BN-{clock.VietnamToday.Year}-{3001 + index:D6}";
-            var phone = $"089900{index + 1:D4}";
+            var phone = $"{DevelopmentDemoBirthdaySeed.WalkInPhonePrefix}{index + 1:D4}";
             if (await db.Patients.AnyAsync(p => p.MedicalRecordNumber == mrn || p.PhoneNumber == phone, ct)) continue;
             db.Patients.Add(new Patient
             {
                 FullName = names[index % names.Length], MedicalRecordNumber = mrn,
                 PhoneNumber = phone, Gender = index % 16 < 8 ? Gender.Female : Gender.Male,
-                DateOfBirth = clock.VietnamToday.AddYears(-25 - index)
+                DateOfBirth = DevelopmentDemoBirthdaySeed.WalkInBirthDate(clock.VietnamToday, index)
             });
         }
         await db.SaveChangesAsync(ct);

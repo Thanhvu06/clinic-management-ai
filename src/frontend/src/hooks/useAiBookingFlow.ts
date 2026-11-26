@@ -13,7 +13,7 @@ import axiosClient from "../api/axiosClient";
 import { isLocalHelpPhrase, isPatientReadAlias, isSafeClientRoute } from "../components/copilot/patientPresentation";
 import { classifyPatientTypedIntent, doctorScheduleHint, extractBookingHint, isFilteredPatientRead, leavesOpenWizardStep } from "../components/copilot/patientTypedIntent";
 import { patientAppointmentChangeCard } from "../components/copilot/patientAppointmentChangeCard";
-import { patientCopilotTurn, wizardTextFields } from "../components/copilot/patientChatTurns";
+import { patientCopilotTurn, startBookingFromChip, wizardTextFields } from "../components/copilot/patientChatTurns";
 import { aiChatFailureMessage } from "../api/aiErrorMessages";
 import { sendRoleCopilotMessage } from "../api/aiCopilotApi";
 import type { ApiResponse } from "../types";
@@ -178,6 +178,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
     const { user } = useAuth();
 
     const [wizard, setWizard] = useState<AiBookingWizardResponse | null>(null);
+    const lastWizardResponseRef = useRef<AiBookingWizardResponse | null>(null);
     const wizardSessionRef = useRef<string>(generateSessionIdentity());
     const wizardBusyRef = useRef(false);
     const [input, setInput] = useState("");
@@ -688,6 +689,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             if (controller.signal.aborted || requestId !== activeRequestIdRef.current || account !== accountKeyRef.current) return;
             const data = response.data;
             if (!data) throw new Error('Không nhận được dữ liệu đặt lịch. Vui lòng thử lại.');
+            lastWizardResponseRef.current = data;
             clearFailure();
             if (data.errorCode === 'EMERGENCY') {
                 setMessages(previous => [...previous, { role: 'model', content: data.message, urgency: 'EMERGENCY', actions: data.actions }]);
@@ -726,10 +728,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
 
     // Only the code is authoritative; the label is shown as the user's turn.
     const handleSuggestion = async (suggestion: AiSuggestionItem, freeText = false, retryError?: ChatMessage, isTypedInput = false): Promise<void> => {
-        if (suggestion.code === 'patient.start_booking') {
-            await handleWizardStep('start');
-            return;
-        }
+        if (suggestion.code === 'patient.start_booking')
+            return startBookingFromChip(suggestion, () => handleWizardStep('start'), lastWizardResponseRef, message => setMessages(previous => [...previous, message]));
         const label = suggestion.label.trim();
         if (!label || (!freeText && !suggestion.code) || loading) return;
 

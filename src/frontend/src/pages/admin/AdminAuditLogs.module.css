@@ -5,4 +5,5 @@
 .auditTime { color: var(--cc-color-text-secondary); }
 .auditActor { font-weight: 600; }
 .auditActor svg { color: var(--cc-color-primary); }
+.auditActorRole { font-weight: 400; color: var(--cc-color-text-secondary); font-size: 0.8rem; }
 .auditTotal { margin-top: var(--cc-space-md); color: var(--cc-color-text-secondary); }

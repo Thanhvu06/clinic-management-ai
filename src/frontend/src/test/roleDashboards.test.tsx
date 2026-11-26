@@ -112,7 +112,7 @@ describe('Reception workspace', () => {
 
     it('shows four metrics and header actions instead of the action cards', async () => {
         mount(<ReceptionWorkspace />, '/reception');
-        const pendingCell = () => within(strip('Số liệu tiếp nhận hôm nay')).getByText('Chờ xác nhận').parentElement as HTMLElement;
+        const pendingCell = () => within(strip('Số liệu tiếp nhận hôm nay')).getByText('Chờ xác nhận hôm nay').parentElement as HTMLElement;
         await waitFor(() => expect(within(pendingCell()).getByText('2')).toHaveAttribute('data-tone', 'attention'));
         expect(strip('Số liệu tiếp nhận hôm nay').children).toHaveLength(4);
         expect(screen.getByRole('button', { name: 'Thu ngân 5' })).toBeInTheDocument();

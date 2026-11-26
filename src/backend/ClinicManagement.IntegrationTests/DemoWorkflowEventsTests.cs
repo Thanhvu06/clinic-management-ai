@@ -79,8 +79,8 @@ public class DemoWorkflowEventsTests(CustomWebApplicationFactory factory) : Inte
         var doctorContext = new Mock<IDoctorContextService>(); doctorContext.Setup(c => c.GetCurrentActiveDoctorAsync()).ReturnsAsync(doctor);
         var notifications = new NotificationService(db, current.Object, NullLogger<NotificationService>.Instance);
         var service = new DoctorAppointmentService(db, doctorContext.Object, clock, current.Object, Mock.Of<IPatientVisitService>(), notificationService: notifications);
-        if (scheduled) await service.CompleteAppointmentAsync(visit.AppointmentId!.Value, new CompleteConsultationRequest { Diagnosis = "Đau đầu" });
-        else await service.CompleteVisitConsultationAsync(visit.Id, new CompleteConsultationRequest { Diagnosis = "Đau đầu" });
+        if (scheduled) await service.CompleteAppointmentAsync(visit.AppointmentId!.Value, new CompleteConsultationRequest { Diagnosis = "Đau đầu", Summary = "Đau đầu, điều trị ngoại trú" });
+        else await service.CompleteVisitConsultationAsync(visit.Id, new CompleteConsultationRequest { Diagnosis = "Đau đầu", Summary = "Đau đầu, điều trị ngoại trú" });
         Assert.True(await db.SystemAuditLogs.AnyAsync(l => l.Action == "COMPLETE_CONSULTATION" && l.UserId == doctor.UserId && l.EntityId == visit.Id.ToString()));
         Assert.True(await db.SystemAuditLogs.AnyAsync(l => l.Action == "ISSUE_PRESCRIPTION" && l.UserId == doctor.UserId && l.EntityId == prescription.Id.ToString()));
         Assert.True(await db.Notifications.AnyAsync(n => n.UserId == receptionist.Id && n.Message == $"Lượt khám {visit.VisitCode} đã hoàn tất, chờ lập hóa đơn"));
