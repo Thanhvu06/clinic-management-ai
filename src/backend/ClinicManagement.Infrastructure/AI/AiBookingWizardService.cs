@@ -6,6 +6,7 @@ using ClinicManagement.Application.AI.DTOs;
 using ClinicManagement.Application.AI.Interfaces;
 using ClinicManagement.Application.AI.Suggestions;
 using ClinicManagement.Application.AI.Tools;
+using ClinicManagement.Application.Common.Expiry;
 using ClinicManagement.Application.Appointments.Interfaces;
 using ClinicManagement.Application.Authentication.Interfaces;
 using ClinicManagement.Application.Common.Interfaces;
@@ -15,7 +16,9 @@ using ClinicManagement.Application.Specialties.DTOs;
 using ClinicManagement.Application.Specialties.Interfaces;
 using ClinicManagement.Infrastructure.Persistence;
 using ClinicManagement.Infrastructure.Appointments;
+using ClinicManagement.Infrastructure.Expiry;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace ClinicManagement.Infrastructure.AI;
 
@@ -23,7 +26,8 @@ namespace ClinicManagement.Infrastructure.AI;
 public sealed class AiBookingWizardService(
     ISpecialtyService specialties, IDoctorService doctors, IAppointmentAvailabilityPolicy availability,
     ICurrentUserService currentUser, IDateTimeProvider clock, AppDbContext db,
-    IAiSafetyGuard safety, IAiAuditService audit, AiBookingWizardTokens tokens, AiBookingReviewIssuer review)
+    IAiSafetyGuard safety, IAiAuditService audit, AiBookingWizardTokens tokens, AiBookingReviewIssuer review,
+    IOptions<ExpiryRulesOptions> expiryOptions)
 {
     private static readonly string[] Reasons = { "Khám tổng quát", "Tái khám theo hẹn", "Tư vấn kết quả xét nghiệm" };
     private static readonly Regex HintPrefix = new(@"^(?:(?:bac si|bac sy|bs|bsi|doctor|dr|chuyen khoa|khoa|kham)\s+)+", RegexOptions.CultureInvariant);
@@ -56,7 +60,8 @@ public sealed class AiBookingWizardService(
         if (!user.HasValue) response = Error("AUTHENTICATION_REQUIRED", "Bạn cần đăng nhập để đặt lịch.");
         else if (guard?.IsEmergency == true) response = Emergency(guard);
         else if (request.Step == "start")
-            response = await StartAsync(request.Hint, user.Value, request.SessionId, ct);
+            response = await OnlineBookingBlockedAsync(user.Value, ct)
+                ?? await StartAsync(request.Hint, request.TypedMessage, user.Value, request.SessionId, ct);
         else
         {
             var selection = tokens.Read(request.OptionToken, user.Value, request.SessionId, request.Step);
@@ -102,9 +107,10 @@ public sealed class AiBookingWizardService(
 
     // A hint only chooses where a normal wizard begins. Any miss, ambiguity or
     // failure starts on the specialty step exactly as before, without an error.
-    private async Task<AiBookingWizardResponseDto> StartAsync(string? hint, Guid user, string session, CancellationToken ct)
+    private async Task<AiBookingWizardResponseDto> StartAsync(string? hint, string? typed, Guid user, string session, CancellationToken ct)
     {
-        var fresh = new BookingWizardSelection(Guid.NewGuid());
+        var (preferredDay, dayPart) = AiBookingWizardPreference.Parse(typed, clock.VietnamToday);
+        var fresh = new BookingWizardSelection(Guid.NewGuid(), PreferredDay: preferredDay, DayPart: dayPart);
         if (!string.IsNullOrWhiteSpace(hint))
         {
             try
@@ -236,23 +242,49 @@ public sealed class AiBookingWizardService(
                 break;
             case BookingWizardStage.Day:
                 response.Title = "Chọn ngày khám";
-                var days = (await SlotsAsync(state, user, ct)).Select(x => x.SlotDate).Distinct().OrderBy(x => x).Take(7).ToList();
-                response.Message = days.Count == 0 ? "Không có lịch trống trong 14 ngày tới. Bạn có thể quay lại chọn bác sĩ khác." : "Các ngày còn lịch trống trong 14 ngày tới.";
-                foreach (var day in days)
-                    Add(response, state with { Stage = BookingWizardStage.Slot, Day = day.DayNumber }, day.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture), user, session);
-                Back(response, state with { Stage = BookingWizardStage.Doctor, DoctorId = 0, Day = 0, SlotId = 0 }, user, session);
+                var available = await SlotsAsync(state, user, ct);
+                if (available.Count == 0 && state.AnyDoctor && (await GetWizardDoctorsAsync(state.SpecialtyId, ct)).Count > 0)
+                    return await NoSlotsForSpecialtyAsync(state, user, session, ct);
+                var inPart = available.Where(x => AiBookingWizardPreference.Matches(state.DayPart, x.StartTime)).ToList();
+                if (inPart.Count == 0) state = state with { DayPart = BookingDayPart.None, PreferredDay = 0 };
+                else available = inPart;
+                var days = available.Select(x => x.SlotDate).Distinct().OrderBy(x => x).Take(7).ToList();
+                var part = AiBookingWizardPreference.Label(state.DayPart);
+                response.Message = days.Count == 0 ? "Không có lịch trống trong 14 ngày tới. Bạn có thể quay lại chọn bác sĩ khác."
+                    : part.Length > 0 ? $"Các ngày còn lịch trống {part} trong 14 ngày tới." : "Các ngày còn lịch trống trong 14 ngày tới.";
+                if (state.PreferredDay > 0 && days.Any(day => day.DayNumber == state.PreferredDay))
+                {
+                    var preferred = DateOnly.FromDayNumber(state.PreferredDay);
+                    response.Message = $"Đã chọn sẵn ngày {preferred.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)}{(part.Length > 0 ? $", {part}" : "")} theo yêu cầu của bạn. Bấm ngày để xem khung giờ hoặc chọn ngày khác.";
+                    Add(response, state with { Stage = BookingWizardStage.Slot, Day = state.PreferredDay }, preferred.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture), user, session, part.Length > 0 ? part : null);
+                    Add(response, state with { PreferredDay = 0 }, OtherDayLabel, user, session);
+                }
+                else
+                {
+                    if (state.PreferredDay > 0 && days.Count > 0)
+                        response.Message = $"Ngày {DateOnly.FromDayNumber(state.PreferredDay).ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)} không còn lịch trống{(part.Length > 0 ? $" {part}" : "")}. Các ngày còn trống bên dưới.";
+                    foreach (var day in days)
+                        Add(response, state with { Stage = BookingWizardStage.Slot, Day = day.DayNumber, PreferredDay = 0 }, day.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture), user, session);
+                }
+                Back(response, state with { Stage = BookingWizardStage.Doctor, DoctorId = 0, Day = 0, SlotId = 0, PreferredDay = 0 }, user, session);
                 break;
             case BookingWizardStage.Slot:
                 response.Title = "Chọn khung giờ";
-                var slots = (await SlotsAsync(state, user, ct)).Where(x => x.SlotDate.DayNumber == state.Day).Take(12).ToList();
-                response.Message = slots.Count == 0 ? "Ngày này không còn lịch trống. Vui lòng quay lại chọn ngày khác." : "Chọn khung giờ còn trống.";
+                var daySlots = (await SlotsAsync(state, user, ct)).Where(x => x.SlotDate.DayNumber == state.Day).ToList();
+                var partSlots = daySlots.Where(x => AiBookingWizardPreference.Matches(state.DayPart, x.StartTime)).ToList();
+                var filtered = state.DayPart != BookingDayPart.None && partSlots.Count > 0;
+                var slots = (filtered ? partSlots : daySlots).Take(12).ToList();
+                response.Message = slots.Count == 0 ? "Ngày này không còn lịch trống. Vui lòng quay lại chọn ngày khác."
+                    : filtered ? $"Các khung giờ còn trống {AiBookingWizardPreference.Label(state.DayPart)} ({PartRange(state.DayPart)})." : "Chọn khung giờ còn trống.";
                 foreach (var slot in slots)
                 {
                     var name = doctorList?.FirstOrDefault(x => x.Id == slot.DoctorId)?.FullName;
                     Add(response, state with { Stage = BookingWizardStage.Facility, DoctorId = slot.DoctorId, SlotId = slot.SlotId, FacilityId = null },
                         $"{slot.StartTime:HH:mm} – {slot.EndTime:HH:mm}", user, session, state.DoctorId == 0 ? name : null);
                 }
-                Back(response, state with { Stage = BookingWizardStage.Day, Day = 0, SlotId = 0 }, user, session);
+                if (filtered && daySlots.Count > partSlots.Count)
+                    Add(response, state with { DayPart = BookingDayPart.None }, AllSlotsLabel, user, session);
+                Back(response, state with { Stage = BookingWizardStage.Day, Day = 0, SlotId = 0, PreferredDay = 0 }, user, session);
                 break;
             case BookingWizardStage.Facility:
                 response.Title = "Chọn cơ sở";
@@ -284,6 +316,8 @@ public sealed class AiBookingWizardService(
 
     private async Task<AiBookingWizardResponseDto> TextAsync(BookingWizardSelection state, string? input, Guid user, string session, CancellationToken ct)
     {
+        // A typed day replaces the start preference, so every available day must be matchable.
+        if (state.Stage == BookingWizardStage.Day) state = state with { PreferredDay = 0 };
         // Resolve only against the currently rendered options, including their limits and availability checks.
         var response = await RenderAsync(state, user, session, ct);
         if (response.Step != state.Stage.ToString().ToLowerInvariant() || response.TextToken is null) return response;
@@ -455,6 +489,7 @@ public sealed class AiBookingWizardService(
         {
             Step = "review", Title = "Xem lại thông tin khám", Message = chat.Message!,
             ReviewAction = chat.Actions.Single(x => x.Type == AiActionTypes.ReviewBooking),
+            ConfirmAction = chat.Actions.Single(x => x.Type == AiActionTypes.ConfirmBooking),
             Summary = new() { SpecialtyName = draft.SpecialtyName, DoctorName = draft.DoctorName,
                 FacilityName = facility.Name, RequiresFacilitySelection = facilities.Count > 1,
                 SlotDate = draft.SlotDate, StartTime = draft.StartTime, EndTime = draft.EndTime, ReasonProvided = true }
@@ -477,6 +512,50 @@ public sealed class AiBookingWizardService(
         response.ErrorCode = "SLOT_UNAVAILABLE";
         return response;
     }
+
+    private const string OtherDayLabel = "Chọn ngày khác";
+    private const string AllSlotsLabel = "Xem mọi khung giờ trong ngày";
+    private const string ReceptionContactRoute = "/locations";
+
+    private static string PartRange(BookingDayPart part)
+    {
+        var (from, to) = part switch
+        {
+            BookingDayPart.Morning => (AiBookingWizardPreference.MorningStart, AiBookingWizardPreference.AfternoonStart),
+            BookingDayPart.Afternoon => (AiBookingWizardPreference.AfternoonStart, AiBookingWizardPreference.EveningStart),
+            _ => (AiBookingWizardPreference.EveningStart, AiBookingWizardPreference.EveningEnd)
+        };
+        return $"{from.ToString("HH:mm", CultureInfo.InvariantCulture)}–{to.ToString("HH:mm", CultureInfo.InvariantCulture)}";
+    }
+
+    private async Task<AiBookingWizardResponseDto?> OnlineBookingBlockedAsync(Guid user, CancellationToken ct)
+    {
+        if (await PatientAsync(user, ct) is not { } patientId ||
+            await NoShowRestrictionRule.GetBlockedUntilAsync(db, clock, expiryOptions.Value, patientId) is not { } until) return null;
+        var blocked = Error("ONLINE_BOOKING_BLOCKED", NoShowRestrictionRule.Message(until, expiryOptions.Value));
+        blocked.Step = "stopped";
+        blocked.Title = "Tạm khóa đặt lịch online";
+        blocked.Actions.Add(ContactReception());
+        return blocked;
+    }
+
+    // Any-doctor already covers every doctor of the specialty, so the doctor step is where another choice can be made.
+    private async Task<AiBookingWizardResponseDto> NoSlotsForSpecialtyAsync(BookingWizardSelection state, Guid user, string session, CancellationToken ct)
+    {
+        var response = await RenderAsync(state with { Stage = BookingWizardStage.Doctor, DoctorId = 0, AnyDoctor = false, Day = 0, SlotId = 0, PreferredDay = 0 }, user, session, ct);
+        response.Options.Clear();
+        response.ErrorCode = "NO_AVAILABLE_SLOTS";
+        response.AssistantMode = "Clarifying";
+        response.Message = $"Chuyên khoa {response.Summary?.SpecialtyName} không có lịch trống trong 14 ngày tới. Bạn có thể quay lại chọn chuyên khoa khác hoặc liên hệ lễ tân để được hỗ trợ.";
+        response.Actions.Add(ContactReception());
+        return response;
+    }
+
+    private static AiActionDto ContactReception() => new()
+    {
+        Id = "act-contact-reception", Type = AiActionTypes.ContactReception, Label = "Liên hệ lễ tân", Style = "secondary",
+        Payload = new() { TargetUrl = ReceptionContactRoute }
+    };
 
     private async Task<long?> PatientAsync(Guid user, CancellationToken ct) =>
         await db.Patients.AsNoTracking().Where(x => x.UserId == user).Select(x => (long?)x.Id).SingleOrDefaultAsync(ct);

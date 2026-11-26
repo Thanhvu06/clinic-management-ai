@@ -2,9 +2,12 @@ import { useLayoutEffect, useId, useRef, useState, type ReactNode } from "react"
 import type { AiBookingWizardRequest, AiBookingWizardResponse } from "../types/ai";
 import styles from "./MedicalChatWidget.module.css";
 import { Check } from 'lucide-react';
+import { Alert, Button } from "antd";
 
 const allSteps = ['specialty', 'doctor', 'day', 'slot', 'facility', 'reason', 'review'] as const;
 const allLabels = ['Chuyên khoa', 'Bác sĩ', 'Ngày', 'Giờ', 'Cơ sở', 'Lý do', 'Xem lại'];
+const RECEPTION_ROUTE = '/locations';
+const RECEPTION_LABEL = 'Liên hệ lễ tân';
 
 interface Props {
     state: AiBookingWizardResponse | null;
@@ -24,6 +27,10 @@ export const BookingWizard = ({ state, busy, onStep, reviewContent }: Props) => 
         heading.current?.focus({ preventScroll: true });
     }, [state?.step]);
     if (!state) return null;
+    if (state.errorCode === 'ONLINE_BOOKING_BLOCKED') return <section ref={card} className={styles.wizard} data-wizard-step={state.step} aria-label="Đặt lịch khám từng bước">
+        <h4 ref={heading} tabIndex={-1}>{state.title}</h4>
+        <Alert type="warning" showIcon title={state.message} action={<Button href={RECEPTION_ROUTE}>{RECEPTION_LABEL}</Button>} />
+    </section>;
     const hasFacilityStep = state.step === 'facility' || state.summary?.requiresFacilitySelection === true;
     const steps = allSteps.filter(step => hasFacilityStep || step !== 'facility');
     const labels = allLabels.filter(label => hasFacilityStep || label !== 'Cơ sở');
@@ -45,6 +52,7 @@ export const BookingWizard = ({ state, busy, onStep, reviewContent }: Props) => 
         <h4 ref={heading} tabIndex={-1}>{state.title}</h4>
         <p role={state.errorCode ? "alert" : "status"}>{state.message}</p>
         {state.step === 'review' && reviewContent}
+        {state.errorCode === 'NO_AVAILABLE_SLOTS' && <Button href={RECEPTION_ROUTE}>{RECEPTION_LABEL}</Button>}
         <div className={`${styles.wizardOptions} ${state.step === 'slot' ? styles.slotGrid : ['specialty', 'doctor', 'facility'].includes(state.step) ? styles.choiceGrid : styles.quickPrompts}`}>
             {state.options.map(option => <button key={option.token} type="button" className={styles.quickPromptChip}
                 aria-label={option.hint ? `${option.label}, ${option.hint}` : option.label} disabled={busy}

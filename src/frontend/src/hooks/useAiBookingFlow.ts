@@ -707,7 +707,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 activeDraftRef.current = draft;
                 setActiveDraft(draft);
                 setMessages(previous => [...previous, { role: 'model', content: data.message,
-                    bookingDraft: draft, actions: [data.reviewAction!], providerWasCalled: false, providerAttemptCount: 0 }]);
+                    bookingDraft: draft, actions: [data.confirmAction ?? data.reviewAction!], providerWasCalled: false, providerAttemptCount: 0 }]);
             } else if (step === 'back') {
                 setActiveDraft(null);
             }

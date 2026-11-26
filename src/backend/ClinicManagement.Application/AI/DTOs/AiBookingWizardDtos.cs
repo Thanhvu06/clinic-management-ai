@@ -45,6 +45,8 @@ public sealed class AiBookingWizardResponseDto
     public string? TextToken { get; set; }
     public AiBookingWizardSummaryDto? Summary { get; set; }
     public AiActionDto? ReviewAction { get; set; }
+    // The same confirmation the review prompt names, so the chat shows one confirm button.
+    public AiActionDto? ConfirmAction { get; set; }
     public List<AiActionDto> Actions { get; set; } = new();
     public IReadOnlyList<AiSuggestionItemDto> Suggestions { get; set; } = Array.Empty<AiSuggestionItemDto>();
     public string AssistantMode { get; set; } = "Ready";

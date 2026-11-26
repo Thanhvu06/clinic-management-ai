@@ -449,6 +449,7 @@ export interface AiBookingWizardResponse {
     textToken?: string;
     summary?: { specialtyName?: string; doctorName?: string; facilityName?: string; requiresFacilitySelection?: boolean; slotDate?: string; startTime?: string; endTime?: string; reasonProvided: boolean };
     reviewAction?: ReviewBookingAction;
+    confirmAction?: AiAction;
     actions: AiAction[];
     suggestions: AiSuggestionItem[];
     assistantMode: string;
