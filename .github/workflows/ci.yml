@@ -2,14 +2,20 @@ name: ClinicCare CI
 
 on:
   push:
-    branches: [ main, "feat/**", "fix/**", "wip/**" ]
+    branches: [ main ]
   pull_request:
     branches: [ main, "feat/**" ]
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  backend:
-    name: Backend Build & Test (.NET 10)
+  backend-checks:
+    name: Backend Checks (gates, EF, migrations, publish)
     runs-on: ubuntu-latest
+    outputs:
+      total-tests: ${{ steps.partition.outputs.total }}
     services:
       sqlserver:
         image: mcr.microsoft.com/mssql/server:2022-latest
@@ -32,6 +38,14 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/packages.lock.json', '**/Directory.Build.props', '**/Directory.Packages.props', '**/global.json', '**/nuget.config', '**/NuGet.Config') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
       - name: Install dotnet-ef
         run: dotnet tool install --global dotnet-ef
 
@@ -40,6 +54,10 @@ jobs:
 
       - name: Build backend
         run: dotnet build src/backend/ClinicManagement.sln --no-restore --configuration Release
+
+      - name: Verify backend test shards partition the solution
+        id: partition
+        run: python3 scripts/ci/backend_test_shards.py verify-partition src/backend/ClinicManagement.sln
 
       - name: Validate Phase 4 independent dataset and benchmark
         shell: bash
@@ -191,17 +209,102 @@ jobs:
             -d ClinicManagement_CiMigration -b -Q "IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'AiPendingToolActions') THROW 50000, 'AiPendingToolActions table missing', 1; IF COL_LENGTH('AiPendingToolActions', 'ActorRole') IS NULL OR COL_LENGTH('AiPendingToolActions', 'ConfirmationTokenHash') IS NULL OR COL_LENGTH('AiPendingToolActions', 'SourceAiActionId') IS NULL THROW 50000, 'Role action columns missing', 1; IF COL_LENGTH('DiagnosticOrders', 'SourceAiActionId') IS NULL THROW 50000, 'Diagnostic order AI source column missing', 1; IF COL_LENGTH('Appointments', 'FacilityId') IS NULL THROW 50000, 'Appointment facility binding column missing', 1; IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_AiPendingToolActions_UserId_ResourceType_ResourceId') THROW 50000, 'Active action index missing', 1; IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_AiPendingToolActions_SourceAiActionId') THROW 50000, 'AI action source index missing', 1; IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_DiagnosticOrders_SourceAiActionId') THROW 50000, 'Diagnostic AI source index missing', 1; IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Appointments_FacilityId_AppointmentDate') THROW 50000, 'Appointment facility index missing', 1; IF NOT EXISTS (SELECT 1 FROM __EFMigrationsHistory WHERE MigrationId = '20260926114519_HardenAiPendingToolActionExecution') THROW 50000, 'Hardening migration history missing', 1; IF NOT EXISTS (SELECT 1 FROM __EFMigrationsHistory WHERE MigrationId = '20260927013919_AddAiRoleConfirmedActionGateway') THROW 50000, 'Role action migration history missing', 1; IF NOT EXISTS (SELECT 1 FROM __EFMigrationsHistory WHERE MigrationId = '20260927023122_AddAppointmentFacilityBinding') THROW 50000, 'Appointment facility migration history missing', 1;"
           rm -f ./ai-ef-idempotent.sql ./ai-ef-apply.sql
 
-      - name: Run backend tests
-        env:
-          TEST_SQLSERVER_CONNECTION_STRING: "Server=localhost,1433;Database=ClinicManagement_CiTest;User Id=sa;Password=Your_password123!;TrustServerCertificate=True;Connect Timeout=30;"
-        run: dotnet test src/backend/ClinicManagement.sln --no-build --configuration Release --verbosity normal
-
       - name: Publish API and verify AI model artifacts
         run: |
           dotnet publish src/backend/ClinicManagement.Api/ClinicManagement.Api.csproj --no-restore --configuration Release -o ./publish_ci_verify
           test -f ./publish_ci_verify/models/vietnamese_intent_classifier_v1.zip
           test -f ./publish_ci_verify/models/intent_model_metadata.json
           rm -rf ./publish_ci_verify
+
+  backend-tests:
+    name: Backend Tests (shard ${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "Your_password123!"
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Your_password123!' -C -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/packages.lock.json', '**/Directory.Build.props', '**/Directory.Packages.props', '**/global.json', '**/nuget.config', '**/NuGet.Config') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Restore dependencies
+        run: dotnet restore src/backend/ClinicManagement.sln
+
+      - name: Build backend
+        run: dotnet build src/backend/ClinicManagement.sln --no-restore --configuration Release
+
+      - name: Run backend tests
+        env:
+          TEST_SQLSERVER_CONNECTION_STRING: "Server=localhost,1433;Database=ClinicManagement_CiTest;User Id=sa;Password=Your_password123!;TrustServerCertificate=True;Connect Timeout=30;"
+        shell: bash
+        run: |
+          filter="$(python3 scripts/ci/backend_test_shards.py filter ${{ matrix.shard }})"
+          echo "Shard ${{ matrix.shard }} filter: $filter"
+          dotnet test src/backend/ClinicManagement.sln --no-build --configuration Release --verbosity normal \
+            --filter "$filter" --logger trx --results-directory "$RUNNER_TEMP/backend-test-results"
+
+      - name: Upload shard test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results-${{ matrix.shard }}
+          path: ${{ runner.temp }}/backend-test-results/*.trx
+          if-no-files-found: error
+          retention-days: 7
+
+  backend:
+    name: Backend Build & Test (.NET 10)
+    runs-on: ubuntu-latest
+    needs: [backend-checks, backend-tests]
+    if: ${{ !cancelled() }}
+    steps:
+      - name: Require backend checks and every test shard to pass
+        shell: bash
+        run: |
+          echo "backend-checks: ${{ needs.backend-checks.result }}"
+          echo "backend-tests: ${{ needs.backend-tests.result }}"
+          test "${{ needs.backend-checks.result }}" = "success"
+          test "${{ needs.backend-tests.result }}" = "success"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download shard test results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: backend-test-results-*
+          path: ${{ runner.temp }}/backend-test-results
+
+      - name: Verify every solution test ran exactly once across shards
+        run: >-
+          python3 scripts/ci/backend_test_shards.py verify-results
+          "${{ needs.backend-checks.outputs.total-tests }}" "$RUNNER_TEMP/backend-test-results"
 
   frontend:
     name: Frontend Lint, Test & Build (Node 24)
@@ -236,7 +339,6 @@ jobs:
   e2e:
     name: E2E Browser Acceptance
     runs-on: ubuntu-latest
-    needs: [backend, frontend]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -245,6 +347,14 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/packages.lock.json', '**/Directory.Build.props', '**/Directory.Packages.props', '**/global.json', '**/nuget.config', '**/NuGet.Config') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
 
       - name: Setup Node.js 24
         uses: actions/setup-node@v4
@@ -257,9 +367,28 @@ jobs:
         working-directory: src/frontend
         run: npm ci
 
+      - name: Resolve Playwright version
+        id: playwright
+        working-directory: src/frontend
+        shell: bash
+        run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright Chromium
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
       - name: Install Chromium and system dependencies
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         working-directory: src/frontend
         run: npx playwright install --with-deps chromium
+
+      - name: Install Chromium system dependencies (browser restored from cache)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        working-directory: src/frontend
+        run: npx playwright install-deps chromium
 
       - name: Build backend Release
         run: dotnet build src/backend/ClinicManagement.sln --configuration Release
