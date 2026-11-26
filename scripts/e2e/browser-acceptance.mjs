@@ -807,7 +807,7 @@ async function runLocalSuggestionAndWizardAcceptance(browser) {
             state = await wizardClick(wizard.getByRole('button', { name: 'Khám tổng quát', exact: true }), 'review');
             await dialog.getByRole('heading', { name: 'Tóm tắt thông tin đặt lịch', exact: true }).waitFor({ state: 'visible' });
             assert.equal(db.prepare('SELECT COUNT(*) AS count FROM Appointments').get().count, before, 'review must not create an appointment');
-            await dialog.getByRole('button', { name: state.reviewAction.label, exact: true }).click();
+            assert.equal(state.confirmAction?.label, 'Xác nhận đặt lịch', 'review must offer the confirm button its prompt names');
             await dialog.getByRole('button', { name: 'Xác nhận đặt lịch', exact: true }).waitFor({ state: 'visible' });
             await assertNoRawWizardValues(dialog, state);
             const pending = page.waitForResponse(response => response.url().endsWith('/api/v1/appointments') && response.request().method() === 'POST');

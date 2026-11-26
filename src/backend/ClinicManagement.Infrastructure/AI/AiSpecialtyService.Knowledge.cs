@@ -30,7 +30,7 @@ public partial class AiSpecialtyService
             return null;
         var answer = recover && _knowledgeAnswerer is IClinicSemanticKnowledgeAnswerer semantic
             ? await semantic.AnswerThroughIntentGateAsync(expanded, ct)
-            : legacy ? await _knowledgeAnswerer.AnswerAsync(message, ct) : null;
+            : legacy ? await _knowledgeAnswerer.AnswerAsync(KnowledgeQuestionPolicy.WithPolicyWording(message), ct) : null;
         if (answer is null) return null;
         var block = AiProviderOutputGuard.Inspect(AiActorRole.Patient, answer.Text);
         var response = new AiChatResponseDto

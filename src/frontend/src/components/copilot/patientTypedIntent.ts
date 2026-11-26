@@ -20,6 +20,7 @@ export function classifyPatientTypedIntent(text: string): PatientTypedIntent | n
         (has('doi', false) && ['lich', 'gio', 'ngay', 'sang'].some(phrase => has(phrase, false)))) return null;
     if (['gia', 'bao nhieu', 'o dau', 'the nao', 'nhu the nao', 'cach', 'mo cua', 'gio lam viec', 'dia chi']
         .some(phrase => has(phrase, false))) return null;
+    if (hasColloquialPriceCue(normalizeTypedText(text)) || isBookingPolicyQuestion(text)) return null;
 
     // Explicit booking wins over the doctor/specialty schedule-question guard.
     if (any(['dat lich', 'dat kham', 'dang ky kham', 'muon kham', 'hen kham', 'book lich'])) return 'booking';
@@ -103,8 +104,25 @@ export function doctorScheduleHint(text: string): string | undefined {
         ? text : undefined;
 }
 
+// Chat shorthand for a price ("bn tiền", "bao nhiu", "giá sao", "hết nhiêu"); a
+// following unit such as "ngày" or "viên" makes it a duration or dose question.
+const COLLOQUIAL_PRICE = /\b(?:(?:mat|het|ton|tra|tinh) (?:bn|bao nhiu|bao nhieu|nhieu|nhiu)|(?:bn|bao nhiu) (?:tien|k|nghin|ngan)|tien (?:kham )?(?:bn|bao nhiu|nhieu|nhiu)|gia (?:sao|the nao|ra sao|bn|bao nhiu)|bao nhiu)\b(?! (?:ngay|gio|tieng|phut|tuan|thang|lan|vien|lieu|ml|thoi gian)\b)/;
+
+function hasColloquialPriceCue(normalized: string): boolean {
+    return COLLOQUIAL_PRICE.test(normalized);
+}
+
+// Asking how booking rules work ("lỡ hẹn mấy lần thì bị khóa đặt lịch", "mở lại kiểu gì")
+// is a question for the policy documents, not a request to start booking.
+const BOOKING_POLICY_CUES = /\b(?:may lan|kieu gi|lam sao|tai sao|vi sao|bi khoa|khoa dat lich|quy dinh|chinh sach|mo lai|lo hen|vang mat|bao lau|co bi|thi sao)\b/;
+
+export function isBookingPolicyQuestion(text: string): boolean {
+    return BOOKING_POLICY_CUES.test(normalizeTypedText(text));
+}
+
 export function isConsultationPriceQuestion(text: string): boolean {
     const normalized = normalizeTypedText(text);
+    if (/\b(?:kham|khoa|chuyen khoa|bac si|bs|dich vu)\b/.test(normalized) && hasColloquialPriceCue(normalized)) return true;
     return /\bkham\b/.test(normalized) && /\b(?:gia|chi phi|phi)\b/.test(normalized) &&
         /\b(?:bao nhieu|the nao|la may)\b/.test(normalized);
 }
