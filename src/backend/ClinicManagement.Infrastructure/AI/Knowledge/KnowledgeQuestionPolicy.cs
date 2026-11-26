@@ -134,7 +134,12 @@ internal static class PatientChatPricing
         @"(?! (?:ngay|gio|tieng|phut|tuan|thang|lan|vien|lieu|ml|thoi gian))",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex ClinicServiceWord = new(
-        @"\b(?:kham|khoa|chuyen khoa|bac si|bs|dich vu)\b", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+        @"\b(?:kham|khoa|chuyen khoa|bac si|bs|dich vu|" + SpecialtyNames + @")\b", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    // Specialty names typed without "khám" ("nhi bn tiền"). Bare "mắt" and "sản" are left out:
+    // unaccented they are also "mất" and "sẵn".
+    private const string SpecialtyNames =
+        "noi tong quat|nhi|san phu khoa|san khoa|phu khoa|da lieu|tai mui hong|tim mach|co xuong khop|than kinh|noi tiet|nhan khoa|tieu hoa";
 
     internal static bool IsColloquialPriceQuestion(string normalized) =>
         ColloquialPriceCue.IsMatch(normalized) && ClinicServiceWord.IsMatch(normalized);

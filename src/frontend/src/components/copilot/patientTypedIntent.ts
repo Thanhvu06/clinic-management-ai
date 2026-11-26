@@ -108,6 +108,10 @@ export function doctorScheduleHint(text: string): string | undefined {
 // following unit such as "ngày" or "viên" makes it a duration or dose question.
 const COLLOQUIAL_PRICE = /\b(?:(?:mat|het|ton|tra|tinh) (?:bn|bao nhiu|bao nhieu|nhieu|nhiu)|(?:bn|bao nhiu) (?:tien|k|nghin|ngan)|tien (?:kham )?(?:bn|bao nhiu|nhieu|nhiu)|gia (?:sao|the nao|ra sao|bn|bao nhiu)|bao nhiu)\b(?! (?:ngay|gio|tieng|phut|tuan|thang|lan|vien|lieu|ml|thoi gian)\b)/;
 
+// Specialty names typed without "khám" ("nhi bn tiền"). Bare "mắt" and "sản" are left out:
+// unaccented they are also "mất" and "sẵn".
+const FEE_CONTEXT = /\b(?:kham|khoa|chuyen khoa|bac si|bs|dich vu|noi tong quat|nhi|san phu khoa|san khoa|phu khoa|da lieu|tai mui hong|tim mach|co xuong khop|than kinh|noi tiet|nhan khoa|tieu hoa)\b/;
+
 function hasColloquialPriceCue(normalized: string): boolean {
     return COLLOQUIAL_PRICE.test(normalized);
 }
@@ -122,7 +126,7 @@ export function isBookingPolicyQuestion(text: string): boolean {
 
 export function isConsultationPriceQuestion(text: string): boolean {
     const normalized = normalizeTypedText(text);
-    if (/\b(?:kham|khoa|chuyen khoa|bac si|bs|dich vu)\b/.test(normalized) && hasColloquialPriceCue(normalized)) return true;
+    if (FEE_CONTEXT.test(normalized) && hasColloquialPriceCue(normalized)) return true;
     return /\bkham\b/.test(normalized) && /\b(?:gia|chi phi|phi)\b/.test(normalized) &&
         /\b(?:bao nhieu|the nao|la may)\b/.test(normalized);
 }

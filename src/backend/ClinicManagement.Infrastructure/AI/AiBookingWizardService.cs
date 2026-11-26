@@ -131,7 +131,8 @@ public sealed class AiBookingWizardService(
                 }
                 if (prefilled is not null)
                 {
-                    var response = await RenderAsync(prefilled, user, session, ct);
+                    // A typed doctor name only decides where the wizard opens; an empty day list there is handled on the next pick.
+                    var response = await RenderAsync(prefilled, user, session, ct, keepDoctorStepWhenEmpty: false);
                     if (response.ErrorCode is null) return response;
                 }
             }
@@ -191,7 +192,8 @@ public sealed class AiBookingWizardService(
     private static string NormalizeHint(string? value) =>
         Regex.Replace(Regex.Replace(AiTextNormalizer.NormalizeForComparison(value), @"[^a-z0-9\s]", " "), @"\s+", " ").Trim();
 
-    private async Task<AiBookingWizardResponseDto> RenderAsync(BookingWizardSelection state, Guid user, string session, CancellationToken ct)
+    private async Task<AiBookingWizardResponseDto> RenderAsync(BookingWizardSelection state, Guid user, string session, CancellationToken ct,
+        bool keepDoctorStepWhenEmpty = true)
     {
         List<EligibleAppointmentFacility>? facilities = null;
         if (state.Stage >= BookingWizardStage.Facility)
@@ -245,6 +247,8 @@ public sealed class AiBookingWizardService(
                 var available = await SlotsAsync(state, user, ct);
                 if (available.Count == 0 && state.AnyDoctor && (await GetWizardDoctorsAsync(state.SpecialtyId, ct)).Count > 0)
                     return await NoSlotsForSpecialtyAsync(state, user, session, ct);
+                if (available.Count == 0 && !state.AnyDoctor && doctor is not null && keepDoctorStepWhenEmpty)
+                    return await NoSlotsForDoctorAsync(state, doctor.FullName, user, session, ct);
                 var inPart = available.Where(x => AiBookingWizardPreference.Matches(state.DayPart, x.StartTime)).ToList();
                 if (inPart.Count == 0) state = state with { DayPart = BookingDayPart.None, PreferredDay = 0 };
                 else available = inPart;
@@ -547,6 +551,18 @@ public sealed class AiBookingWizardService(
         response.ErrorCode = "NO_AVAILABLE_SLOTS";
         response.AssistantMode = "Clarifying";
         response.Message = $"Chuyên khoa {response.Summary?.SpecialtyName} không có lịch trống trong 14 ngày tới. Bạn có thể quay lại chọn chuyên khoa khác hoặc liên hệ lễ tân để được hỗ trợ.";
+        response.Actions.Add(ContactReception());
+        return response;
+    }
+
+    // A chosen doctor without slots keeps the patient on the doctor step with the remaining doctors.
+    private async Task<AiBookingWizardResponseDto> NoSlotsForDoctorAsync(BookingWizardSelection state, string doctorName, Guid user, string session, CancellationToken ct)
+    {
+        var response = await RenderAsync(state with { Stage = BookingWizardStage.Doctor, DoctorId = 0, AnyDoctor = false, Day = 0, SlotId = 0, PreferredDay = 0 }, user, session, ct);
+        response.Options.RemoveAll(option => option.Label == doctorName);
+        response.ErrorCode = "NO_AVAILABLE_SLOTS";
+        response.AssistantMode = "Clarifying";
+        response.Message = $"Bác sĩ {doctorName} không có lịch trống trong 14 ngày tới. Bạn có thể chọn bác sĩ khác, quay lại chọn chuyên khoa khác hoặc liên hệ lễ tân để được hỗ trợ.";
         response.Actions.Add(ContactReception());
         return response;
     }

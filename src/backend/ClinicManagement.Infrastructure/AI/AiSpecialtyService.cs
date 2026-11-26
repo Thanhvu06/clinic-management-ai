@@ -58,7 +58,8 @@ public partial class AiSpecialtyService : IAiSpecialtyService
         IAiToolExecutor? toolExecutor = null,
         IAiConversationPipeline? conversationPipeline = null,
         IAiProviderHealth? providerHealth = null,
-        ClinicManagement.Application.AI.Knowledge.IClinicKnowledgeAnswerer? knowledgeAnswerer = null)
+        ClinicManagement.Application.AI.Knowledge.IClinicKnowledgeAnswerer? knowledgeAnswerer = null,
+        Microsoft.Extensions.Options.IOptions<ClinicManagement.Application.Common.Expiry.ExpiryRulesOptions>? expiryOptions = null)
     {
         _dbContext = dbContext;
         _aiProvider = aiProvider;
@@ -77,6 +78,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
         _conversationPipeline = conversationPipeline;
         _providerHealth = providerHealth;
         _knowledgeAnswerer = knowledgeAnswerer;
+        _expiryOptions = expiryOptions;
     }
 
     public async Task<AiSuggestionResponseDto> GetSuggestionsAsync(AiSuggestionRequestDto request, CancellationToken cancellationToken = default)
