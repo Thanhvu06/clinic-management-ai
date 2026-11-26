@@ -28,6 +28,8 @@ async function mount() {
     render(<MemoryRouter initialEntries={['/reception/register?existingPatientId=1']}><WalkInPatientRegistration /></MemoryRouter>);
     await screen.findByText('Người bệnh thử');
     fireEvent.click(screen.getByText(/Tiếp tục: Chuẩn bị lượt khám/));
+    await screen.findByRole('option', { name: 'Nội (NOI)' });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Khoa phòng tiếp nhận' }), { target: { value: '10' } });
     await screen.findByRole('option', { name: 'Bác sĩ Nội (Nội)' });
 }
 it('filters doctors by specialty, clears the previous doctor and shows the chosen name on confirmation', async () => {

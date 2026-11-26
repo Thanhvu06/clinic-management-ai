@@ -78,6 +78,7 @@ export const WalkInPatientRegistration: React.FC = () => {
     const [doctorId, setDoctorId] = useState<number | undefined>(undefined);
     const [priority, setPriority] = useState<VisitPriority>('Normal');
     const [chiefComplaint, setChiefComplaint] = useState('');
+    const [departmentRequiredError, setDepartmentRequiredError] = useState(false);
     const selectedSpecialtyId = departments.find(department => department.id === departmentId)?.specialtyId;
     const availableDoctors = doctors.filter(doctor => !selectedSpecialtyId || doctor.specialtyId === selectedSpecialtyId);
 
@@ -183,7 +184,8 @@ export const WalkInPatientRegistration: React.FC = () => {
                 if (!active) return;
                 if (!res.success || !res.data) throw new Error('Departments load failed');
                 setDepartments(res.data);
-                setDepartmentId(res.data[0]?.id);
+                // Walk-ins must pick a department explicitly; defaulting to the first one routed patients to the wrong queue.
+                setDepartmentId(res.data.length === 1 ? res.data[0].id : undefined);
             })
             .catch(err => {
                 if (!active) return;
@@ -228,7 +230,7 @@ export const WalkInPatientRegistration: React.FC = () => {
     const handleSearchPatient = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
         if (!searchQuery.trim()) {
-            showAlert('Thông báo', 'Vui lòng nhập từ khóa tìm kiếm (Mã BN, CCCD, SĐT hoặc Họ tên).', 'warning');
+            showAlert('Vui lòng nhập từ khóa tìm kiếm (Mã BN, CCCD, SĐT hoặc Họ tên).', 'Thông báo', 'warning');
             return;
         }
 
@@ -238,14 +240,14 @@ export const WalkInPatientRegistration: React.FC = () => {
             if (res.success && res.data) {
                 setSearchResults(res.data.items);
                 if (res.data.items.length === 0) {
-                    showAlert('Kết quả tìm kiếm', 'Không tìm thấy người bệnh nào khớp thông tin. Bạn có thể chuyển sang "Đăng ký hồ sơ mới".', 'info');
+                    showAlert('Không tìm thấy người bệnh nào khớp thông tin. Bạn có thể chuyển sang "Đăng ký hồ sơ mới".', 'Kết quả tìm kiếm', 'info');
                 }
             } else {
                 setSearchResults([]);
             }
         } catch (err) {
             console.error('Lỗi tìm kiếm MPI:', err);
-            showAlert('Lỗi tra cứu', 'Không thể kết nối dịch vụ tra cứu hồ sơ người bệnh.', 'error');
+            showAlert('Không thể kết nối dịch vụ tra cứu hồ sơ người bệnh.', 'Lỗi tra cứu', 'error');
         } finally {
             setSearching(false);
         }
@@ -270,24 +272,24 @@ export const WalkInPatientRegistration: React.FC = () => {
     const handleProceedToStep2 = () => {
         if (patientMode === 'lookup') {
             if (!selectedPatient) {
-                showAlert('Chưa chọn người bệnh', 'Vui lòng chọn một hồ sơ người bệnh từ kết quả tra cứu trước khi tiếp tục.', 'warning');
+                showAlert('Vui lòng chọn một hồ sơ người bệnh từ kết quả tra cứu trước khi tiếp tục.', 'Chưa chọn người bệnh', 'warning');
                 return;
             }
         } else {
             // Validate new patient
             if (!newFullName.trim()) {
-                showAlert('Thiếu họ tên', 'Vui lòng nhập Họ và tên người bệnh.', 'warning');
+                showAlert('Vui lòng nhập Họ và tên người bệnh.', 'Thiếu họ tên', 'warning');
                 return;
             }
             if (!newDateOfBirth) {
-                showAlert('Thiếu ngày sinh', 'Vui lòng chọn Ngày tháng năm sinh của người bệnh.', 'warning');
+                showAlert('Vui lòng chọn Ngày tháng năm sinh của người bệnh.', 'Thiếu ngày sinh', 'warning');
                 return;
             }
             // Check contact phone rule: if personal phone is empty, emergency contact phone is required!
             if (!newPhone.trim() && !contactPhone.trim()) {
                 showAlert(
-                    'Yêu cầu số điện thoại liên hệ',
                     'Vui lòng nhập ít nhất một số điện thoại: Số điện thoại cá nhân của người bệnh HOẶC số điện thoại người liên hệ khẩn cấp.',
+                    'Yêu cầu số điện thoại liên hệ',
                     'warning'
                 );
                 return;
@@ -298,15 +300,15 @@ export const WalkInPatientRegistration: React.FC = () => {
 
     const handleProceedToStep3 = () => {
         if (!facilityId) {
-            showAlert('Chưa chọn cơ sở', 'Vui lòng chọn cơ sở y tế tiếp nhận.', 'warning');
+            showAlert('Vui lòng chọn cơ sở y tế tiếp nhận.', 'Chưa chọn cơ sở', 'warning');
             return;
         }
         if (!departmentId) {
-            showAlert('Chưa chọn khoa', 'Vui lòng chọn Khoa khám tiếp nhận.', 'warning');
+            setDepartmentRequiredError(true);
             return;
         }
         if (!chiefComplaint.trim()) {
-            showAlert('Thiếu lý do khám', 'Vui lòng nhập Lý do khám hoặc Triệu chứng ban đầu của người bệnh.', 'warning');
+            showAlert('Vui lòng nhập Lý do khám hoặc Triệu chứng ban đầu của người bệnh.', 'Thiếu lý do khám', 'warning');
             return;
         }
         setStep(3);
@@ -359,16 +361,16 @@ export const WalkInPatientRegistration: React.FC = () => {
                 setCurrentTicket(res.data);
                 setTicketModalOpen(true);
                 showAlert(
-                    'Tiếp nhận & cấp STT thành công!',
                     `Đã cấp Số thứ tự ${res.data.queueNumber} tại ${res.data.departmentName || 'phòng khám'} cho bệnh nhân ${res.data.patientName}. Mã bệnh án: ${res.data.medicalRecordNumber}.`,
+                    'Tiếp nhận & cấp STT thành công!',
                     'success'
                 );
             } else {
-                showAlert('Lỗi tiếp nhận', res.message || 'Không thể tạo lượt khám.', 'error');
+                showAlert(res.message || 'Không thể tạo lượt khám.', 'Lỗi tiếp nhận', 'error');
             }
         } catch (err: any) {
             console.error('Lỗi khi tiếp nhận bệnh nhân:', err);
-            showAlert('Lỗi tiếp nhận', getApiErrorMessage(err, 'Không thể hoàn tất tiếp nhận lượt khám.'), 'error');
+            showAlert(getApiErrorMessage(err, 'Không thể hoàn tất tiếp nhận lượt khám.'), 'Lỗi tiếp nhận', 'error');
         } finally {
             setSubmitting(false);
         }
@@ -473,10 +475,10 @@ export const WalkInPatientRegistration: React.FC = () => {
                 <h3 className={styles.stepTitle}>Thông tin phân luồng và phòng khám</h3>
                 <Row gutter={[spacing.md, spacing.md]} className={styles.visitFormRow}>
                     <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Cơ sở khám chữa bệnh *</label><select aria-label="Cơ sở khám chữa bệnh" disabled={facilitiesLoading} aria-invalid={!!facilitiesError} className={styles.nativeSelect} value={facilityId} onChange={(e) => setFacilityId(Number(e.target.value))}>{facilities.map(f => <option key={f.id} value={f.id}>{f.name} ({f.code})</option>)}</select>{facilitiesLoading && <small className={styles.loadHint}>Đang tải...</small>}{facilitiesError && <div className={styles.loadError}><InlineError message={facilitiesError} onRetry={() => setFacilitiesReload(value => value + 1)} /></div>}</div></Col>
-                    <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Khoa phòng tiếp nhận *</label><Select aria-label="Khoa phòng tiếp nhận" disabled={departmentsLoading} status={departmentsError ? 'error' : undefined} className={styles.formSelect} value={departmentId || ''} onChange={(value) => setDepartmentId(Number(value))} options={departments.map(d => ({value:d.id,label:`${d.name} (${d.code})`}))} />{departmentsLoading && <small className={styles.loadHint}>Đang tải...</small>}{departmentsError && <div className={styles.loadError}><InlineError message={departmentsError} onRetry={() => setDepartmentsReload(value => value + 1)} /></div>}</div></Col>
+                    <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Khoa phòng tiếp nhận *</label><Select aria-label="Khoa phòng tiếp nhận" aria-invalid={departmentRequiredError} disabled={departmentsLoading} status={departmentsError || departmentRequiredError ? 'error' : undefined} className={styles.formSelect} placeholder="-- Chọn khoa phòng tiếp nhận --" value={departmentId} onChange={(value) => { setDepartmentId(value ? Number(value) : undefined); setDepartmentRequiredError(false); }} options={departments.map(d => ({value:d.id,label:`${d.name} (${d.code})`}))} />{departmentRequiredError && <small role="alert" className={styles.fieldError}>Vui lòng chọn khoa phòng tiếp nhận.</small>}{departmentsLoading && <small className={styles.loadHint}>Đang tải...</small>}{departmentsError && <div className={styles.loadError}><InlineError message={departmentsError} onRetry={() => setDepartmentsReload(value => value + 1)} /></div>}</div></Col>
                 </Row>
                 <Row gutter={[spacing.md, spacing.md]} className={styles.visitFormRow}>
-                    <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Phòng bệnh / buồng khám</label><Select aria-label="Phòng bệnh / buồng khám" disabled={roomsLoading} status={roomsError ? 'error' : undefined} className={styles.formSelect} value={roomId || ''} onChange={(value) => setRoomId(value ? Number(value) : undefined)} options={[{value:'',label:'-- Tự động xếp phòng trống --'},...rooms.map(r => ({value:r.id,label:`${r.roomNumber} - ${r.name}`}))]} />{roomsLoading && <small className={styles.loadHint}>Đang tải...</small>}{roomsError && <div className={styles.loadError}><InlineError message={roomsError} onRetry={() => setRoomsReload(value => value + 1)} /></div>}</div></Col>
+                    <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Phòng bệnh / buồng khám</label><Select aria-label="Phòng bệnh / buồng khám" disabled={roomsLoading || !departmentId} status={roomsError ? 'error' : undefined} className={styles.formSelect} value={roomId || ''} onChange={(value) => setRoomId(value ? Number(value) : undefined)} options={[{value:'',label:departmentId ? '-- Tự động xếp phòng trống --' : '-- Chọn khoa trước --'},...rooms.map(r => ({value:r.id,label:`${r.roomNumber} - ${r.name}`}))]} />{roomsLoading && <small className={styles.loadHint}>Đang tải...</small>}{roomsError && <div className={styles.loadError}><InlineError message={roomsError} onRetry={() => setRoomsReload(value => value + 1)} /></div>}</div></Col>
                     <Col xs={24} md={12}><div className={styles.formField}><label className={styles.fieldLabel}>Bác sĩ phụ trách</label><select aria-label="Bác sĩ phụ trách" disabled={doctorsLoading} aria-invalid={!!doctorsError} className={styles.nativeSelect} value={doctorId || ''} onChange={(e) => setDoctorId(e.target.value ? Number(e.target.value) : undefined)}><option value="">-- Tự động phân công theo ca trực --</option>{availableDoctors.map(doc => <option key={doc.id} value={doc.id}>{doc.fullName} ({doc.specialtyName || 'Đa khoa'})</option>)}</select>{doctorsLoading && <small className={styles.loadHint}>Đang tải...</small>}{doctorsError && <div className={styles.loadError}><InlineError message={doctorsError} onRetry={() => setDoctorsReload(value => value + 1)} /></div>}</div></Col>
                 </Row>
                 <Row gutter={[spacing.md, spacing.md]} className={styles.visitFormRow}>
