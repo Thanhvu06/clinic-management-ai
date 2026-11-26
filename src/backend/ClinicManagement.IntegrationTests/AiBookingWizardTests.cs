@@ -367,8 +367,8 @@ public sealed class AiBookingWizardTests(CustomWebApplicationFactory factory) : 
         using var scope = Factory.Services.CreateScope();
         var name = await scope.ServiceProvider.GetRequiredService<AppDbContext>().Users.Where(x => x.Id == Doctor2UserId).Select(x => x.FullName).SingleAsync();
         var days = await StepAsync(client, session, "pick", doctors.Options.Single(x => x.Label == name).Token);
-        Assert.Empty(days.Options);
-        Assert.Contains("Không có lịch trống", days.Message);
+        Assert.DoesNotContain(days.Options, x => x.Label == name);
+        Assert.Contains($"Bác sĩ {name} không có lịch trống", days.Message);
         Assert.True(days.CanGoBack);
         Assert.False(string.IsNullOrEmpty(days.BackToken));
     }
