@@ -73,6 +73,14 @@ public static class KnowledgeQuestionPolicy
 
     internal static bool IsBookingLeadTimeQuestion(string normalized) => BookingLeadTime.IsMatch(normalized);
 
+    private static readonly Regex MissedAppointmentWording = new(@"(?<![\p{L}])(?:lỡ|bỏ|trễ) hẹn(?![\p{L}])|(?<![\p{L}])không đến khám(?![\p{L}])",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    // Patients say "lỡ hẹn" where the policy says "vắng mặt"; without the policy word the
+    // online-lock question misses the lexical coverage the retriever requires.
+    internal static string WithPolicyWording(string message) =>
+        Regex.IsMatch(KnowledgeText.Normalize(message, false), @"(?<![\p{L}])(?:khóa|khoá)(?![\p{L}])") ? MissedAppointmentWording.Replace(message, "vắng mặt") : message;
+
     internal static bool IsVisitPreparationQuestion(string text) => Regex.IsMatch(text,
         @"^(?:(?:can|nen) )?chuan bi(?: gi)? truoc khi (?:di )?kham(?: (?:can gi|nen lam gi|the nao|nhu the nao))?$");
 
@@ -118,8 +126,22 @@ internal static class PatientChatPricing
         Regex.IsMatch(normalized, @"\b(?:bi|dang) (?:ho|met|sot|dau|ngua|non|nhuc|rat|te|phu)\b",
             RegexOptions.CultureInvariant);
 
+    // Chat shorthand such as "bn tiền", "bao nhiu", "giá sao", "hết nhiêu"; the
+    // clinic word keeps dose or duration questions ("uống bao nhiu viên") out.
+    private static readonly Regex ColloquialPriceCue = new(
+        @"\b(?:(?:mat|het|ton|tra|tinh) (?:bn|bao nhiu|bao nhieu|nhieu|nhiu)|(?:bn|bao nhiu) (?:tien|k|nghin|ngan)|" +
+        @"tien (?:kham )?(?:bn|bao nhiu|nhieu|nhiu)|gia (?:sao|the nao|ra sao|bn|bao nhiu)|bao nhiu)\b" +
+        @"(?! (?:ngay|gio|tieng|phut|tuan|thang|lan|vien|lieu|ml|thoi gian))",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex ClinicServiceWord = new(
+        @"\b(?:kham|khoa|chuyen khoa|bac si|bs|dich vu)\b", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    internal static bool IsColloquialPriceQuestion(string normalized) =>
+        ColloquialPriceCue.IsMatch(normalized) && ClinicServiceWord.IsMatch(normalized);
+
     internal static bool HasPricingEvidence(string lower, string normalized)
     {
+        if (IsColloquialPriceQuestion(normalized)) return true;
         if (lower.Contains("bảng giá") || lower.Contains("chi phí khám") || lower.Contains("giá khám") ||
             lower.Contains("bao nhiêu tiền") || lower.Contains("hết bao nhiêu tiền") || lower.Contains("tiền khám") ||
             lower.Contains("phí khám") || lower.Contains("giá dịch vụ") || lower.Contains("viện phí") ||

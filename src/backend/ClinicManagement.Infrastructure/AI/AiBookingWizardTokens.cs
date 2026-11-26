@@ -10,7 +10,8 @@ public enum BookingWizardStage : byte { Specialty, Doctor, Day, Slot, Facility, 
 public enum BookingWizardOperation : byte { Pick, Back, Reason, Preset, Text }
 public sealed record BookingWizardSelection(
     Guid DraftId, BookingWizardStage Stage = BookingWizardStage.Specialty,
-    long SpecialtyId = 0, long DoctorId = 0, int Day = 0, long SlotId = 0, byte Preset = 0, bool AnyDoctor = false, long? FacilityId = null);
+    long SpecialtyId = 0, long DoctorId = 0, int Day = 0, long SlotId = 0, byte Preset = 0, bool AnyDoctor = false, long? FacilityId = null,
+    int PreferredDay = 0, BookingDayPart DayPart = BookingDayPart.None);
 
 /// <summary>Compact encrypted, authenticated capabilities; no server-side wizard state.</summary>
 public sealed class AiBookingWizardTokens
@@ -41,6 +42,8 @@ public sealed class AiBookingWizardTokens
             writer.Write(selection.Preset);
             writer.Write(selection.AnyDoctor);
             writer.Write(selection.FacilityId ?? 0);
+            writer.Write(selection.PreferredDay);
+            writer.Write((byte)selection.DayPart);
         }
         return WebEncoders.Base64UrlEncode(_protector.Protect(stream.ToArray(), TimeSpan.FromMinutes(15)));
     }
@@ -60,8 +63,10 @@ public sealed class AiBookingWizardTokens
             var stage = (BookingWizardStage)reader.ReadByte();
             var selection = new BookingWizardSelection(draft, stage, reader.ReadInt64(), reader.ReadInt64(), reader.ReadInt32(), reader.ReadInt64(), reader.ReadByte(), reader.ReadBoolean());
             var facilityId = reader.ReadInt64();
-            if (facilityId < 0) return null;
-            selection = selection with { FacilityId = facilityId == 0 ? null : facilityId };
+            var preferredDay = reader.ReadInt32();
+            var dayPart = (BookingDayPart)reader.ReadByte();
+            if (facilityId < 0 || preferredDay < 0 || !Enum.IsDefined(dayPart)) return null;
+            selection = selection with { FacilityId = facilityId == 0 ? null : facilityId, PreferredDay = preferredDay, DayPart = dayPart };
             if (stream.Position != stream.Length || !Enum.IsDefined(stage)) return null;
             return (requestStep, operation) switch
             {
