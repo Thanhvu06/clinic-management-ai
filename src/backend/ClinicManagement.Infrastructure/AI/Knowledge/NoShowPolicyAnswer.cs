@@ -16,13 +16,15 @@ public static class NoShowPolicyAnswer
     private static readonly string[] CountWords = ["không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín", "mười"];
     private static readonly string[] PlainCountWords = ["khong", "mot", "hai", "ba", "bon", "nam", "sau", "bay", "tam", "chin", "muoi"];
 
-    private static readonly Regex MissedVisit = new(@"\b(?:lo hen|lo lich|bo hen|tre hen|vang mat|khong den(?: kham)?|huy (?:lich|hen))\b", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    // Cancelling is not a missed visit: "hủy lịch" alone never counts toward the lock, so it is not listed here.
+    private static readonly Regex MissedVisit = new(@"\b(?:lo hen|lo lich|bo hen|tre hen|vang mat|khong den(?: kham)?)\b", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex VisitCount = new(@"\b(?:may lan|bao nhieu lan|\d+ lan|(?:mot|hai|ba|bon|nam) lan)\b", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex ConsequenceCue = new(
         @"\b(?:mo lai|mo khoa|bi gi|co sao|co bi|thi sao|sao khong|may lan|bao nhieu lan|\d+ lan|(?:mot|hai|ba|bon|nam) lan|bi phat|anh huong|bi chan)\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex LockWord = new(@"(?<![\p{L}])(?:khóa|khoá)(?![\p{L}])", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex BookingLock = new(@"\b(?:dat lich|online|tai khoan)\b", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex LockContext = new(@"(?<![\p{L}])(?:đặt lịch|online|vắng mặt)(?![\p{L}])", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     // Same cues as the patient composer's isBookingPolicyQuestion, so a typed rule question
     // that also says "đặt lịch" is answered rather than treated as a booking or a symptom.
@@ -39,6 +41,8 @@ public static class NoShowPolicyAnswer
     public static bool IsLockQuestion(string message)
     {
         var plain = KnowledgeText.Normalize(message);
+        // "Sai mật khẩu … khóa tài khoản" is the sign-in lockout, answered by LoginLockPolicyAnswer.
+        if (LoginLockPolicyAnswer.IsLoginContext(plain)) return false;
         var mentionsLock = LockWord.IsMatch(KnowledgeText.Normalize(message, false));
         // Arriving late once ("trễ hẹn 20p có sao") is a lateness question for the documents, not a lock question.
         var lateOnly = Regex.IsMatch(plain, @"\btre hen\b") && !MissedVisit.IsMatch(Regex.Replace(plain, @"\btre hen\b", " "));
@@ -69,11 +73,26 @@ public static class NoShowPolicyAnswer
         return string.Join(" ", parts);
     }
 
-    /// <summary>True when a text about the online lock states a count, window or grace time the rule does not use.</summary>
-    public static bool Contradicts(string text, ExpiryRulesOptions rule)
+    /// <summary>
+    /// True when a text about the online lock states a count, window or grace time the rule does not use.
+    /// For a no-show lock question the whole answer is checked; otherwise only sentences that tie "khóa" to
+    /// online booking or absences, so an answer about another lock ("khóa đăng nhập 15 phút") is kept.
+    /// </summary>
+    public static bool Contradicts(string text, ExpiryRulesOptions rule, string? question = null)
     {
-        var accented = KnowledgeText.Normalize(text, false);
-        if (!LockWord.IsMatch(accented)) return false;
+        var whole = question is not null && IsLockQuestion(question);
+        string[] sentences = whole ? [text] : Regex.Split(text, @"(?<=[.!?;])\s+|[\r\n]+");
+        foreach (var sentence in sentences)
+        {
+            var accented = KnowledgeText.Normalize(sentence, false);
+            if (!LockWord.IsMatch(accented) || !whole && !LockContext.IsMatch(accented)) continue;
+            if (StatesOtherFigure(accented, rule)) return true;
+        }
+        return false;
+    }
+
+    private static bool StatesOtherFigure(string accented, ExpiryRulesOptions rule)
+    {
         foreach (Match match in Regex.Matches(accented, @"(?<![\p{L}\d])(\d+|" + string.Join('|', CountWords) + @") (lần|ngày|phút)(?![\p{L}])"))
         {
             var value = int.TryParse(match.Groups[1].Value, out var number) ? number : Array.IndexOf(CountWords, match.Groups[1].Value);

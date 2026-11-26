@@ -36,7 +36,8 @@ export const isSafeClientRoute = (url?: string): boolean => {
         "/patient/diagnostic-results",
         "/patient/prescriptions",
         "/patient/invoices",
-        "/doctors"
+        "/doctors",
+        "/medicines"
     ];
 
     return allowedPathPrefixes.some(prefix => path === prefix || path.startsWith(prefix + "/"));

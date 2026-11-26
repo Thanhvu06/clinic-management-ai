@@ -109,8 +109,20 @@ export function doctorScheduleHint(text: string): string | undefined {
 const COLLOQUIAL_PRICE = /\b(?:(?:mat|het|ton|tra|tinh) (?:bn|bao nhiu|bao nhieu|nhieu|nhiu)|(?:bn|bao nhiu) (?:tien|k|nghin|ngan)|tien (?:kham )?(?:bn|bao nhiu|nhieu|nhiu)|gia (?:sao|the nao|ra sao|bn|bao nhiu)|bao nhiu)\b(?! (?:ngay|gio|tieng|phut|tuan|thang|lan|vien|lieu|ml|thoi gian)\b)/;
 
 // Specialty names typed without "khám" ("nhi bn tiền"). Bare "mắt" and "sản" are left out:
-// unaccented they are also "mất" and "sẵn".
-const FEE_CONTEXT = /\b(?:kham|khoa|chuyen khoa|bac si|bs|dich vu|noi tong quat|nhi|san phu khoa|san khoa|phu khoa|da lieu|tai mui hong|tim mach|co xuong khop|than kinh|noi tiet|nhan khoa|tieu hoa)\b/;
+// unaccented they are also "mất" and "sẵn". "Nhi" is matched with its accents only, since
+// "nhỉ" and "nhì" fold to the same letters.
+const FEE_CONTEXT = /\b(?:kham|khoa|chuyen khoa|bac si|bs|dich vu|noi tong quat|san phu khoa|san khoa|phu khoa|da lieu|tai mui hong|tim mach|co xuong khop|than kinh|noi tiet|nhan khoa|tieu hoa)\b/;
+const ACCENTED_PEDIATRICS = /(?<![\p{L}\p{M}])nhi(?![\p{L}\p{M}])/u;
+
+// Accented on purpose: unaccented "thuoc" is also "thuộc" and "hop" is also "hợp".
+const MEDICINE_CONTEXT = /(?<![\p{L}\p{M}])(?:thuốc|viên|hộp|vỉ|chai|lọ|tuýp|siro|si rô)(?![\p{L}\p{M}])/u;
+const ACCENTED_PRICE = /(?<![\p{L}\p{M}])(?<!đánh )(?:giá|bảng giá)(?![\p{L}\p{M}])/u;
+
+const accentedText = (text: string) => text.normalize('NFC').toLowerCase();
+
+function hasFeeContext(text: string, normalized: string): boolean {
+    return FEE_CONTEXT.test(normalized) || ACCENTED_PEDIATRICS.test(accentedText(text));
+}
 
 function hasColloquialPriceCue(normalized: string): boolean {
     return COLLOQUIAL_PRICE.test(normalized);
@@ -124,9 +136,39 @@ export function isBookingPolicyQuestion(text: string): boolean {
     return BOOKING_POLICY_CUES.test(normalizeTypedText(text));
 }
 
+/** "thuốc paracetamol bao nhiu tiền": answered from the medicine price list, never the consultation fees. */
+export function isMedicinePriceQuestion(text: string): boolean {
+    const normalized = normalizeTypedText(text);
+    return MEDICINE_CONTEXT.test(accentedText(text)) && (hasColloquialPriceCue(normalized) || ACCENTED_PRICE.test(accentedText(text)) ||
+        /\b(?:bao nhieu tien|gia (?:bao nhieu|ban)|bang gia)\b/.test(normalized));
+}
+
+// Day and time words left in a hint ("ngày" from "khám ngày 22/10") name no specialty or doctor.
+const HINT_TIME_WORDS = new Set(['ngay', 'hom', 'nay', 'mai', 'kia', 'thu', 'chu', 'nhat', 'tuan', 'sau', 'toi', 'sang', 'chieu', 'buoi', 'luc', 'gio', 'h']);
+
+/**
+ * A full booking request typed while a wizard step is open ("tôi muốn đặt lịch khám nhi chiều mai").
+ * A specialty or doctor always starts a new wizard. A sentence that only names a day or part of day
+ * does so only on the specialty step; on later steps it answers the step ("đặt lịch khám ngày 22/10/2026").
+ */
+export function isNewBookingRequest(text: string, step = 'specialty'): boolean {
+    if (classifyPatientTypedIntent(text) !== 'booking') return false;
+    const hint = extractBookingHint(text);
+    if (hint && normalizeTypedText(hint).split(' ').some(word => !HINT_TIME_WORDS.has(word))) return true;
+    if (step !== 'specialty') return false;
+    return /\b(?:ngay mai|hom nay|ngay kia|tuan (?:sau|toi|nay)|cuoi tuan|(?:sang|chieu|toi) (?:mai|nay)|thu [2-7]|chu nhat|ngay \d{1,2})\b|\b\d{1,2}\/\d{1,2}\b/.test(normalizeTypedText(text)) ||
+        /(?<![\p{L}\p{M}])(?:sáng|chiều|tối)(?![\p{L}\p{M}])/u.test(accentedText(text));
+}
+
+/** Typed text that is not an answer to the open wizard step and goes to chat or a new wizard instead. */
+export function leavesOpenWizardStep(text: string, step: string): boolean {
+    return isConsultationPriceQuestion(text) || isMedicinePriceQuestion(text) || isNewBookingRequest(text, step);
+}
+
 export function isConsultationPriceQuestion(text: string): boolean {
     const normalized = normalizeTypedText(text);
-    if (FEE_CONTEXT.test(normalized) && hasColloquialPriceCue(normalized)) return true;
+    if (MEDICINE_CONTEXT.test(accentedText(text))) return false;
+    if (hasFeeContext(text, normalized) && hasColloquialPriceCue(normalized)) return true;
     return /\bkham\b/.test(normalized) && /\b(?:gia|chi phi|phi)\b/.test(normalized) &&
         /\b(?:bao nhieu|the nao|la may)\b/.test(normalized);
 }

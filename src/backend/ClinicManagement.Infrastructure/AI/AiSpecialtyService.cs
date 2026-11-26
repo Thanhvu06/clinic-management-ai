@@ -58,7 +58,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
         IAiToolExecutor? toolExecutor = null,
         IAiConversationPipeline? conversationPipeline = null,
         IAiProviderHealth? providerHealth = null,
-        ClinicManagement.Application.AI.Knowledge.IClinicKnowledgeAnswerer? knowledgeAnswerer = null, Microsoft.Extensions.Options.IOptions<ClinicManagement.Application.Common.Expiry.ExpiryRulesOptions>? expiryOptions = null)
+        ClinicManagement.Application.AI.Knowledge.IClinicKnowledgeAnswerer? knowledgeAnswerer = null, Microsoft.Extensions.Options.IOptions<ClinicManagement.Application.Common.Expiry.ExpiryRulesOptions>? expiryOptions = null, Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Identity.IdentityOptions>? identityOptions = null)
     {
         _dbContext = dbContext;
         _aiProvider = aiProvider;
@@ -76,7 +76,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
         _toolExecutor = toolExecutor;
         _conversationPipeline = conversationPipeline;
         _providerHealth = providerHealth;
-        (_knowledgeAnswerer, _expiryOptions) = (knowledgeAnswerer, expiryOptions);
+        (_knowledgeAnswerer, _expiryOptions, _identityOptions) = (knowledgeAnswerer, expiryOptions, identityOptions);
     }
 
     public async Task<AiSuggestionResponseDto> GetSuggestionsAsync(AiSuggestionRequestDto request, CancellationToken cancellationToken = default)
