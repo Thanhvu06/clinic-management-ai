@@ -67,6 +67,10 @@ public sealed class AiBookingWizardService(
             var selection = tokens.Read(request.OptionToken, user.Value, request.SessionId, request.Step);
             if (selection is null)
                 response = Error("WIZARD_TOKEN_INVALID_OR_EXPIRED", "Lựa chọn không hợp lệ hoặc đã hết hạn. Vui lòng bắt đầu lại.");
+            // Runs after the emergency check and goes through the same online-booking lock as "start".
+            else if (request.Step == "text" && AiBookingWizardRestart.IsNewRequest(typedInput, clock.VietnamToday, selection.Stage))
+                response = await OnlineBookingBlockedAsync(user.Value, ct)
+                    ?? await StartAsync(AiBookingWizardRestart.Hint(typedInput), typedInput, user.Value, request.SessionId, ct);
             else if (request.Step == "text")
                 response = await TextAsync(selection, typedInput, user.Value, request.SessionId, ct);
             else if (request.Step == "reason" || selection.Preset > 0)

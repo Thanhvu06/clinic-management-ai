@@ -17,6 +17,12 @@ public partial class AiSpecialtyService
     {
         if (NoShowPolicyAnswer.IsLockQuestion(message))
             return await BookingPolicyResponseAsync(request, NoShowPolicyAnswer.Compose(message, NoShowRule), [NoShowPolicyAnswer.Source], version, ct);
+        if (LoginLockPolicyAnswer.IsQuestion(message))
+            return await BookingPolicyResponseAsync(request, LoginLockPolicyAnswer.Compose(_identityOptions?.Value.Lockout), [LoginLockPolicyAnswer.Source], version, ct);
+        // Must precede the cancellation flow, which would read "hủy hẹn trước mấy tiếng" as a cancel command.
+        if (CancellationPolicyAnswer.IsQuestion(message))
+            return await BookingPolicyResponseAsync(request, CancellationPolicyAnswer.Compose(message), CancellationPolicyAnswer.Sources, version, ct);
+        if (await ResolveMedicinePriceAsync(request, message, version, ct) is { } medicinePrice) return medicinePrice;
         if (_knowledgeAnswerer is null || !NoShowPolicyAnswer.IsBookingPolicyQuestion(message)) return null;
         var answer = await _knowledgeAnswerer.AnswerAsync(message, ct);
         if (answer is null || AiProviderOutputGuard.Inspect(AiActorRole.Patient, answer.Text) is not null) return null;

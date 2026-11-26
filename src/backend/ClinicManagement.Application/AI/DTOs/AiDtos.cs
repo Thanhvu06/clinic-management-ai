@@ -188,6 +188,7 @@ public static class SafeRoutes
     public const string BookAppointment = "/patient/book";
     public const string Doctors = "/doctors";
     public const string Specialties = "/specialties";
+    public const string Medicines = "/medicines";
     public const string EmergencyPhone = "tel:115";
 
     public static readonly HashSet<string> AllowedPrefixes = new(StringComparer.OrdinalIgnoreCase)
@@ -199,6 +200,7 @@ public static class SafeRoutes
         BookAppointment,
         Doctors,
         Specialties,
+        Medicines,
         EmergencyPhone
     };
 

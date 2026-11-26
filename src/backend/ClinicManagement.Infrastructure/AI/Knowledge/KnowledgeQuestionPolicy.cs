@@ -137,16 +137,19 @@ internal static class PatientChatPricing
         @"\b(?:kham|khoa|chuyen khoa|bac si|bs|dich vu|" + SpecialtyNames + @")\b", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     // Specialty names typed without "khám" ("nhi bn tiền"). Bare "mắt" and "sản" are left out:
-    // unaccented they are also "mất" and "sẵn".
+    // unaccented they are also "mất" and "sẵn". "Nhi" is matched on the accented text only,
+    // since "nhỉ" and "nhì" fold to the same letters.
     private const string SpecialtyNames =
-        "noi tong quat|nhi|san phu khoa|san khoa|phu khoa|da lieu|tai mui hong|tim mach|co xuong khop|than kinh|noi tiet|nhan khoa|tieu hoa";
+        "noi tong quat|san phu khoa|san khoa|phu khoa|da lieu|tai mui hong|tim mach|co xuong khop|than kinh|noi tiet|nhan khoa|tieu hoa";
+    private static readonly Regex AccentedPediatrics = new(@"(?<![\p{L}])nhi(?![\p{L}\p{M}])", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-    internal static bool IsColloquialPriceQuestion(string normalized) =>
-        ColloquialPriceCue.IsMatch(normalized) && ClinicServiceWord.IsMatch(normalized);
+    internal static bool IsColloquialPriceQuestion(string lower, string normalized) =>
+        ColloquialPriceCue.IsMatch(normalized) && !MedicinePriceQuestion.HasMedicineContext(lower) &&
+        (ClinicServiceWord.IsMatch(normalized) || AccentedPediatrics.IsMatch(lower.Normalize(System.Text.NormalizationForm.FormC)));
 
     internal static bool HasPricingEvidence(string lower, string normalized)
     {
-        if (IsColloquialPriceQuestion(normalized)) return true;
+        if (IsColloquialPriceQuestion(lower, normalized)) return true;
         if (lower.Contains("bảng giá") || lower.Contains("chi phí khám") || lower.Contains("giá khám") ||
             lower.Contains("bao nhiêu tiền") || lower.Contains("hết bao nhiêu tiền") || lower.Contains("tiền khám") ||
             lower.Contains("phí khám") || lower.Contains("giá dịch vụ") || lower.Contains("viện phí") ||

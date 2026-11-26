@@ -10,6 +10,7 @@ public partial class AiSpecialtyService
 {
     private readonly IClinicKnowledgeAnswerer? _knowledgeAnswerer;
     private readonly Microsoft.Extensions.Options.IOptions<ClinicManagement.Application.Common.Expiry.ExpiryRulesOptions>? _expiryOptions;
+    private readonly Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Identity.IdentityOptions>? _identityOptions;
 
     private async Task<AiChatResponseDto?> ResolveKnowledgeAsync(AiChatRequestDto request, string message,
         string intent, ClinicManagement.Application.AI.Interfaces.IntentClassificationResult classification, int version, CancellationToken ct, bool early = false)
@@ -34,7 +35,7 @@ public partial class AiSpecialtyService
             ? await semantic.AnswerThroughIntentGateAsync(expanded, ct)
             : legacy ? await _knowledgeAnswerer.AnswerAsync(KnowledgeQuestionPolicy.WithPolicyWording(message), ct) : null;
         if (answer is null) return null;
-        if (NoShowPolicyAnswer.Contradicts(answer.Text, NoShowRule))
+        if (NoShowPolicyAnswer.Contradicts(answer.Text, NoShowRule, message))
             answer = new KnowledgeAnswer(NoShowPolicyAnswer.Compose(message, NoShowRule), [NoShowPolicyAnswer.Source], false, answer.ProviderWasCalled);
         var block = AiProviderOutputGuard.Inspect(AiActorRole.Patient, answer.Text);
         var response = new AiChatResponseDto

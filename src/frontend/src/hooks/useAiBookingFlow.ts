@@ -11,7 +11,7 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import axiosClient from "../api/axiosClient";
 import { isLocalHelpPhrase, isPatientReadAlias, isSafeClientRoute } from "../components/copilot/patientPresentation";
-import { classifyPatientTypedIntent, doctorScheduleHint, extractBookingHint, isConsultationPriceQuestion, isFilteredPatientRead } from "../components/copilot/patientTypedIntent";
+import { classifyPatientTypedIntent, doctorScheduleHint, extractBookingHint, isFilteredPatientRead, leavesOpenWizardStep } from "../components/copilot/patientTypedIntent";
 import { patientAppointmentChangeCard } from "../components/copilot/patientAppointmentChangeCard";
 import { patientCopilotTurn, wizardTextFields } from "../components/copilot/patientChatTurns";
 import { aiChatFailureMessage } from "../api/aiErrorMessages";
@@ -322,7 +322,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 await handleSuggestion({ code: '', label: trimmed }, true, retryError);
                 return;
             }
-            if (wizard?.textToken && !isConsultationPriceQuestion(trimmed) && ['specialty', 'doctor', 'day', 'slot', 'facility'].includes(wizard.step)) {
+            if (wizard?.textToken && !leavesOpenWizardStep(trimmed, wizard.step) && ['specialty', 'doctor', 'day', 'slot', 'facility'].includes(wizard.step)) {
                 setInput('');
                 setMessages(previous => [...previous, { role: 'user', content: trimmed }]);
                 await handleWizardStep('text', wizard.textToken, undefined, false, undefined, trimmed);
