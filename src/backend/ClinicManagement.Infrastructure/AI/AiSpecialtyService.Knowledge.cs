@@ -9,10 +9,12 @@ namespace ClinicManagement.Infrastructure.AI;
 public partial class AiSpecialtyService
 {
     private readonly IClinicKnowledgeAnswerer? _knowledgeAnswerer;
+    private readonly Microsoft.Extensions.Options.IOptions<ClinicManagement.Application.Common.Expiry.ExpiryRulesOptions>? _expiryOptions;
 
     private async Task<AiChatResponseDto?> ResolveKnowledgeAsync(AiChatRequestDto request, string message,
         string intent, ClinicManagement.Application.AI.Interfaces.IntentClassificationResult classification, int version, CancellationToken ct, bool early = false)
     {
+        if (early && await ResolveBookingPolicyAsync(request, message, version, ct) is { } policy) return policy;
         var expanded = ClinicQuestionNormalizer.Expand(message);
         var fresh = IsFreshKnowledgeQuestion(request);
         if (ClinicKnowledgeGatePolicy.IsOutsideClinic(expanded)) return null;
@@ -32,6 +34,8 @@ public partial class AiSpecialtyService
             ? await semantic.AnswerThroughIntentGateAsync(expanded, ct)
             : legacy ? await _knowledgeAnswerer.AnswerAsync(KnowledgeQuestionPolicy.WithPolicyWording(message), ct) : null;
         if (answer is null) return null;
+        if (NoShowPolicyAnswer.Contradicts(answer.Text, NoShowRule))
+            answer = new KnowledgeAnswer(NoShowPolicyAnswer.Compose(message, NoShowRule), [NoShowPolicyAnswer.Source], false, answer.ProviderWasCalled);
         var block = AiProviderOutputGuard.Inspect(AiActorRole.Patient, answer.Text);
         var response = new AiChatResponseDto
         {
