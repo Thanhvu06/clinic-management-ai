@@ -99,6 +99,7 @@ export const copilotCardEmptyMessage = (card: AiCopilotCard): string | null => {
             return !asRecords(record.consultation).length && !asRecords(record.diagnostics).length ? 'Chưa có giá công bố phù hợp.' : null;
         case 'appointments': return !rowsFrom(card.data).length ? 'Bạn chưa có lịch hẹn phù hợp.' : null;
         case 'appointment_detail': return !record ? 'Bạn chưa có lịch hẹn phù hợp.' : null;
+        case 'patient_appointment_change_form': return typeof record?.onPreview === 'function' ? null : 'Không thể mở biểu mẫu đổi hoặc hủy lịch.';
         case 'patient_visits': return noRows ? 'Bạn chưa có lượt khám nào.' : null;
         case 'patient_diagnostic_results': return noRows ? 'Bạn chưa có kết quả cận lâm sàng được công bố.' : null;
         case 'patient_prescriptions': return noRows ? 'Bạn chưa có đơn thuốc đã phát hành.' : null;

@@ -14,7 +14,7 @@ public partial class AiSpecialtyService
 {
     private async Task<AiChatResponseDto?> ResolvePatientChatReadAsync(AiChatRequestDto request, string message, int version, CancellationToken ct)
     {
-        if (AppointmentChange(message) is { } change)
+        if (AppointmentChange(request.Message) is { } change)
             return await ResolveCancellationAsync(request, message, version, ct, change);
         if (IsShortDraftCancellation(message))
             return await ResolveCancellationAsync(request, message, version, ct);
@@ -70,7 +70,7 @@ public partial class AiSpecialtyService
     private async Task<AiChatResponseDto> ResolveCancellationAsync(
         AiChatRequestDto request, string cleanMessage, int passiveDraftVersion, CancellationToken cancellationToken, string? appointmentChange = null)
     {
-        var target = appointmentChange == "cancel" ? ReadAppointmentCancelTarget(cleanMessage) : default;
+        var target = appointmentChange == "cancel" ? ReadAppointmentCancelTarget(request.Message) : default;
         if (target.IsSpecified &&
             await ResolveAppointmentCancelAsync(request, target, passiveDraftVersion, cancellationToken) is { } appointmentCancel)
             return appointmentCancel;

@@ -23,6 +23,7 @@ public partial class AiSpecialtyService
 
     private AppointmentCancelTarget ReadAppointmentCancelTarget(string message)
     {
+        // The date segment of an APT code is removed by the provider's numeric redaction.
         var text = AiTextNormalizer.NormalizeForComparison(message);
         var code = AppointmentCancelCode.Match(text);
         var dateText = code.Success ? text.Remove(code.Index, code.Length) : text;
