@@ -17,6 +17,7 @@ export const isPatientReadAlias = (value: string): boolean => [
 ].includes(value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase().replace(/\s+/g, ' ').trim().replace(/[!.?]+$/, ''));
 
 export const patientSuggestions = (message: ChatMessage | undefined, menu: AiSuggestionItem[] | undefined, empty: boolean): AiSuggestionItem[] | undefined => {
+    if (message?.urgency === 'EMERGENCY' || message?.dialogueOutcome === 'SafetySelfHarm') return [];
     const items = empty ? menu : message?.suggestionChips ?? menu;
     const start = menu?.find(item => item.code === 'patient.start_booking');
     const needsBooking = message?.missingFields?.some(field => /doctor|slot|reason/i.test(field)) || message?.bookingDraft && !message.bookingDraft.isComplete;

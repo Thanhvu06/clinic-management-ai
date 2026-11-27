@@ -246,9 +246,7 @@ builder.Services.AddOptions<ClinicManagement.Application.Common.Expiry.ExpiryRul
 foreach (var ruleType in ClinicManagement.Infrastructure.Expiry.ExpiryWorker.RuleTypes)
     builder.Services.AddScoped(ruleType);
 builder.Services.AddSingleton<ClinicManagement.Infrastructure.Expiry.ExpiryWorker>();
-// Expiry runs immediately and can change live QA appointments and visits.
-if (!slotCoverageOnly)
-    builder.Services.AddHostedService(sp => sp.GetRequiredService<ClinicManagement.Infrastructure.Expiry.ExpiryWorker>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ClinicManagement.Infrastructure.Expiry.ExpiryWorker>());
 builder.Services.AddHostedService<ClinicManagement.Infrastructure.AI.AiSessionCleanupWorker>();
 builder.Services.Configure<DemoTopUpOptions>(builder.Configuration.GetSection("DemoSeed"));
 if (demoSeedEnabled)

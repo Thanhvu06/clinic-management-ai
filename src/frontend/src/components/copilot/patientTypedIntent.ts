@@ -98,12 +98,6 @@ export function isFilteredPatientRead(text: string): boolean {
     );
 }
 
-export function doctorScheduleHint(text: string): string | undefined {
-    const normalized = normalizeTypedText(text);
-    return /^(?:bac si|bac sy|bsi|bs)\s+\S.+\b(?:(?:kham|lam viec|truc)\s+(?:(?:vao )?(?:ngay|hom) nao|khi nao)|(?:co|con) lich(?: kham)? khong|lich kham(?: the nao)?|khi nao(?: kham)?)(?: (?:a|nhe|nha|vay))?$/.test(normalized)
-        ? text : undefined;
-}
-
 // Chat shorthand for a price ("bn tiền", "bao nhiu", "giá sao", "hết nhiêu"); a
 // following unit such as "ngày" or "viên" makes it a duration or dose question.
 const COLLOQUIAL_PRICE = /\b(?:(?:mat|het|ton|tra|tinh) (?:bn|bao nhiu|bao nhieu|nhieu|nhiu)|(?:bn|bao nhiu) (?:tien|k|nghin|ngan)|tien (?:kham )?(?:bn|bao nhiu|nhieu|nhiu)|gia (?:sao|the nao|ra sao|bn|bao nhiu)|bao nhiu)\b(?! (?:ngay|gio|tieng|phut|tuan|thang|lan|vien|lieu|ml|thoi gian)\b)/;

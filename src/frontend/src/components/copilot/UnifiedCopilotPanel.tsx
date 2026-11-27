@@ -2,6 +2,7 @@ import { formatCopilotDateTime } from './displayFormatters';
 import React, { useEffect, useRef, useState } from 'react';
 import { Bot, CheckCircle2, ExternalLink, RotateCcw, Send, ShieldCheck, Square, X } from 'lucide-react';
 import { useUnifiedCopilot, type UnifiedCopilotMessage } from './useUnifiedCopilot';
+import { terminalActionLabel } from './patientActionConfirmation';
 import { ProviderStatus } from './ProviderStatus';
 import './chatTokens.css';
 import { toolDisplayName } from './copilotConfig';
@@ -147,7 +148,7 @@ export const UnifiedCopilotPanel: React.FC = () => {
                         <button type="button" className={styles.actionButton} disabled={!capability.enabled || Boolean(copilot.actionLoading)} onClick={() => void copilot.prepareAction(capability)}>{copilot.actionLoading === capability.tool.name ? 'Đang chuẩn bị…' : 'Xem trước'}</button>
                     </div>)}
                     {copilot.pendingAction && <div className={styles.actionPreview} aria-label="Xem trước thao tác">
-                        <div className={styles.cardTitle}><span>Thông tin xem trước</span><span>{copilot.pendingActionExpired ? 'Đã hết hạn' : 'Chờ xác nhận'}</span></div>
+                        <div className={styles.cardTitle}><span>Thông tin xem trước</span><span>{terminalActionLabel(copilot.pendingAction.status) ?? 'Chờ xác nhận'}</span></div>
                         <div className={styles.previewLine}><strong>Thông tin đã chọn:</strong> {copilot.pendingAction.preview.resource.identity}</div>
                         {copilot.pendingAction.preview.resource.facility && <div className={styles.previewLine}><strong>Cơ sở:</strong> {copilot.pendingAction.preview.resource.facility}</div>}
                         {copilot.pendingAction.preview.resource.department && <div className={styles.previewLine}><strong>Khoa:</strong> {copilot.pendingAction.preview.resource.department}</div>}
@@ -162,8 +163,8 @@ export const UnifiedCopilotPanel: React.FC = () => {
                         <div className={styles.previewLine}><strong>Nguồn kiểm tra:</strong> Dữ liệu phòng khám</div>
                         <div className={styles.previewLine}><strong>Hết hạn:</strong> {formatCopilotDateTime(copilot.pendingAction.preview.expiresAtUtc)}</div>
                         {copilot.pendingActionExpired && <p className={styles.actionError} role="alert">Thông tin xem trước đã hết hạn. Hãy chuẩn bị lại để nhận dữ liệu kiểm tra mới.</p>}
-                        <button type="button" className={styles.confirmButton} disabled={Boolean(copilot.actionLoading) || copilot.pendingActionExpired} onClick={() => void copilot.confirmAction()}><CheckCircle2 size={14} /> Xác nhận thao tác</button>
-                        <button type="button" className={styles.actionButton} disabled={Boolean(copilot.actionLoading)} onClick={() => void copilot.cancelAction()}>Hủy thao tác</button>
+                        {(copilot.pendingAction.status === 'pending_confirmation' || copilot.pendingActionExpired) && <button type="button" className={styles.confirmButton} disabled={Boolean(copilot.actionLoading) || copilot.pendingActionExpired} onClick={() => void copilot.confirmAction()}><CheckCircle2 size={14} /> Xác nhận thao tác</button>}
+                        {copilot.pendingAction.status === 'pending_confirmation' && <button type="button" className={styles.actionButton} disabled={Boolean(copilot.actionLoading) || copilot.pendingActionExpired} onClick={() => void copilot.cancelAction()}>Hủy thao tác</button>}
                         {copilot.pendingActionExpired && pendingCapability?.enabled && <button type="button" className={styles.actionButton} disabled={Boolean(copilot.actionLoading)} onClick={() => void copilot.prepareAction(pendingCapability)}>Chuẩn bị lại xem trước</button>}
                     </div>}
                     {copilot.actionFeedback && <p className={copilot.actionFeedback.status === 'completed' ? styles.actionSuccess : copilot.actionFeedback.status === 'cancelled' ? styles.actionNeutral : styles.actionError} role="status">{copilot.actionFeedback.message}</p>}

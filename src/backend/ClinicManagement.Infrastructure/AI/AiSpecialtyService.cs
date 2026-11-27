@@ -163,32 +163,8 @@ public partial class AiSpecialtyService : IAiSpecialtyService
         var lowerMsg = rawMessage.ToLowerInvariant();
 
         var safety = _safetyGuard.Inspect(rawMessage);
-        if (safety.IsEmergency)
-        {
-            await _auditService.LogActionAsync(new AiAuditLogEntry
-            {
-                UserId = _currentUserService.UserId,
-                SessionId = request.SessionId,
-                ActionType = "SafetyGuard",
-                Outcome = "EMERGENCY",
-                ErrorCode = "EMERGENCY_RED_FLAG"
-            }, cancellationToken);
-            return new AiChatResponseDto
-            {
-                Message = AiSafetyGuard.PatientEmergencyMessage(safety),
-                Urgency = "EMERGENCY",
-                SafetyNotice = "TÌNH HUỐNG Y TẾ CẤP CỨU: Gọi 115 hoặc đến cơ sở cấp cứu gần nhất.",
-                PromptVersion = GeminiAiProvider.CurrentPromptVersion,
-                AssistantStatus = "Online",
-                ProviderStatus = "NotCalled",
-                ProviderState = AiProviderStatusContract.SafetyBlocked,
-                DialogueOutcome = "SafetyEmergency",
-                Actions = new List<AiActionDto>
-                {
-                    new() { Id = "act-emergency-115", Type = AiActionTypes.CallEmergency, Label = "Gọi cấp cứu 115", Style = "danger", RequiresAuthentication = false, RequiresConfirmation = false, Payload = new AiActionPayloadDto { TargetUrl = "tel:115" } }
-                }
-            };
-        }
+        if (safety.IsEmergency || safety.IsSelfHarm)
+            return await RespondToPatientSafetyAsync(request, safety, cancellationToken);
         if (safety.IsPromptInjection)
         {
             return new AiChatResponseDto
@@ -307,6 +283,9 @@ public partial class AiSpecialtyService : IAiSpecialtyService
             : localClassification.Intent;
 
         var passiveDraftVersion = ResolveDraftVersion(request.DraftVersion, hasSubstantiveChanges: false);
+        if (await ResolveDoctorInformationAsync(cleanMessage, passiveDraftVersion, cancellationToken) is { } doctorInformation) return doctorInformation;
+        if (IsClinicParkingQuestion(cleanMessage))
+            return await HandleFacilityInquiryAsync(request, cleanMessage, passiveDraftVersion, cancellationToken);
         if (await ResolveKnowledgeAsync(request, cleanMessage, resolvedIntent, localClassification, passiveDraftVersion, cancellationToken, early: true) is { } earlyKnowledgeResponse) return earlyKnowledgeResponse;
         if (await ResolvePatientChatReadAsync(request, cleanMessage, passiveDraftVersion, cancellationToken) is { } localResponse) return localResponse;
 

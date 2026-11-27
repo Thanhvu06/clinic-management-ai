@@ -243,6 +243,7 @@ public interface IAiPendingActionCancellationService
 public sealed class AiSafetyGuardResult
 {
     public bool IsEmergency { get; init; }
+    public bool IsSelfHarm { get; init; }
     public bool IsPromptInjection { get; init; }
     public string? MatchedCategory { get; init; }
 }
