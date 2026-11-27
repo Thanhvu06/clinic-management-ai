@@ -6,6 +6,7 @@ interface StatusBadgeProps {
     status: string;
     label?: string;
     size?: 'sm' | 'md';
+    toneClass?: string;
 }
 
 type TagColor = 'processing' | 'warning' | 'success' | 'error' | 'default';
@@ -13,7 +14,8 @@ type TagColor = 'processing' | 'warning' | 'success' | 'error' | 'default';
 export const StatusBadge: React.FC<StatusBadgeProps> = ({
     status,
     label,
-    size = 'md'
+    size = 'md',
+    toneClass = '',
 }) => {
     const normalize = (status || '').toLowerCase().trim();
     const customLabel = label?.trim();
@@ -136,7 +138,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
     }
 
     return (
-        <Tag color={color} className={`${styles.statusBadge} ${size === 'sm' ? styles.statusBadgeSm : ''}`}>
+        <Tag color={toneClass ? undefined : color} className={`${styles.statusBadge} ${size === 'sm' ? styles.statusBadgeSm : ''} ${toneClass}`}>
             <span className={styles.statusDot} />
             {text}
         </Tag>
