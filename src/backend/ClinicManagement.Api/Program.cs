@@ -8,6 +8,7 @@ using ClinicManagement.Application.Specialties.Interfaces;
 using ClinicManagement.Application.Doctors.Interfaces;
 using ClinicManagement.Application.Schedules.Interfaces;
 using ClinicManagement.Application.Appointments.Interfaces;
+using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Infrastructure.Authentication;
 using ClinicManagement.Infrastructure.Patients;
 using ClinicManagement.Infrastructure.Specialties;
@@ -237,18 +238,28 @@ builder.Services.AddScoped<ClinicManagement.Application.Mpi.Interfaces.IMpiPatie
 builder.Services.AddScoped<ClinicManagement.Application.Mpi.Interfaces.IMrnGenerator, ClinicManagement.Infrastructure.Mpi.MrnGenerator>();
 builder.Services.AddScoped<ClinicManagement.Application.Common.Interfaces.IFacilityAuthorizationService, ClinicManagement.Infrastructure.Common.FacilityAuthorizationService>();
 builder.Services.AddScoped<ClinicManagement.Application.Visits.Interfaces.IPatientVisitService, ClinicManagement.Infrastructure.Visits.PatientVisitService>();
+var demoSeedEnabled = builder.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("DemoSeed:Enabled");
+var slotCoverageOnly = builder.Environment.IsDevelopment() && !demoSeedEnabled &&
+    builder.Configuration.GetValue<bool>("DemoSeed:SlotCoverageOnly");
 builder.Services.AddOptions<ClinicManagement.Application.Common.Expiry.ExpiryRulesOptions>()
     .Bind(builder.Configuration.GetSection("ExpiryRules")).ValidateDataAnnotations().ValidateOnStart();
 foreach (var ruleType in ClinicManagement.Infrastructure.Expiry.ExpiryWorker.RuleTypes)
     builder.Services.AddScoped(ruleType);
 builder.Services.AddSingleton<ClinicManagement.Infrastructure.Expiry.ExpiryWorker>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<ClinicManagement.Infrastructure.Expiry.ExpiryWorker>());
+// Expiry runs immediately and can change live QA appointments and visits.
+if (!slotCoverageOnly)
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<ClinicManagement.Infrastructure.Expiry.ExpiryWorker>());
 builder.Services.AddHostedService<ClinicManagement.Infrastructure.AI.AiSessionCleanupWorker>();
 builder.Services.Configure<DemoTopUpOptions>(builder.Configuration.GetSection("DemoSeed"));
-if (builder.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("DemoSeed:Enabled"))
+if (demoSeedEnabled)
 {
     builder.Services.AddSingleton<DevelopmentDemoTopUpWorker>();
     builder.Services.AddHostedService(sp => sp.GetRequiredService<DevelopmentDemoTopUpWorker>());
+}
+if (slotCoverageOnly)
+{
+    builder.Services.AddSingleton<DevelopmentSlotCoverageWorker>();
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<DevelopmentSlotCoverageWorker>());
 }
 
 builder.Services.AddRateLimiter(options =>
@@ -357,9 +368,10 @@ using (var scope = app.Services.CreateScope())
         await db.Database.MigrateAsync();
     }
 
-    await RoleSeeder.SeedRolesAsync(scope.ServiceProvider);
+    if (!slotCoverageOnly)
+        await RoleSeeder.SeedRolesAsync(scope.ServiceProvider);
 
-    if (app.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("DemoSeed:Enabled"))
+    if (demoSeedEnabled)
     {
         await ClinicManagement.Infrastructure.Persistence.DevelopmentDataSeeder.SeedAsync(scope.ServiceProvider);
         await MedicineImageSeeder.SeedAsync(db,
@@ -368,10 +380,13 @@ using (var scope = app.Services.CreateScope())
             scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(MedicineImageSeeder)),
             app.Lifetime.ApplicationStopping);
         await app.Services.GetRequiredService<DevelopmentDemoTopUpWorker>().RunOnceAsync(app.Lifetime.ApplicationStopping);
-        await ClinicManagement.Infrastructure.Persistence.DevelopmentSpecialtyCoverageSeed.EnsureAsync(db,
-            scope.ServiceProvider.GetRequiredService<ClinicManagement.Application.Common.Interfaces.IDateTimeProvider>(), app.Lifetime.ApplicationStopping);
+        await DevelopmentSpecialtyCoverageSeed.EnsureAsync(db,
+            scope.ServiceProvider.GetRequiredService<IDateTimeProvider>(), app.Lifetime.ApplicationStopping,
+            app.Logger);
         await ClinicManagement.Infrastructure.Persistence.DevelopmentDemoBirthdaySeed.EnsureAsync(db, app.Lifetime.ApplicationStopping);
     }
+    if (slotCoverageOnly)
+        await app.Services.GetRequiredService<DevelopmentSlotCoverageWorker>().RunOnceAsync(app.Lifetime.ApplicationStopping);
 }
 
 app.UseMiddleware<ExceptionMiddleware>();

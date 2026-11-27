@@ -1,6 +1,7 @@
 using ClinicManagement.Application.Common.Interfaces;
 using ClinicManagement.Infrastructure.Appointments;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace ClinicManagement.Infrastructure.Persistence;
 
@@ -14,7 +15,7 @@ public static class DevelopmentSpecialtyCoverageSeed
 {
     public const int CoverageDays = 14;
 
-    public static async Task<int> EnsureAsync(AppDbContext db, IDateTimeProvider clock, CancellationToken ct = default)
+    public static async Task<int> EnsureAsync(AppDbContext db, IDateTimeProvider clock, CancellationToken ct = default, ILogger? logger = null)
     {
         var memberships = await db.DoctorSpecialties.AsNoTracking()
             .Where(x => x.Specialty.IsActive && x.Doctor.IsActive && db.Users.Any(user => user.Id == x.Doctor.UserId && user.IsActive))
@@ -26,7 +27,7 @@ public static class DevelopmentSpecialtyCoverageSeed
             .ToList();
         if (representatives.Count == 0) return 0;
 
-        var changes = 0;
+        var departmentChanges = new List<(long DoctorId, long FacilityId, long? OldDepartmentId, long NewDepartmentId)>();
         // The demo master seed assigns every doctor to the first department, which the booking
         // facility check rejects for any primary specialty other than that department's.
         foreach (var doctor in representatives.Where(x => x.IsPrimary))
@@ -38,14 +39,17 @@ public static class DevelopmentSpecialtyCoverageSeed
             var department = await db.Departments.Where(d => d.FacilityId == assignment.FacilityId && d.SpecialtyId == doctor.SpecialtyId && d.IsActive)
                 .OrderBy(d => d.Id).FirstOrDefaultAsync(ct);
             if (department is null || assignment.DepartmentId == department.Id) continue;
+            departmentChanges.Add((doctor.DoctorId, assignment.FacilityId, assignment.DepartmentId, department.Id));
             assignment.DepartmentId = department.Id;
-            changes++;
         }
         await db.SaveChangesAsync(ct);
+        foreach (var change in departmentChanges)
+            logger?.LogInformation("Seed phủ slot đổi khoa gốc của bác sĩ {DoctorId} tại cơ sở {FacilityId} từ {OldDepartmentId} sang {NewDepartmentId}.",
+                change.DoctorId, change.FacilityId, change.OldDepartmentId, change.NewDepartmentId);
 
         var today = clock.VietnamToday;
         var before = await db.AppointmentSlots.CountAsync(ct);
         await DevelopmentDemoTopUpSlots.EnsureAsync(db, representatives.Select(x => x.DoctorId).Distinct().ToArray(), today, today.AddDays(CoverageDays - 1), ct);
-        return changes + await db.AppointmentSlots.CountAsync(ct) - before;
+        return departmentChanges.Count + await db.AppointmentSlots.CountAsync(ct) - before;
     }
 }
