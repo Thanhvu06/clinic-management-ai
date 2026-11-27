@@ -78,4 +78,11 @@ public class AppointmentController : ControllerBase
         var result = await changeRequestService.CreateCancellationRequestAsync(id, request);
         return Ok(ApiResponse<ClinicManagement.Application.Appointments.DTOs.ChangeRequests.ChangeRequestDto>.Ok(result, "Yêu cầu hủy lịch đã được gửi."));
     }
+
+    [HttpPost("{id}/cancel")]
+    public async Task<IActionResult> CancelPendingAppointment(long id, [FromBody] ClinicManagement.Application.Appointments.DTOs.ChangeRequests.CreateCancellationRequestDto request, [FromServices] IChangeRequestService changeRequestService)
+    {
+        var result = await changeRequestService.CancelPendingAppointmentAsync(id, request);
+        return Ok(ApiResponse<ClinicManagement.Application.Appointments.DTOs.ChangeRequests.PatientCancellationResultDto>.Ok(result, "Đã hủy lịch hẹn."));
+    }
 }

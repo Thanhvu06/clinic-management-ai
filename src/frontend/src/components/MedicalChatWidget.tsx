@@ -83,7 +83,9 @@ const GroundedToolData: React.FC<{ result: AiToolExecutionResult }> = ({ result 
             rows = [{ key: "pending", text: `Lịch hẹn ${String(data.appointmentCode ?? data.appointmentId ?? "")} · chờ xác nhận` }];
             break;
         case "change_request":
-            rows = [{ key: "change", text: `Yêu cầu thay đổi #${String(data.changeRequestId ?? "")} đã được tạo` }];
+            rows = [{ key: "change", text: data.cancelled === true
+                ? `Lịch hẹn ${String(data.appointmentCode ?? data.appointmentId ?? "")} đã được hủy`
+                : `Yêu cầu thay đổi #${String(data.changeRequestId ?? "")} đã được tạo` }];
             break;
     }
     if (rows.length === 0) return null;

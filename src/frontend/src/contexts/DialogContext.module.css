@@ -75,6 +75,12 @@
     border-color: var(--cc-color-danger);
 }
 
+.buttonPrimary.buttonPrimary {
+    flex: 1;
+    background-color: var(--cc-color-primary);
+    border-color: var(--cc-color-primary);
+}
+
 .button3.button3 {
     min-width: 120px;
 }

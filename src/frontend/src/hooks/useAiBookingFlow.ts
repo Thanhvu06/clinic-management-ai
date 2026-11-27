@@ -20,6 +20,7 @@ import type { ApiResponse } from "../types";
 import type {
     ChatMessage,
     AiChatResponse,
+    AiChatRequestPayload,
     AiAction,
     AiBookingDraft,
     AiChatIntent,
@@ -31,29 +32,14 @@ import type {
     AiBookingWizardResponse
 } from "../types/ai";
 
+export type { AiChatRequestPayload } from "../types/ai";
+
 export function isBookingConfirmationAction(action: AiAction): action is ConfirmBookingAction | ReviewBookingAction {
     return (action.type === "ConfirmBooking" || action.type === "ReviewBooking") &&
            action.payload !== undefined &&
            typeof action.payload === "object";
 }
 
-
-export interface AiChatRequestPayload {
-    message: string;
-    context: Array<{ role: "user" | "model"; content: string }>;
-    intent?: AiChatIntent;
-    pendingSpecialtyId?: number;
-    pendingDoctorId?: number;
-    pendingSlotId?: number;
-    pendingSlotDate?: string;
-    reason?: string;
-    draftVersion?: number;
-    displayedDoctorIds?: number[];
-    displayedSlotIds?: number[];
-    contextSnapshotId?: string;
-    sessionId?: string;
-    draftId?: string;
-}
 
 export interface CreateAppointmentPayload {
     facilityId?: number;
@@ -394,6 +380,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 message: trimmed,
                 context: historyMessages,
                 intent: pendingPayload?.intent,
+                hasOpenBookingWizard: Boolean(wizard && wizard.step !== 'stopped' && wizard.step !== 'error'),
                 pendingSpecialtyId: pendingPayload?.pendingSpecialtyId ?? pendingPayload?.specialtyId ?? activeDraft?.specialtyId,
                 pendingDoctorId: pendingPayload?.pendingDoctorId ?? pendingPayload?.doctorId ?? activeDraft?.doctorId,
                 pendingSlotId: pendingPayload?.pendingSlotId ?? pendingPayload?.slotId ?? activeDraft?.slotId,
@@ -498,6 +485,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 };
 
                 if (data.dialogueOutcome === "DraftCancelled" || data.dialogueOutcome === "SessionRejected") {
+                    setWizard(null);
                     draftCancelledAtRef.current = Date.now();
                     contextSnapshotIdRef.current = undefined;
                     sessionIdRef.current = rotateSessionIdentity(accountKeyRef.current);

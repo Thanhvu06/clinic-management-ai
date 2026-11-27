@@ -2,7 +2,7 @@
 id: appointments
 title: Đặt, đổi, hủy lịch và vắng mặt
 category: booking
-updated: 2026-11-08
+updated: 2026-11-26
 ---
 
 ## Đặt lịch trên website
@@ -11,7 +11,7 @@ updated: 2026-11-08
 
 ## Gửi yêu cầu đổi hoặc hủy
 
-Trong Lịch hẹn của tôi, chọn lịch còn cho phép thao tác. Bấm Đổi lịch, chọn ngày/giờ trống, nhập lý do rồi Gửi yêu cầu dời lịch; hoặc Hủy lịch, nhập lý do rồi Xác nhận gửi yêu cầu. Yêu cầu chờ lễ tân xử lý, chưa tự đổi/hủy ngay. Không tạo yêu cầu chồng khi còn yêu cầu đang chờ. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
+Trong Lịch hẹn của tôi, chọn lịch còn cho phép thao tác. Lịch còn Chờ xác nhận: bấm Hủy lịch, nhập lý do rồi Xác nhận hủy lịch; lịch chuyển Đã hủy ngay, khung giờ được giải phóng. Lịch Đã xác nhận: bấm Hủy lịch, nhập lý do rồi Xác nhận gửi yêu cầu. Để đổi lịch, chọn Đổi lịch, giờ mới và lý do rồi Gửi yêu cầu dời lịch. Yêu cầu chờ lễ tân xử lý. Không tạo yêu cầu chồng khi còn yêu cầu đang chờ. Trong chat, nhắn “hủy lịch hẹn” kèm ngày hoặc mã nếu có. Làm theo chỉ định của bác sĩ hoặc nhân viên nơi khám nếu khác hướng dẫn này.
 
 ## Theo dõi yêu cầu trên lịch hẹn
 
@@ -23,4 +23,4 @@ Chờ duyệt đổi lịch hoặc Chờ duyệt hủy nghĩa là yêu cầu ch�
 
 ## Hạn xử lý và hạn chế online
 
-Yêu cầu đổi/hủy còn chờ tới giờ bắt đầu lịch gốc sẽ hết hạn xử lý. Theo mặc định, ba lần Vắng mặt trong 90 ngày dẫn tới khóa đặt lịch online 30 ngày; vẫn có thể liên hệ lễ tân để tiếp nhận. Mốc áp dụng theo lịch sử thực tế; xem trạng thái lịch trên tài khoản, không nhờ chat phỏng đoán. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.
+Lịch còn Chờ xác nhận được tự hủy ngay trên website trước giờ bắt đầu. Với lịch Đã xác nhận, yêu cầu đổi/hủy còn chờ tới giờ bắt đầu lịch gốc sẽ hết hạn xử lý. Theo mặc định, ba lần Vắng mặt trong 90 ngày dẫn tới khóa đặt lịch online 30 ngày; vẫn có thể liên hệ lễ tân để tiếp nhận. Mốc áp dụng theo lịch sử thực tế; xem trạng thái lịch trên tài khoản, không nhờ chat phỏng đoán. Làm theo chỉ định cụ thể của bác sĩ hoặc nhân viên nơi thực hiện nếu khác hướng dẫn này.

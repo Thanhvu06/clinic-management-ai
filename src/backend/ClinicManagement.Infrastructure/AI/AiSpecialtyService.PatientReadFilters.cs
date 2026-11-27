@@ -16,6 +16,8 @@ public partial class AiSpecialtyService
     {
         if (AppointmentChange(message) is { } change)
             return await ResolveCancellationAsync(request, message, version, ct, change);
+        if (IsShortDraftCancellation(message))
+            return await ResolveCancellationAsync(request, message, version, ct);
 
         var text = AiTextNormalizer.NormalizeForComparison(message);
         var read = ClassifyFilteredRead(text);
@@ -68,13 +70,17 @@ public partial class AiSpecialtyService
     private async Task<AiChatResponseDto> ResolveCancellationAsync(
         AiChatRequestDto request, string cleanMessage, int passiveDraftVersion, CancellationToken cancellationToken, string? appointmentChange = null)
     {
+        var target = appointmentChange == "cancel" ? ReadAppointmentCancelTarget(cleanMessage) : default;
+        if (target.IsSpecified &&
+            await ResolveAppointmentCancelAsync(request, target, passiveDraftVersion, cancellationToken) is { } appointmentCancel)
+            return appointmentCancel;
+
         var currentUserId = _currentUserService.UserId;
         var nowUtc = _dateTimeProvider.UtcNow;
         // A legacy draft containing selections but no persisted identity belongs
         // only to this client; clearing it must not cancel another saved tab.
-        var hasLocalDraft = request.PendingSpecialtyId.HasValue &&
-            string.IsNullOrWhiteSpace(request.SessionId) && string.IsNullOrWhiteSpace(request.DraftId) &&
-            string.IsNullOrWhiteSpace(request.ContextSnapshotId);
+        var hasLocalDraft = string.IsNullOrWhiteSpace(request.DraftId) && string.IsNullOrWhiteSpace(request.ContextSnapshotId)
+            && (request.HasOpenBookingWizard || (request.PendingSpecialtyId.HasValue && string.IsNullOrWhiteSpace(request.SessionId)));
         var scopeResult = await _snapshotStore.TryResolveCancelScopeFromSnapshotAsync(
             request.ContextSnapshotId,
             currentUserId,
@@ -95,10 +101,14 @@ public partial class AiSpecialtyService
             .Take(2)
             .ToListAsync(cancellationToken);
 
-        if (!scopeResult.HasResolved && activeDraftScopes.Count == 0 && !request.PendingSpecialtyId.HasValue &&
-            appointmentChange is not null && await ResolveAppointmentChangeAsync(request,
-                AiTextNormalizer.NormalizeForComparison(cleanMessage), appointmentChange, passiveDraftVersion, cancellationToken) is { } change)
-            return change;
+        var hasDraft = scopeResult.HasResolved || activeDraftScopes.Count > 0 || hasLocalDraft || request.PendingSpecialtyId.HasValue;
+        if ((appointmentChange == "cancel" || (!hasDraft && IsShortDraftCancellation(cleanMessage))) &&
+            await ResolveAppointmentCancelAsync(request, target, passiveDraftVersion, cancellationToken, hasDraft) is { } matchingAppointments)
+            return matchingAppointments;
+
+        if (!hasDraft && appointmentChange == "reschedule" && await ResolveAppointmentChangeAsync(request,
+                AiTextNormalizer.NormalizeForComparison(cleanMessage), appointmentChange, passiveDraftVersion, cancellationToken) is { } reschedule)
+            return reschedule;
 
         if (!scopeResult.HasResolved && !hasLocalDraft && activeDraftScopes.Count == 1 &&
             string.IsNullOrWhiteSpace(request.ContextSnapshotId))
@@ -178,8 +188,9 @@ public partial class AiSpecialtyService
             // Fail closed: do NOT revoke snapshots across sessions/drafts when target scope cannot be uniquely determined
             var failClosedCancelResponse = new AiChatResponseDto
             {
-                Message = "Không thể xác định yêu cầu đặt lịch cần hủy. Vui lòng quay lại cuộc trò chuyện đang đặt lịch và chọn Hủy.",
-                ClarificationPrompt = "Vui lòng quay lại cuộc trò chuyện có yêu cầu đặt lịch cần hủy và chọn Hủy.",
+                Message = "ClinicCare chưa xác định được bản nháp cần hủy. Nếu muốn hủy lịch hẹn đã đặt, hãy gửi ngày hoặc mã lịch hẹn, hoặc mở Lịch hẹn của tôi.",
+                ClarificationPrompt = "Bạn muốn hủy lịch hẹn ngày nào hoặc có mã nào?",
+                Actions = PatientOperationResponse(AiChatIntentTypes.CancelDraft, AiActionTypes.ViewMyAppointments, SafeRoutes.Appointments, "lịch hẹn").Actions,
                 DialogueOutcome = "ClarificationRequired",
                 PrimaryIntent = AiChatIntentTypes.CancelDraft,
                 AssistantStatus = "Online",
@@ -225,17 +236,15 @@ public partial class AiSpecialtyService
         return WithDraftVersionSync(statelessCancelResponse, passiveDraftVersion);
     }
 
-    private static string? AppointmentChange(string message)
+    private string? AppointmentChange(string message)
     {
         var text = AiTextNormalizer.NormalizeForComparison(message);
-        var match = Regex.Match(text, @"\b(huy|doi) (?:lich(?: hen| kham)?(?! (?:truc|lam viec|cong tac)\b)|cuoc hen)\b");
+        var match = Regex.Match(text, @"\b(huy|doi) (?:lich(?: hen| kham)?(?! (?:truc|lam viec|cong tac)\b)|cuoc hen)\b|\b(huy) hen\b");
         if (!match.Success || Regex.IsMatch(text, @"\b(?:khong (?:muon )?|dung )(?:huy|doi)\b"))
-            return null;
-
-        // The bare unaccented phrase remains ambiguous under the stateless cancellation guard.
-        if (match.Value == "huy lich" && !Regex.IsMatch(AiTextNormalizer.Normalize(message), @"\b(?:hủy|huỷ)\s+lịch\b", RegexOptions.IgnoreCase))
-            return null;
-        return match.Groups[1].Value == "huy" ? "cancel" : "reschedule";
+            return IsTargetedAppointmentCancellation(text) ? "cancel" : null;
+        if (match.Groups[1].Value == "doi") return "reschedule";
+        return Regex.IsMatch(AiTextNormalizer.Normalize(message), @"\b(?:hủy|huỷ)\b", RegexOptions.IgnoreCase)
+            || ReadAppointmentCancelTarget(message).IsSpecified ? "cancel" : null;
     }
 
     private async Task<AiChatResponseDto?> ResolveAppointmentChangeAsync(

@@ -11,6 +11,7 @@ export const auditActionLabels: Readonly<Record<string, string>> = {
     CancelAppointment: 'Hủy lịch hẹn',
     RequestAppointmentReschedule: 'Yêu cầu đổi lịch hẹn',
     RescheduleAppointment: 'Đổi lịch hẹn',
+    RejectAppointmentChangeRequest: 'Từ chối yêu cầu đổi/hủy lịch',
     StartConsultation: 'Bắt đầu khám',
     CreateLeaveRequest: 'Tạo đơn nghỉ phép',
     WithdrawLeaveRequest: 'Rút đơn nghỉ phép',
