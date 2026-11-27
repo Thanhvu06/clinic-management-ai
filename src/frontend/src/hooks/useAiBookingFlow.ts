@@ -14,7 +14,7 @@ import { isLocalHelpPhrase, isPatientReadAlias, isSafeClientRoute } from "../com
 import { classifyPatientTypedIntent, extractBookingHint, isFilteredPatientRead, leavesOpenWizardStep } from "../components/copilot/patientTypedIntent";
 import { updatePatientAction, usePatientActionExpiry } from "../components/copilot/patientActionConfirmation";
 import { patientAppointmentChangeCard } from "../components/copilot/patientAppointmentChangeCard";
-import { patientCopilotTurn, startBookingFromChip, typedReasonOption, wizardTextFields } from "../components/copilot/patientChatTurns";
+import { patientCopilotTurn, startBookingFromChip, typedReasonOption, wizardDoctorFields, wizardTextFields } from "../components/copilot/patientChatTurns";
 import { aiChatFailureMessage } from "../api/aiErrorMessages";
 import { sendRoleCopilotMessage } from "../api/aiCopilotApi";
 import type { ApiResponse } from "../types";
@@ -681,7 +681,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 sessionId, step, optionToken, reason,
                 currentRoute: location.pathname, locale: 'vi-VN',
                 ...(step === 'start' && hint ? { hint } : {}),
-                ...(step === 'start' ? doctorSelection : undefined),
+                ...wizardDoctorFields(step, doctorSelection),
                 ...wizardTextFields(step, text)
             }, { signal: controller.signal, suppressForbiddenRedirect: true });
             if (controller.signal.aborted || requestId !== activeRequestIdRef.current || account !== accountKeyRef.current) return;
