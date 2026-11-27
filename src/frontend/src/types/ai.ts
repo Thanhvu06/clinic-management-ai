@@ -83,6 +83,7 @@ export interface StartBookingAction extends BaseAiAction {
     type: "StartBooking";
     payload: {
         specialtyId?: number;
+        doctorId?: number;
         targetUrl?: string;
     };
 }
@@ -396,6 +397,7 @@ export interface AiToolExecutionResult {
     requiresConfirmation?: boolean;
     actionId?: string;
     retrievedAtUtc?: string;
+    isIdempotentReplay?: boolean;
 }
 
 export interface ChatMessage {
@@ -454,6 +456,8 @@ export interface AiBookingWizardRequest {
     locale?: string;
     /** Typed doctor/specialty name; sent only with a typed "start". Never an ID. */
     hint?: string;
+    doctorId?: number;
+    specialtyId?: number;
 }
 
 export interface AiBookingWizardResponse {
@@ -473,6 +477,7 @@ export interface AiBookingWizardResponse {
     assistantMode: string;
     errorCode?: string;
     providerWasCalled: false;
+    routeToChat?: boolean;
 }
 
 export interface AiSuggestionMenuRequest {

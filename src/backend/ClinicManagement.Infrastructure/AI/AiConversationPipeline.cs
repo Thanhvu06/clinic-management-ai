@@ -40,7 +40,7 @@ public sealed class AiConversationPipeline : IAiConversationPipeline
             Intent = intent,
             Entities = entities,
             Safety = safety,
-            ProviderStatus = safety.IsEmergency || safety.IsPromptInjection
+            ProviderStatus = safety.IsEmergency || safety.IsSelfHarm || safety.IsPromptInjection
                 ? AiProviderStatusContract.SafetyBlocked
                 : AiProviderStatusContract.NotCalled
         };

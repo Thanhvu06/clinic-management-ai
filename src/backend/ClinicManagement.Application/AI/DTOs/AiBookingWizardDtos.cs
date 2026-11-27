@@ -18,6 +18,8 @@ public sealed class AiBookingWizardRequestDto
     // Optional typed doctor/specialty name, read only on "start" and matched
     // server-side against the same lists the wizard shows. Never an ID.
     [MaxLength(120)] public string? Hint { get; set; }
+    [Range(1, long.MaxValue)] public long? DoctorId { get; set; }
+    [Range(1, long.MaxValue)] public long? SpecialtyId { get; set; }
 }
 
 public sealed record AiBookingWizardOptionDto(string Token, string Label, string? Hint = null);
@@ -52,4 +54,5 @@ public sealed class AiBookingWizardResponseDto
     public string AssistantMode { get; set; } = "Ready";
     public string? ErrorCode { get; set; }
     public bool ProviderWasCalled { get; set; } = false;
+    public bool RouteToChat { get; set; }
 }

@@ -1,4 +1,6 @@
 using System.Text;
+using System.Text.RegularExpressions;
+using ClinicManagement.Application.AI.Conversation;
 using ClinicManagement.Application.AI.DTOs;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,6 +8,13 @@ namespace ClinicManagement.Infrastructure.AI;
 
 public partial class AiSpecialtyService
 {
+    private static bool IsClinicParkingQuestion(string message)
+    {
+        var plain = AiTextNormalizer.NormalizeForComparison(message);
+        return Regex.IsMatch(plain, @"\b(?:gui xe|do xe|giu xe)\b") &&
+            Regex.IsMatch(plain, @"\b(?:phong kham|cliniccare|co so|cho)\b");
+    }
+
     private async Task<AiChatResponseDto> HandleFacilityInquiryAsync(
         AiChatRequestDto request,
         string cleanMessage,
@@ -41,6 +50,8 @@ public partial class AiSpecialtyService
         sb.AppendLine($"- **Hotline/SĐT**: {phone}");
         sb.AppendLine($"- **Email**: {email}");
         sb.AppendLine($"- **Thời gian làm việc**: {await GetOpeningHoursAsync(facility?.Code, cancellationToken)}");
+        if (IsClinicParkingQuestion(cleanMessage))
+            sb.AppendLine("- **Gửi xe**: Hệ thống chưa có thông tin đã xác nhận về chỗ gửi xe. Bạn có thể hỏi bàn tiếp đón trước khi đến.");
         response.Message = sb.ToString();
 
         var contactAction = await CreateContactReceptionActionAsync(cancellationToken);
