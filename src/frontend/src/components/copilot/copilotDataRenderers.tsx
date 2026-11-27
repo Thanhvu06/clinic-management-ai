@@ -3,7 +3,8 @@ import { PatientAppointmentChangeForm, type PatientAppointmentChangeData } from 
 import { CopilotWorkspaceReadCard } from './CopilotWorkspaceReadCards';
 import type { AiCopilotCard } from '../../api/aiCopilotApi';
 import { formatDateOnly } from '../../utils/formatters';
-import { getAppointmentStatusLabel } from '../../utils/appointmentStatusLabels';
+import { appointmentStatusLabels } from '../../utils/appointmentStatusLabels';
+import { AppointmentStatusBadge } from '../common/AppointmentStatusBadge';
 import { formatCopilotDateTime } from './displayFormatters';
 import { statusLabels } from '../../utils/visitStatusLabels';
 import styles from './UnifiedCopilotPanel.module.css';
@@ -76,6 +77,11 @@ const StatusLine: React.FC<{ label: string; value: unknown; date?: boolean }> = 
     const rendered = date ? formatDateTime(value) : valueLabel(value);
     const localized = rendered && /trạng thái|thanh toán/i.test(label) ? paymentLabels[rendered] ?? statusLabels[rendered] : undefined;
     return rendered ? <div className={styles.typedLine}><strong>{label}:</strong> {localized ?? rendered}</div> : null;
+};
+
+const AppointmentStatusLine = ({ value }: { value: unknown }) => {
+    const status = text(value);
+    return status ? <div className={styles.typedLine}><strong>Trạng thái:</strong> <AppointmentStatusBadge status={status} size="sm" /></div> : null;
 };
 
 const EmptyData: React.FC<{ message: string }> = ({ message }) => <p className={styles.typedNotice} role="status">{message}</p>;
@@ -216,7 +222,7 @@ const AppointmentCard: React.FC<{ data: unknown; detail?: boolean }> = ({ data, 
     if (!source.length) return <EmptyData message="Bạn chưa có lịch hẹn phù hợp." />;
     return <List>{source.slice(0, 20).map((item, index) => <article className={styles.typedItem} key={index}>
         <strong>{text(item.appointmentCode) ?? 'Lịch hẹn'}</strong>
-        <StatusLine label="Trạng thái" value={text(item.status) ? getAppointmentStatusLabel(String(item.status), 'patient') : null} />
+        <AppointmentStatusLine value={item.status} />
         <StatusLine label="Ngày" value={item.appointmentDate ?? item.slotDate} date />
         <StatusLine label="Giờ" value={item.startTime && item.endTime ? `${formatClock(item.startTime)} – ${formatClock(item.endTime)}` : formatClock(item.startTime)} />
         <StatusLine label="Bác sĩ" value={item.doctorName} />
@@ -310,7 +316,7 @@ const ReceptionCard: React.FC<{ data: unknown; queue?: boolean }> = ({ data, que
         {queue && <StatusLine label="Số thứ tự" value={item.queueNumber} />}
         <StatusLine label="Người bệnh" value={item.patientName} />
         {!queue && <StatusLine label="Bác sĩ" value={item.doctorName} />}
-        <StatusLine label="Trạng thái" value={item.status} />
+        {queue ? <StatusLine label="Trạng thái" value={item.status} /> : <AppointmentStatusLine value={item.status} />}
         <StatusLine label="Thời gian" value={item.appointmentDate ?? item.visitDate ?? item.checkedInAtUtc} date />
     </article>)}</List>;
 };
@@ -324,7 +330,7 @@ const ReceptionAppointmentLookupCard: React.FC<{ data: unknown }> = ({ data }) =
     return <List><article className={styles.typedItem}>
         <strong>{text(item.appointmentCode)}</strong>
         <StatusLine label="Người bệnh" value={item.patientName} />
-        <StatusLine label="Trạng thái" value={item.status} />
+        <AppointmentStatusLine value={item.status} />
         <StatusLine label="Ngày" value={item.appointmentDate} date />
         <StatusLine label="Giờ" value={item.startTime && item.endTime ? `${formatClock(item.startTime)} – ${formatClock(item.endTime)}` : formatClock(item.startTime)} />
     </article></List>;
@@ -350,7 +356,7 @@ const DoctorSummaryCard: React.FC<{ data: unknown }> = ({ data }) => {
 const DoctorQueueCard: React.FC<{ data: unknown }> = ({ data }) => {
     const items = asRecords(data);
     if (!items.length) return <EmptyData message="Hàng đợi bác sĩ hiện không có dữ liệu phù hợp." />;
-    return <List>{items.slice(0, 20).map((item, index) => <article className={styles.typedItem} key={index}><strong>{text(item.visitCode) ?? text(item.appointmentCode) ?? 'Lượt khám'}</strong><StatusLine label="Tiếp nhận" value={item.intakeStatus} /><StatusLine label="Ngày" value={item.appointmentDate} date /><StatusLine label="Giờ" value={formatClock(item.startTime)} /><StatusLine label="Số thứ tự" value={item.queueNumber} /><StatusLine label="Người bệnh" value={item.patientName} /><StatusLine label="Trạng thái" value={item.status === 'Completed' ? 'Đã khám xong' : item.status === 'Confirmed' ? 'Chờ tiếp nhận' : item.status} /><StatusLine label="Lý do khám" value={item.chiefComplaint} /></article>)}</List>;
+    return <List>{items.slice(0, 20).map((item, index) => <article className={styles.typedItem} key={index}><strong>{text(item.visitCode) ?? text(item.appointmentCode) ?? 'Lượt khám'}</strong><StatusLine label="Tiếp nhận" value={item.intakeStatus} /><StatusLine label="Ngày" value={item.appointmentDate} date /><StatusLine label="Giờ" value={formatClock(item.startTime)} /><StatusLine label="Số thứ tự" value={item.queueNumber} /><StatusLine label="Người bệnh" value={item.patientName} />{Object.hasOwn(appointmentStatusLabels, text(item.status) ?? '') ? <AppointmentStatusLine value={item.status} /> : <StatusLine label="Trạng thái" value={item.status} />}<StatusLine label="Lý do khám" value={item.chiefComplaint} /></article>)}</List>;
 };
 
 const LegacyDoctorSummaryCard: React.FC<{ data: unknown }> = ({ data }) => {
@@ -450,7 +456,7 @@ const DoctorAppointmentsTodayCard: React.FC<{ data: unknown }> = ({ data }) => {
             <strong>{text(item.appointmentCode) ?? 'Lịch hẹn'}</strong>
             <StatusLine label="Giờ khám" value={start && end ? `${start} – ${end}` : start} />
             <StatusLine label="Người bệnh" value={item.patientName} />
-            <StatusLine label="Trạng thái" value={item.status} />
+            <AppointmentStatusLine value={item.status} />
             <StatusLine label="Lý do khám" value={item.reason} />
         </article>;
     })}</List>;

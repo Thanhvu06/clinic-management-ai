@@ -11,7 +11,7 @@ vi.mock('../api/organizationApi', () => ({ organizationApi: {
 } }));
 vi.mock('../contexts/DialogContext', () => ({ useDialog: () => dialog }));
 
-it('shows Confirmed appointments as Chờ tiếp nhận with HH:mm appointment times', async () => {
+it('shows Confirmed appointments as Đã xác nhận with HH:mm appointment times', async () => {
     vi.mocked(axiosClient.get).mockImplementation(async url => ({ success: true, message: '', data:
         url.startsWith('/reception/appointments?') ? { items: [{
             id: 91, appointmentCode: 'APT-RECEPTION-91', patientId: 11, patientName: 'Người bệnh tiếp nhận',
@@ -24,7 +24,7 @@ it('shows Confirmed appointments as Chờ tiếp nhận with HH:mm appointment t
     render(<MemoryRouter><ReceptionWorkspace /></MemoryRouter>);
 
     const row = (await screen.findByText('APT-RECEPTION-91')).closest('tr');
-    expect(within(row!).getByText('Chờ tiếp nhận')).toBeInTheDocument();
+    expect(within(row!).getByText('Đã xác nhận')).toBeInTheDocument();
     expect(within(row!).getByText('09:00 - 09:30')).toBeInTheDocument();
     expect(within(row!).queryByText('Đã xác nhận (Chờ tiếp nhận)')).not.toBeInTheDocument();
     expect(row).not.toHaveTextContent('09:00:00 - 09:30:00');

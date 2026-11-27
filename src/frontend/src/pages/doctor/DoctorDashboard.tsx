@@ -3,6 +3,7 @@ import { getGenderLabel } from '../../utils/genderLabels';
 import { formatVitalSummaryVi } from '../../utils/formatDecimalVi';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { isConsultationInProgress } from '../../utils/doctorQueueStatus';
+import { AppointmentStatusBadge } from '../../components/common/AppointmentStatusBadge';
 import { getVisitStatusLabel } from '../../utils/visitStatusLabels';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
@@ -237,7 +238,7 @@ export const DoctorDashboard: React.FC = () => {
             )
         },
         { header: 'Lý do khám', accessor: (item) => item.reason || 'Khám theo lịch hẹn' },
-        { header: 'Trạng thái', accessor: (item) => <><StatusBadge status={item.status} label={getVisitStatusLabel(item.status)} size="sm" /><ExpiryBadge overdue={item.isCompletionOverdue} completion /></> },
+        { header: 'Trạng thái', accessor: (item) => <><AppointmentStatusBadge status={item.status} size="sm" /><ExpiryBadge overdue={item.isCompletionOverdue} completion /></> },
         {
             header: 'Thao tác',
             align: 'right',
@@ -296,9 +297,9 @@ export const DoctorDashboard: React.FC = () => {
                 ariaLabel="Số liệu hôm nay"
                 items={[
                     { label: 'Đang chờ khám', value: loading ? '...' : (kpis?.waitingCount ?? 0), tone: 'attention', to: '/doctor/queue' },
-                    { label: 'Đang khám', value: loading ? '...' : (kpis?.inConsultationCount ?? 0) },
+                    { label: getVisitStatusLabel('InConsultation'), value: loading ? '...' : (kpis?.inConsultationCount ?? 0) },
                     { label: getVisitStatusLabel('Completed'), value: loading ? '...' : (kpis?.completedCount ?? 0) },
-                    { label: 'Vắng mặt', value: loading ? '...' : (kpis?.noShowCount ?? 0) },
+                    { label: getVisitStatusLabel('NoShow'), value: loading ? '...' : (kpis?.noShowCount ?? 0) },
                 ]}
             />
 

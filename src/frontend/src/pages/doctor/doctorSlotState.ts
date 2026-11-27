@@ -2,9 +2,8 @@ import type { DoctorScheduleSlotDto } from '../../types';
 
 export type DoctorSlotState = 'Booked' | 'NoShow' | 'Past' | 'Free';
 
-export const SLOT_STATE_LABEL: Record<DoctorSlotState, string> = {
+export const SLOT_STATE_LABEL: Record<Exclude<DoctorSlotState, 'NoShow'>, string> = {
     Booked: 'Đã đặt',
-    NoShow: 'Vắng mặt',
     Past: 'Đã qua',
     Free: 'Trống',
 };

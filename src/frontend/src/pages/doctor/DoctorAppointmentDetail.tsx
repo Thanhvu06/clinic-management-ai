@@ -11,6 +11,7 @@ import type { PatientClinicalContextDto } from '../../types';
 import { LoadingState, StatusBadge, DataTable, InlineError, EmptyState, MetricStrip } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
 import styles from './DoctorAppointmentDetail.module.css';
+import { AppointmentStatusBadge } from '../../components/common/AppointmentStatusBadge';
 import { getAppointmentStatusLabel } from '../../utils/appointmentStatusLabels';
 import { formatDateOnly } from '../../utils/formatters';
 interface AppointmentHistory {
@@ -147,7 +148,7 @@ export const DoctorAppointmentDetail: React.FC = () => {
                         <Flex align="center" gap={10} className={styles.patientIdentity}>
                             <h1 className={styles.patientName}>{context.patientName}</h1>
                             <span className={styles.codeTag}>{apt.appointmentCode}</span>
-                            <StatusBadge status={apt.status} label={getAppointmentStatusLabel(apt.status)} />
+                            <AppointmentStatusBadge status={apt.status} />
                         </Flex>
                         <div className={styles.metaRow}>
                             <span>{getGenderLabel(context.patientGender)} {context.patientDob ? `• ${formatDateOnly(context.patientDob)}` : ''}</span>

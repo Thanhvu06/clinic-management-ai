@@ -1,6 +1,6 @@
-export const appointmentStatusLabels: Readonly<Record<string, string>> = {
+export const appointmentStatusLabels = {
     Pending: 'Chờ xác nhận',
-    Confirmed: 'Chờ tiếp nhận',
+    Confirmed: 'Đã xác nhận',
     PendingReschedule: 'Chờ duyệt đổi lịch',
     PendingCancellation: 'Chờ duyệt hủy',
     Cancelled: 'Đã hủy',
@@ -9,9 +9,7 @@ export const appointmentStatusLabels: Readonly<Record<string, string>> = {
     CheckedIn: 'Đã tiếp nhận',
     InConsultation: 'Đang khám',
     InProgress: 'Đang khám'
-};
+} as const;
 
-export const getAppointmentStatusLabel = (status: string, audience: 'staff' | 'patient' = 'staff'): string => {
-    if (status === 'Confirmed' && audience === 'patient') return 'Đã xác nhận';
-    return Object.hasOwn(appointmentStatusLabels, status) ? appointmentStatusLabels[status] : 'Không xác định';
-};
+export const getAppointmentStatusLabel = (status: string): string =>
+    Object.hasOwn(appointmentStatusLabels, status) ? appointmentStatusLabels[status as keyof typeof appointmentStatusLabels] : 'Không xác định';
