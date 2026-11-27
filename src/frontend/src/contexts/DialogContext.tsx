@@ -21,11 +21,19 @@ interface DialogState {
     confirmText?: string;
     cancelText?: string;
     isConfirm: boolean;
+    tone: ConfirmTone;
+}
+
+// Positive actions (confirming, checking in) use the primary colour; red stays for cancel/delete.
+export type ConfirmTone = 'danger' | 'primary';
+
+export interface ConfirmOptions {
+    tone?: ConfirmTone;
 }
 
 interface DialogContextProps {
     showAlert: (message: string, title?: string, type?: DialogType) => void;
-    showConfirm: (message: string, onConfirm: () => void, title?: string) => void;
+    showConfirm: (message: string, onConfirm: () => void, title?: string, options?: ConfirmOptions) => void;
     showToast: (message: string, type?: DialogType) => void;
 }
 
@@ -43,16 +51,18 @@ export const DialogProvider: React.FC< { children: ReactNode }> = ({ children })
         title: '',
         message: '',
         type: 'info',
-        isConfirm: false
+        isConfirm: false,
+        tone: 'danger'
     });
     
     const [toasts, setToasts] = useState<Toast[]>([]);
 
     const showAlert = useCallback((message: string, title: string = 'Thông báo', type: DialogType = 'info') => {
-        setDialog({ isOpen: true, title, message, type, isConfirm: false });
+        setDialog({ isOpen: true, title, message, type, isConfirm: false, tone: 'danger' });
     }, []);
 
-    const showConfirm = useCallback((message: string, onConfirm: () => void, title: string = 'Xác nhận') => {
+    const showConfirm = useCallback((message: string, onConfirm: () => void, title: string = 'Xác nhận', options?: ConfirmOptions) => {
+        const tone = options?.tone ?? 'danger';
         setDialog({
             isOpen: true,
             title,
@@ -61,7 +71,8 @@ export const DialogProvider: React.FC< { children: ReactNode }> = ({ children })
             isConfirm: true,
             onConfirm,
             confirmText: 'Xác nhận',
-            cancelText: 'Hủy'
+            cancelText: 'Hủy',
+            tone
         });
     }, []);
 
@@ -110,7 +121,7 @@ export const DialogProvider: React.FC< { children: ReactNode }> = ({ children })
                                     <button className={["btn-secondary", styles.button1].join(' ')} onClick={closeDialog}>
                                         {dialog.cancelText || 'Hủy'}
                                     </button>
-                                    <button className={["btn-primary", styles.button2].join(' ')} onClick={handleConfirm}>
+                                    <button className={["btn-primary", dialog.tone === 'primary' ? styles.buttonPrimary : styles.button2].join(' ')} data-tone={dialog.tone} onClick={handleConfirm}>
                                         {dialog.confirmText || 'Xác nhận'}
                                     </button>
                                 </>

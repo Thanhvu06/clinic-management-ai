@@ -12,6 +12,7 @@ public static class UserActionAudit
     public const string CancelAppointment = "CancelAppointment";
     public const string RequestAppointmentReschedule = "RequestAppointmentReschedule";
     public const string RescheduleAppointment = "RescheduleAppointment";
+    public const string RejectAppointmentChangeRequest = "RejectAppointmentChangeRequest";
     public const string StartConsultation = "StartConsultation";
     public const string CreateLeaveRequest = "CreateLeaveRequest";
     public const string WithdrawLeaveRequest = "WithdrawLeaveRequest";

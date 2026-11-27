@@ -501,24 +501,24 @@ public sealed partial class PatientCopilotToolHandler : IAiToolHandler
         try
         {
             // Revalidate through the canonical appointment/change-request services.
-            await _appointments.GetPatientAppointmentByIdAsync(appointmentId.Value);
-            var result = isReschedule
-                ? await _changeRequests.CreateRescheduleRequestAsync(appointmentId.Value, new CreateRescheduleRequestDto { RequestedSlotId = GetLong(stored, "requestedSlotId") ?? 0, Reason = GetString(stored, "reason") ?? "Yêu cầu đổi lịch từ Patient Copilot" }, action.ActionId)
-                : await _changeRequests.CreateCancellationRequestAsync(appointmentId.Value, new CreateCancellationRequestDto { Reason = GetString(stored, "reason") ?? "Yêu cầu hủy lịch từ Patient Copilot" }, action.ActionId);
+            var current = await _appointments.GetPatientAppointmentByIdAsync(appointmentId.Value);
+            var outcome = isReschedule
+                ? ChangeOutcome.Request(await _changeRequests.CreateRescheduleRequestAsync(appointmentId.Value, new CreateRescheduleRequestDto { RequestedSlotId = GetLong(stored, "requestedSlotId") ?? 0, Reason = GetString(stored, "reason") ?? "Yêu cầu đổi lịch từ Patient Copilot" }, action.ActionId), actionId, "reschedule", appointmentId.Value)
+                : await CancelAppointmentAsync(current, GetString(stored, "reason") ?? "Yêu cầu hủy lịch từ Patient Copilot", actionId);
 
             var completed = await _db.AiPendingToolActions
                 .Where(x => x.ActionId == actionId && x.ExecutionLeaseId == leaseId && x.State == AiPendingToolActionState.Executing)
                 .ExecuteUpdateAsync(x => x
                     .SetProperty(a => a.State, AiPendingToolActionState.Completed)
                     .SetProperty(a => a.ExecutedAtUtc, _dateTimeProvider.UtcNow)
-                    .SetProperty(a => a.ExecutionResultReference, result.Id.ToString())
+                    .SetProperty(a => a.ExecutionResultReference, outcome.Reference)
                     .SetProperty(a => a.ExecutionLeaseId, (Guid?)null)
                     .SetProperty(a => a.ExecutionLeaseExpiresAtUtc, (DateTime?)null)
                     .SetProperty(a => a.LastErrorCode, (string?)null), cancellationToken);
             if (completed == 0)
                 return AiToolExecutionResult.Failed("ACTION_IN_PROGRESS", "Thao tác đã được xử lý bởi một yêu cầu khác.", true);
 
-            return Completed(new { actionId, changeRequestId = result.Id, operation = isReschedule ? "reschedule" : "cancel", appointmentId }, "change_request", isReschedule ? "Yêu cầu đổi lịch đã được tạo." : "Yêu cầu hủy lịch đã được tạo.");
+            return Completed(outcome.Data, "change_request", outcome.DisplayText);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -561,8 +561,8 @@ public sealed partial class PatientCopilotToolHandler : IAiToolHandler
     {
         Status = "pending_confirmation", RequiresConfirmation = true, ActionId = action.ActionId.ToString(),
         ResultType = "pending_action",
-        DisplayText = $"Thao tác trên lịch hẹn {appointment.AppointmentCode} đang chờ bạn xác nhận.",
-        Data = new { actionId = action.ActionId, appointmentId = appointment.Id, appointmentCode = appointment.AppointmentCode, expiresAtUtc = action.ExpiresAtUtc, confirmation = "Xác nhận thao tác này", concurrencyToken = BuildConfirmationToken(action) },
+        DisplayText = PendingDisplayText(action, appointment),
+        Data = new { actionId = action.ActionId, appointmentId = appointment.Id, appointmentCode = appointment.AppointmentCode, expiresAtUtc = action.ExpiresAtUtc, confirmation = "Xác nhận thao tác này", concurrencyToken = BuildConfirmationToken(action), immediate = CancelsImmediately(action, appointment) },
         DataSources = new[] { new AiToolDataSource("appointment_service", "service"), new AiToolDataSource("pending_action_store", "database") }
     };
 

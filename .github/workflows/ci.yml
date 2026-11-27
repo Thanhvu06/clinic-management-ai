@@ -282,7 +282,7 @@ jobs:
     name: Backend Build & Test (.NET 10)
     runs-on: ubuntu-latest
     needs: [backend-checks, backend-tests]
-    if: ${{ !cancelled() }}
+    if: always()
     steps:
       - name: Require backend checks and every test shard to pass
         shell: bash

@@ -87,8 +87,11 @@ export function PatientAppointmentChangeForm({ data }: { data: PatientAppointmen
             const change = reschedule && selected
                 ? 'đổi lịch hẹn ' + data.appointmentCode + ' sang ngày ' + formatDateOnly(day) + ', ' + slotLabel(selected)
                 : 'hủy lịch hẹn ' + data.appointmentCode;
+            const title = !reschedule && preview.immediate === true
+                ? 'Xem trước thao tác hủy ngay lịch hẹn ' + data.appointmentCode + ' (lịch đang chờ xác nhận nên được hủy ngay khi bạn xác nhận)'
+                : 'Xem trước yêu cầu ' + change;
             data.onPreview({ status: result.status, actionId: result.actionId, data: preview },
-                'Xem trước yêu cầu ' + change + '. Lý do: ' + reason.trim());
+                title + '. Lý do: ' + reason.trim());
             setSubmitted(true);
         } catch (error) {
             if (!controller.signal.aborted) setPrepareError(getApiErrorMessage(error, 'Không tạo được bản xem trước.'));

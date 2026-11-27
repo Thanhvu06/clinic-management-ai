@@ -16,7 +16,7 @@ using ClinicManagement.Infrastructure.Common;
 
 namespace ClinicManagement.Infrastructure.Appointments;
 
-public class ChangeRequestService : IChangeRequestService
+public partial class ChangeRequestService : IChangeRequestService
 {
     private readonly AppDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
@@ -917,6 +917,7 @@ public class ChangeRequestService : IChangeRequestService
                 PerformedByUserId = userId,
                 CreatedAt = _dateTimeProvider.UtcNow
             });
+            UserActionAudit.Appointment(_dbContext, userId, UserActionAudit.RejectAppointmentChangeRequest, appointment, RejectAuditDescription(changeReq.RequestType, rejectReason), _dateTimeProvider.UtcNow);
 
             await NotifyPatientForAppointmentAsync(
                 changeReq.AppointmentId,

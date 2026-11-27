@@ -335,6 +335,24 @@ export interface KnowledgeSource {
     heading: string;
 }
 
+export interface AiChatRequestPayload {
+    message: string;
+    context: Array<{ role: "user" | "model"; content: string }>;
+    intent?: AiChatIntent;
+    hasOpenBookingWizard?: boolean;
+    pendingSpecialtyId?: number;
+    pendingDoctorId?: number;
+    pendingSlotId?: number;
+    pendingSlotDate?: string;
+    reason?: string;
+    draftVersion?: number;
+    displayedDoctorIds?: number[];
+    displayedSlotIds?: number[];
+    contextSnapshotId?: string;
+    sessionId?: string;
+    draftId?: string;
+}
+
 export interface AiChatResponse {
     sources?: KnowledgeSource[];
     message: string;

@@ -162,7 +162,9 @@ export function isNewBookingRequest(text: string, step = 'specialty'): boolean {
 
 /** Typed text that is not an answer to the open wizard step and goes to chat or a new wizard instead. */
 export function leavesOpenWizardStep(text: string, step: string): boolean {
-    return isConsultationPriceQuestion(text) || isMedicinePriceQuestion(text) || isNewBookingRequest(text, step);
+    const normalized = normalizeTypedText(text);
+    const cancellation = /\bhuy\b/.test(normalized) || /^(?:thoi|khong dat nua)$/.test(normalized);
+    return cancellation || isConsultationPriceQuestion(text) || isMedicinePriceQuestion(text) || isNewBookingRequest(text, step);
 }
 
 export function isConsultationPriceQuestion(text: string): boolean {
