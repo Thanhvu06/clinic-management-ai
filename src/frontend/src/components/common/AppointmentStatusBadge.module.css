@@ -1,0 +1,45 @@
+:global(.ant-tag).amber {
+    background-color: var(--cc-color-warning-bg);
+    color: var(--cc-color-text);
+    border-color: var(--cc-color-warning);
+}
+
+:global(.ant-tag).blue {
+    background-color: var(--cc-color-primary);
+    color: var(--cc-color-text-on-dark);
+}
+
+:global(.ant-tag).teal {
+    background-color: var(--cc-color-secondary-hover);
+    color: var(--cc-color-text-on-dark);
+}
+
+:global(.ant-tag).purple {
+    background-color: var(--cc-color-purple);
+    color: var(--cc-color-text-on-dark);
+}
+
+:global(.ant-tag).green {
+    background-color: var(--cc-color-success);
+    color: var(--cc-color-text-dark);
+}
+
+:global(.ant-tag).gray {
+    background-color: var(--cc-color-border);
+    color: var(--cc-color-text);
+}
+
+:global(.ant-tag).red {
+    background-color: var(--cc-color-danger);
+    color: var(--cc-color-text-on-dark);
+}
+
+:global(.ant-tag).orange {
+    background-color: var(--cc-color-orange-light);
+    color: var(--cc-color-text);
+}
+
+:global(.ant-tag).deepOrange {
+    background-color: var(--cc-color-orange-dark);
+    color: var(--cc-color-text-on-dark);
+}

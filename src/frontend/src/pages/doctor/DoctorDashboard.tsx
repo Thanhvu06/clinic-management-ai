@@ -15,7 +15,7 @@ import {
 import { doctorApi } from '../../api/doctorApi';
 import type { DoctorDashboardDto, DoctorQueueItemDto } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
-import { PageHeader, MetricStrip, StatusBadge, InlineError, EmptyState, DataTable, LoadingState } from '../../components/common';
+import { PageHeader, MetricStrip, InlineError, EmptyState, DataTable, LoadingState } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
 import { formatDateOnly, toLocalDateString } from '../../utils/formatters';
 import styles from './DoctorDashboard.module.css';
@@ -166,7 +166,7 @@ export const DoctorDashboard: React.FC = () => {
                 ? <span className={styles.vitalsOk}><CheckCircle size={14} /><span>Đã đo</span></span>
                 : <span className={styles.vitalsPending}>Chưa đo</span>
         },
-        { header: 'Trạng thái', accessor: (item) => <><StatusBadge status={item.status} label={getVisitStatusLabel(item.status)} size="sm" /><ExpiryBadge overdue={item.isCompletionOverdue} completion /></> },
+        { header: 'Trạng thái', accessor: (item) => <><AppointmentStatusBadge status={item.status} label={getVisitStatusLabel(item.status)} size="sm" /><ExpiryBadge overdue={item.isCompletionOverdue} completion /></> },
         {
             header: 'Thao tác',
             align: 'right',
@@ -308,7 +308,7 @@ export const DoctorDashboard: React.FC = () => {
                     <div className={styles.spacing1}>
                         <Flex align="center" gap="small" className={styles.spacing2}>
                             <h2 className={styles.nextPatientTag}>Bệnh nhân tiếp theo</h2>
-                            {nextPatient && <StatusBadge status={nextPatient.status} label={getVisitStatusLabel(nextPatient.status)} />}
+                            {nextPatient && <AppointmentStatusBadge status={nextPatient.status} label={getVisitStatusLabel(nextPatient.status)} />}
                         </Flex>
 
                         {nextPatient ? (

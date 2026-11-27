@@ -15,7 +15,7 @@ import { doctorApi } from '../../api/doctorApi';
 import type { DoctorQueueItemDto } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
 import {
-    PageHeader, FilterBar, StatusBadge, DataTable,
+    PageHeader, FilterBar, AppointmentStatusBadge, DataTable,
     InlineError, LoadingState, EmptyState
 } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
@@ -213,7 +213,7 @@ export const DoctorQueue: React.FC = () => {
                 <span className={styles.vitalsPending}>Chưa ghi nhận</span>
             )
         },
-        { header: 'Trạng thái', width: 130, accessor: (item) => <><StatusBadge status={item.status} label={getVisitStatusLabel(item.status)} /><ExpiryBadge overdue={item.isCompletionOverdue} completion /></> },
+        { header: 'Trạng thái', width: 130, accessor: (item) => <><AppointmentStatusBadge status={item.status} label={getVisitStatusLabel(item.status)} /><ExpiryBadge overdue={item.isCompletionOverdue} completion /></> },
         {
             header: 'Thao tác',
             align: 'right',

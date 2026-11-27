@@ -42,6 +42,9 @@ export const colors = {
     dangerBg: '#FEF2F2',
     info: '#0284C7',
     infoBg: '#F0F9FF',
+    purple: 'rgb(109, 40, 217)',
+    orangeLight: 'rgb(254, 215, 170)',
+    orangeDark: 'rgb(154, 52, 18)',
 } as const;
 
 export const spacing = {
@@ -118,6 +121,9 @@ export const tokenCssVariables: Record<string, string> = {
     '--cc-color-danger-bg': colors.dangerBg,
     '--cc-color-info': colors.info,
     '--cc-color-info-bg': colors.infoBg,
+    '--cc-color-purple': colors.purple,
+    '--cc-color-orange-light': colors.orangeLight,
+    '--cc-color-orange-dark': colors.orangeDark,
     // Trang công khai và trang bệnh nhân chỉ dùng nhóm này cùng chữ/viền trung tính; trang nhân viên không đọc các biến này.
     '--cc-color-public-bg': colors.bgSubtle,
     '--cc-color-public-surface': colors.bgContainer,
