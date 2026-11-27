@@ -91,7 +91,8 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
         var auditSource = suggestionRequested ? SuggestionAuditSource : FreeTextAuditSource;
 
         var emergency = typedSafety?.IsEmergency == true || analysis.Safety.IsEmergency;
-        if (emergency || analysis.Safety.IsPromptInjection)
+        var selfHarm = typedSafety?.IsSelfHarm == true || analysis.Safety.IsSelfHarm;
+        if (emergency || selfHarm || analysis.Safety.IsPromptInjection)
         {
             var response = new AiCopilotResponseDto
             {
@@ -101,14 +102,16 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
                 AssistantMode = AiAssistantModes.SafetyBlocked,
                 ProviderState = AiProviderStatusContract.SafetyBlocked,
                 PlannerMode = AiPlannerModes.Safety,
-                Intent = emergency ? AiChatIntentTypes.EmergencyEscalation : AiChatIntentTypes.PromptInjection,
+                Intent = emergency ? AiChatIntentTypes.EmergencyEscalation : selfHarm
+                    ? AiChatIntentTypes.UnclearOrOutOfScope : AiChatIntentTypes.PromptInjection,
                 Confidence = 1m,
-                Message = emergency
+                Message = selfHarm ? AiSafetyGuard.PatientSelfHarmMessage(emergency) : emergency
                     ? "Dấu hiệu có thể là tình huống cấp cứu. Hãy gọi 115 hoặc kích hoạt quy trình cấp cứu theo quy định của cơ sở."
                     : "Yêu cầu điều khiển tool hoặc truy cập vượt quyền đã bị từ chối.",
                 SafetyNotice = "Safety guard đã chặn provider và mọi tool call trước khi truy cập dữ liệu.",
-                SuggestedPrompts = SuggestedPrompts(role),
-                Suggestions = AiSuggestionCatalog.ForRole(role, hasCaseResource: false),
+                ErrorCode = selfHarm ? "SELF_HARM_RISK" : null,
+                SuggestedPrompts = selfHarm ? [] : SuggestedPrompts(role),
+                Suggestions = selfHarm ? [] : AiSuggestionCatalog.ForRole(role, hasCaseResource: false),
                 AvailableTools = ToolsForUi(tools)
             };
             await PersistAndAudit(response, sessionId, role, null, 0, cancellationToken, auditSource);

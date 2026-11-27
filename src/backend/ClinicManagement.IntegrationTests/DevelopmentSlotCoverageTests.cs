@@ -36,7 +36,7 @@ public sealed class DevelopmentSlotCoverageTests
         var db = services.GetRequiredService<AppDbContext>();
         var hosted = api.Services.GetServices<IHostedService>().ToList();
         var worker = Assert.Single(hosted.OfType<DevelopmentSlotCoverageWorker>());
-        Assert.DoesNotContain(hosted, candidate => candidate is DevelopmentDemoTopUpWorker or ExpiryWorker);
+        Assert.DoesNotContain(hosted, candidate => candidate is DevelopmentDemoTopUpWorker);
 
         var availability = services.GetRequiredService<IAppointmentAvailabilityPolicy>();
         var horizon = today.AddDays(13);
@@ -61,6 +61,38 @@ public sealed class DevelopmentSlotCoverageTests
         await worker.RunOnceAsync(CancellationToken.None);
         Assert.Equal(afterStartup, (await db.AppointmentSlots.CountAsync(), await db.DoctorWorkSchedules.CountAsync()));
         Assert.Equivalent(before, await ReadQaRecordsAsync(db), strict: true);
+    }
+
+    [Theory]
+    [InlineData(AppointmentStatus.Pending, AppointmentStatus.Cancelled)]
+    [InlineData(AppointmentStatus.Confirmed, AppointmentStatus.NoShow)]
+    public async Task Coverage_only_host_expires_overdue_appointments_without_running_demo_top_up(
+        AppointmentStatus initialStatus, AppointmentStatus expectedStatus)
+    {
+        using var initial = new FixedSeedWebApplicationFactory();
+        using var initialScope = initial.Services.CreateScope();
+        var services = initialScope.ServiceProvider;
+        await DevelopmentDataSeeder.SeedMasterDataAsync(services);
+        var db = services.GetRequiredService<AppDbContext>();
+        var clock = services.GetRequiredService<IDateTimeProvider>();
+        await AddExistingActivityAsync(db, clock.VietnamToday, initialStatus);
+
+        using var api = new CoverageApiFactory("Development", true, db.Database.GetConnectionString(), clock);
+        Assert.Single(api.Services.GetServices<IHostedService>().OfType<ExpiryWorker>());
+        Assert.DoesNotContain(api.Services.GetServices<IHostedService>(), worker => worker is DevelopmentDemoTopUpWorker);
+        using var verifyScope = api.Services.CreateScope();
+        var qa = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        AppointmentStatus status;
+        do
+        {
+            status = await qa.Appointments.Where(a => a.AppointmentCode == "COVERAGE-EXISTING").Select(a => a.Status).SingleAsync(timeout.Token);
+            if (status == initialStatus) await Task.Delay(50, timeout.Token);
+        } while (status == initialStatus);
+        Assert.Equal(expectedStatus, status);
+        Assert.Equal(await db.Appointments.CountAsync(), await qa.Appointments.CountAsync());
+        Assert.Equal(await db.PatientVisits.CountAsync(), await qa.PatientVisits.CountAsync());
+        Assert.Equal(await db.Patients.CountAsync(), await qa.Patients.CountAsync());
     }
 
     [Theory]
@@ -92,7 +124,7 @@ public sealed class DevelopmentSlotCoverageTests
         Assert.Equal(TimeSpan.FromMinutes(expectedMinutes), DevelopmentSlotCoverageWorker.GetDelayUntilNextRun(clock));
     }
 
-    private static async Task AddExistingActivityAsync(AppDbContext db, DateOnly today)
+    private static async Task AddExistingActivityAsync(AppDbContext db, DateOnly today, AppointmentStatus status = AppointmentStatus.Completed)
     {
         var assignment = await db.StaffFacilityAssignments.FirstAsync(a => a.Role == "Doctor" && a.DepartmentId != null);
         var doctor = await db.Doctors.FirstAsync(d => d.UserId == assignment.UserId);
@@ -103,7 +135,7 @@ public sealed class DevelopmentSlotCoverageTests
         {
             AppointmentCode = "COVERAGE-EXISTING", PatientId = patient.Id, DoctorId = doctor.Id,
             SpecialtyId = otherSpecialty.Id, FacilityId = assignment.FacilityId,
-            AppointmentDate = past, StartTime = new(9, 0), EndTime = new(9, 30), Status = AppointmentStatus.Confirmed,
+            AppointmentDate = past, StartTime = new(9, 0), EndTime = new(9, 30), Status = status,
             AppointmentSlot = new AppointmentSlot
             {
                 DoctorId = doctor.Id, SlotDate = past, StartTime = new(9, 0), EndTime = new(9, 30), IsBooked = true

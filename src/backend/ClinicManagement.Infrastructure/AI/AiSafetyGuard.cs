@@ -5,16 +5,16 @@ using ClinicManagement.Application.AI.Tools;
 
 namespace ClinicManagement.Infrastructure.AI;
 
-public sealed class AiSafetyGuard : IAiSafetyGuard
+public sealed partial class AiSafetyGuard : IAiSafetyGuard
 {
     private static readonly string[] EmergencyPhrases =
     {
         "đau ngực", "đau tim", "đau thắt ngực", "tức ngực", "đau tức ngực", "nặng ngực", "đè ép ngực", "đau ngực trái", "khó thở khi nằm",
         "khó thở nặng", "khó thở", "không thở được", "không cầm máu", "ngất xỉu", "ngất", "bất tỉnh",
         "dấu hiệu đột quỵ", "méo miệng", "yếu liệt nửa người", "co giật", "chảy máu không cầm",
-        "chảy máu nhiều", "sốc phản vệ", "dị ứng nặng", "tự tử", "muốn tự sát", "cấp cứu thai", "thai kỳ khẩn cấp",
+        "chảy máu nhiều", "sốc phản vệ", "dị ứng nặng", "cấp cứu thai", "thai kỳ khẩn cấp",
         "trẻ tím tái", "trẻ khó thở", "tím tái", "trẻ co giật", "uống quá liều thuốc", "quá liều thuốc",
-        "có ý định tự làm hại bản thân", "muốn tự làm hại bản thân", "uống quá liều", "uống cả vỉ", "uống nhầm thuốc",
+        "uống quá liều", "uống cả vỉ", "uống nhầm thuốc",
         "nôn ra máu", "ói ra máu", "thở không nổi", "uống nhầm chai thuốc tẩy", "uống nhầm nước tẩy",
         "ngộ độc", "uống nhầm", "nuốt nhầm", "uống phải hóa chất", "uống phải thuốc tẩy", "uống phải thuốc diệt", "quá liều"
     };
@@ -63,6 +63,11 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
         if (string.IsNullOrWhiteSpace(normalized)) return new AiSafetyGuardResult();
 
         var tokens = Tokenize(normalized);
+        var selfHarm = MatchesSafetyPhrase(normalized, tokens, SelfHarmPhrases);
+        AiSafetyGuardResult Emergency(string category) =>
+            new() { IsEmergency = true, IsSelfHarm = selfHarm, MatchedCategory = category };
+
+        if (HasHazardousExposure(normalized, tokens)) return Emergency("nuốt, uống hoặc hít phải chất độc hay vật nguy hiểm");
         var chestPainMatches = FindChestPainMatches(normalized, tokens);
         var medicationMatches = FindMedicationMisuseMatches(normalized, tokens);
         foreach (var phrase in EmergencyPhrases)
@@ -73,17 +78,24 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
                     continue;
                 var fullMatch = chestPainMatches.Concat(medicationMatches).FirstOrDefault(span => span.StartTokenIndex <= match.StartTokenIndex && span.EndTokenIndex >= match.EndTokenIndex);
                 if (!IsNegated(normalized, tokens, fullMatch?.StartTokenIndex ?? match.StartTokenIndex))
-                    return new AiSafetyGuardResult { IsEmergency = true, MatchedCategory = phrase };
+                    return Emergency(phrase);
             }
         }
 
         if (chestPainMatches.Any(match => !IsNegated(normalized, tokens, match.StartTokenIndex)))
-            return new AiSafetyGuardResult { IsEmergency = true, MatchedCategory = "đau ngực" };
+            return Emergency("đau ngực");
         if (medicationMatches.Any(match => !IsNegated(normalized, tokens, match.StartTokenIndex)))
-            return new AiSafetyGuardResult { IsEmergency = true, MatchedCategory = "uống nhiều thuốc một lúc" };
+            return Emergency("uống nhiều thuốc một lúc");
 
         if (FindAdditionalEmergency(normalized, tokens) is { } emergency)
-            return new AiSafetyGuardResult { IsEmergency = true, MatchedCategory = emergency };
+            return Emergency(emergency);
+
+        if (selfHarm)
+            return new AiSafetyGuardResult
+            {
+                IsEmergency = MatchesSafetyPhrase(normalized, tokens, ImmediateSelfHarmPhrases),
+                IsSelfHarm = true, MatchedCategory = "self_harm"
+            };
 
         if (ContainsPromptInjectionNormalized(normalized))
             return new AiSafetyGuardResult { IsPromptInjection = true, MatchedCategory = "prompt_injection" };
@@ -97,7 +109,8 @@ public sealed class AiSafetyGuard : IAiSafetyGuard
             !HasClauseBoundaryBetween(text, tokens[mild.StartTokenIndex].EndIndex, tokens[mild.EndTokenIndex].StartIndex));
 
     internal static string PatientEmergencyMessage(AiSafetyGuardResult safety) =>
-        safety.MatchedCategory == MedicalEmergency
+        safety.IsSelfHarm ? PatientSelfHarmMessage(safety.IsEmergency)
+        : safety.MatchedCategory == MedicalEmergency
             ? "Trong tình huống y tế khẩn cấp, hãy gọi ngay 115 hoặc đến cơ sở cấp cứu gần nhất. Không chờ đổi lịch hay phản hồi qua trò chuyện."
             : "Dấu hiệu có thể là tình huống cấp cứu. Hãy gọi 115 ngay.";
 

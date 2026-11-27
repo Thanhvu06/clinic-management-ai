@@ -38,13 +38,12 @@ it.each([
     expect(post.mock.calls[0][1]).not.toHaveProperty('suggestionCode');
 });
 
-it('uses the typed schedule question to start the booking wizard with the named doctor', async () => {
-    post.mockResolvedValueOnce({ success: true, data: { step: 'day', textToken: 'day-token' } });
+it('asks patient chat for the named doctor’s schedule before opening a wizard', async () => {
     const { result } = renderHook(() => useAiBookingFlow(), { wrapper });
     await act(async () => result.current.handleSendMessage('bác sĩ Khải khám ngày nào'));
 
-    expect(post).toHaveBeenCalledWith('/ai/booking-wizard',
-        expect.objectContaining({ step: 'start', hint: 'bác sĩ Khải khám ngày nào' }), expect.anything());
+    expect(post).toHaveBeenCalledWith('/ai/chat',
+        expect.objectContaining({ message: 'bác sĩ Khải khám ngày nào' }), expect.anything());
 
     const price = 'khám nội tổng quát giá bao nhiêu';
     await act(async () => result.current.handleSendMessage(price));

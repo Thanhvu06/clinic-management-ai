@@ -14,7 +14,7 @@ internal static class PatientChatDoctorName
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private static readonly Regex NameSuffix = new(
-        @"\s+(?:vào|từ|lúc|ngày|khoa|chuyên khoa|sáng|chiều|tối|ở|của|trong|có|khám|giúp|giup|ơi|nhé|với)\b",
+        @"\s+(?:vào|vao|từ|lúc|ngày|ngay|khoa|chuyên khoa|chuyen khoa|sáng|chiều|tối|ở|của|trong|có|co|khám|kham|lịch|lich|làm việc|lam viec|trực|truc|học hàm|hoc ham|học vị|hoc vi|bằng cấp|bang cap|giúp|giup|ơi|nhé|với)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private static readonly Regex CommonPhrase = new(
@@ -24,6 +24,22 @@ internal static class PatientChatDoctorName
     private static readonly Regex CapitalizedName = new(
         @"^\p{Lu}[\p{L}\p{M}]*(?:[ \t]+(?:\p{Lu}[\p{L}\p{M}]*|\d+))*$",
         RegexOptions.CultureInvariant);
+
+    private static readonly Regex InformationCue = new(
+        @"\b(?:kham khoa|kham (?:vao )?(?:ngay|hom|gio) nao|khoa (?:gi|nao)|chuyen khoa|lich(?: (?:kham|trong|lam viec))?|khi nao|lam viec|truc|hoc ham|hoc vi|bang cap|tieu su|thong tin)\b",
+        RegexOptions.CultureInvariant);
+
+    private static readonly Regex BookingOrFeeCue = new(
+        @"\b(?:dat (?:lich|kham|hen)|dang ky kham|muon kham|book lich|phi kham|gia|bao nhieu|het nhiu)\b",
+        RegexOptions.CultureInvariant);
+
+    internal static string? InformationName(string message)
+    {
+        var normalized = AiTextNormalizer.NormalizeForComparison(message);
+        if (!InformationCue.IsMatch(normalized) || BookingOrFeeCue.IsMatch(normalized)) return null;
+        var candidate = ExtractCandidate(message);
+        return IsCandidate(candidate) ? candidate : null;
+    }
 
     internal static string? ExtractCandidate(string message)
     {

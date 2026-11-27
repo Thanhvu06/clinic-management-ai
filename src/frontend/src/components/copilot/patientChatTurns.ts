@@ -1,6 +1,13 @@
 import type { MutableRefObject } from "react";
 import type { AiCopilotResponse } from "../../api/aiCopilotApi";
 import type { AiBookingWizardRequest, AiBookingWizardResponse, AiSuggestionItem, ChatMessage } from "../../types/ai";
+import { normalizeTypedText } from "./typedIntentText";
+
+export function typedReasonOption(wizard: AiBookingWizardResponse | null, text: string): string | undefined {
+    if (wizard?.step !== "reason") return undefined;
+    const normalized = normalizeTypedText(text);
+    return wizard.options.find(option => normalizeTypedText(option.label) === normalized)?.token;
+}
 
 export function wizardTextFields(step: AiBookingWizardRequest["step"], text?: string): Pick<AiBookingWizardRequest, "text" | "typedMessage"> {
     if (!text) return {};
@@ -21,6 +28,7 @@ export function patientCopilotTurn(response: AiCopilotResponse): ChatMessage {
         providerWasCalled: response.providerWasCalled,
         providerAttemptCount: response.providerAttemptCount,
         primaryIntent: response.intent,
+        dialogueOutcome: response.errorCode === 'SELF_HARM_RISK' ? 'SafetySelfHarm' : undefined,
         clarificationPrompt: response.clarification ?? undefined,
         copilotCards: response.cards ?? [],
         suggestionChips: response.suggestions ?? []

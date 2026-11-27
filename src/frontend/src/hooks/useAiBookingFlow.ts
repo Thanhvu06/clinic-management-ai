@@ -11,9 +11,10 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import axiosClient from "../api/axiosClient";
 import { isLocalHelpPhrase, isPatientReadAlias, isSafeClientRoute } from "../components/copilot/patientPresentation";
-import { classifyPatientTypedIntent, doctorScheduleHint, extractBookingHint, isFilteredPatientRead, leavesOpenWizardStep } from "../components/copilot/patientTypedIntent";
+import { classifyPatientTypedIntent, extractBookingHint, isFilteredPatientRead, leavesOpenWizardStep } from "../components/copilot/patientTypedIntent";
+import { updatePatientAction, usePatientActionExpiry } from "../components/copilot/patientActionConfirmation";
 import { patientAppointmentChangeCard } from "../components/copilot/patientAppointmentChangeCard";
-import { patientCopilotTurn, startBookingFromChip, wizardTextFields } from "../components/copilot/patientChatTurns";
+import { patientCopilotTurn, startBookingFromChip, typedReasonOption, wizardTextFields } from "../components/copilot/patientChatTurns";
 import { aiChatFailureMessage } from "../api/aiErrorMessages";
 import { sendRoleCopilotMessage } from "../api/aiCopilotApi";
 import type { ApiResponse } from "../types";
@@ -26,7 +27,6 @@ import type {
     AiChatIntent,
     ConfirmBookingAction,
     ReviewBookingAction,
-    AiToolExecutionResult,
     AiSuggestionItem,
     AiBookingWizardRequest,
     AiBookingWizardResponse
@@ -293,8 +293,9 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         textToSend: string,
         pendingPayload?: SendMessageOptions,
         prefixMessage?: ChatMessage,
-        retryError?: ChatMessage
-    ) => {
+        retryError?: ChatMessage,
+        fromWizard = false
+    ): Promise<void> => {
         const trimmed = textToSend.trim();
         if (!trimmed || loading || submittingBooking) return;
         const maxMessageLength = 500;
@@ -303,7 +304,14 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             return;
         }
 
-        if (!pendingPayload && !prefixMessage && !isFilteredPatientRead(trimmed)) {
+        if (!fromWizard && !pendingPayload && !prefixMessage && !isFilteredPatientRead(trimmed)) {
+            const reasonOption = typedReasonOption(wizard, trimmed);
+            if (reasonOption) {
+                setInput('');
+                setMessages(previous => [...previous, { role: 'user', content: trimmed }]);
+                await handleWizardStep('pick', reasonOption);
+                return;
+            }
             if (isLocalHelpPhrase(trimmed) || isPatientReadAlias(trimmed)) {
                 setInput('');
                 await handleSuggestion({ code: '', label: trimmed }, true, retryError);
@@ -316,13 +324,12 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 return;
             }
             const intent = classifyPatientTypedIntent(trimmed);
-            const scheduleHint = doctorScheduleHint(trimmed);
-            if (intent || scheduleHint) {
+            if (intent) {
                 setInput('');
-                if (intent === 'booking' || scheduleHint) {
+                if (intent === 'booking') {
                     setMessages(previous => [...previous, { role: 'user', content: trimmed }]);
                     const suggestions = messages.findLast(message => message.role === 'model')?.suggestions;
-                    await handleWizardStep('start', undefined, undefined, false, scheduleHint ?? extractBookingHint(trimmed) ?? (suggestions?.length === 1 ? suggestions[0].specialtyName : undefined), trimmed);
+                    await handleWizardStep('start', undefined, undefined, false, extractBookingHint(trimmed) ?? (suggestions?.length === 1 ? suggestions[0].specialtyName : undefined), trimmed);
                 } else if (intent) {
                     const codes = {
                         appointments: 'patient.my_appointments', visits: 'patient.my_visits',
@@ -344,7 +351,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         });
 
         if (retryError) setMessages(previous => previous.filter(message => message !== retryError || !message.isError));
-        else setMessages(newMessages);
+        else if (!fromWizard) setMessages(newMessages);
         setInput("");
         clearFailure();
         setLoading(true);
@@ -362,7 +369,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             bookingContextVersion === getBookingContextVersion();
 
         try {
-            const preservedReason = pendingPayload?.reason || activeDraft?.reason;
+            const chatDraft = fromWizard ? undefined : activeDraft;
+            const preservedReason = pendingPayload?.reason || chatDraft?.reason;
 
             // Extract displayed doctor and slot IDs from the last assistant message
             const lastModelMsg = [...messages].reverse().find(m => m.role === "model");
@@ -381,17 +389,17 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 context: historyMessages,
                 intent: pendingPayload?.intent,
                 hasOpenBookingWizard: Boolean(wizard && wizard.step !== 'stopped' && wizard.step !== 'error'),
-                pendingSpecialtyId: pendingPayload?.pendingSpecialtyId ?? pendingPayload?.specialtyId ?? activeDraft?.specialtyId,
-                pendingDoctorId: pendingPayload?.pendingDoctorId ?? pendingPayload?.doctorId ?? activeDraft?.doctorId,
-                pendingSlotId: pendingPayload?.pendingSlotId ?? pendingPayload?.slotId ?? activeDraft?.slotId,
-                pendingSlotDate: pendingPayload?.pendingSlotDate ?? pendingPayload?.slotDate ?? activeDraft?.slotDate,
+                pendingSpecialtyId: pendingPayload?.pendingSpecialtyId ?? pendingPayload?.specialtyId ?? chatDraft?.specialtyId,
+                pendingDoctorId: pendingPayload?.pendingDoctorId ?? pendingPayload?.doctorId ?? chatDraft?.doctorId,
+                pendingSlotId: pendingPayload?.pendingSlotId ?? pendingPayload?.slotId ?? chatDraft?.slotId,
+                pendingSlotDate: pendingPayload?.pendingSlotDate ?? pendingPayload?.slotDate ?? chatDraft?.slotDate,
                 reason: preservedReason,
                 draftVersion: pendingPayload?.draftVersion ?? activeDraft?.version,
                 displayedDoctorIds: displayedDoctorIds.length > 0 ? displayedDoctorIds : undefined,
                 displayedSlotIds: displayedSlotIds.length > 0 ? displayedSlotIds : undefined,
-                contextSnapshotId: pendingPayload?.contextSnapshotId ?? contextSnapshotIdRef.current,
+                contextSnapshotId: pendingPayload?.contextSnapshotId ?? (fromWizard ? undefined : contextSnapshotIdRef.current),
                 sessionId: pendingPayload?.sessionId ?? sessionIdRef.current,
-                draftId: pendingPayload?.draftId ?? activeDraft?.draftId
+                draftId: pendingPayload?.draftId ?? chatDraft?.draftId
             };
 
             const res = await axiosClient.post<AiChatRequestPayload, ApiResponse<AiChatResponse>>(
@@ -641,7 +649,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                     }
                 ] } : {})
             };
-            rememberFailure(err, () => handleSendMessage(textToSend, pendingPayload, prefixMessage, failedMessage));
+            rememberFailure(err, () => handleSendMessage(textToSend, pendingPayload, prefixMessage, failedMessage, fromWizard));
             setMessages(prev => [...prev, failedMessage]);
         } finally {
             if (requestId === activeRequestIdRef.current) {
@@ -651,11 +659,12 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         }
     };
 
-    const handleWizardStep = async (step: AiBookingWizardRequest['step'], optionToken?: string, reason?: string, retrying = false, hint?: string, text?: string, retrySession?: string): Promise<void> => {
+    const handleWizardStep = async (step: AiBookingWizardRequest['step'], optionToken?: string, reason?: string, retrying = false, hint?: string, text?: string, retrySession?: string,
+        doctorSelection?: Pick<AiBookingWizardRequest, 'doctorId' | 'specialtyId'>): Promise<void> => {
         if (loading || submittingBooking || wizardBusyRef.current) return;
         wizardBusyRef.current = true;
         const sessionId = retrySession ?? (step === 'start' ? generateSessionIdentity() : wizardSessionRef.current);
-        if (step === 'start' && !retrying && !text) {
+        if (step === 'start' && !retrying && !text && !doctorSelection) {
             wizardSessionRef.current = sessionId;
             setActiveDraft(null);
             setWizard(null);
@@ -672,6 +681,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
                 sessionId, step, optionToken, reason,
                 currentRoute: location.pathname, locale: 'vi-VN',
                 ...(step === 'start' && hint ? { hint } : {}),
+                ...(step === 'start' ? doctorSelection : undefined),
                 ...wizardTextFields(step, text)
             }, { signal: controller.signal, suppressForbiddenRedirect: true });
             if (controller.signal.aborted || requestId !== activeRequestIdRef.current || account !== accountKeyRef.current) return;
@@ -679,8 +689,16 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             if (!data) throw new Error('Không nhận được dữ liệu đặt lịch. Vui lòng thử lại.');
             lastWizardResponseRef.current = data;
             clearFailure();
-            if (data.errorCode === 'EMERGENCY') {
-                setMessages(previous => [...previous, { role: 'model', content: data.message, urgency: 'EMERGENCY', actions: data.actions }]);
+            if (data.errorCode === 'EMERGENCY' || data.errorCode === 'SELF_HARM_RISK') {
+                setMessages(previous => [...previous, { role: 'model', content: data.message, providerState: 'SafetyBlocked',
+                    dialogueOutcome: data.errorCode === 'SELF_HARM_RISK' ? 'SafetySelfHarm' : 'SafetyEmergency',
+                    urgency: data.errorCode === 'EMERGENCY' ? 'EMERGENCY' : 'ROUTINE', actions: data.actions }]);
+                return;
+            }
+            if (data.routeToChat && step === 'text' && text) {
+                wizardBusyRef.current = false;
+                setLoading(false);
+                await handleSendMessage(text, undefined, undefined, undefined, true);
                 return;
             }
             if (step === 'start') {
@@ -703,7 +721,7 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             }
         } catch (error: unknown) {
             if (controller.signal.aborted || requestId !== activeRequestIdRef.current || account !== accountKeyRef.current) return;
-            rememberFailure(error, () => handleWizardStep(step, optionToken, reason, true, undefined, text, sessionId));
+            rememberFailure(error, () => handleWizardStep(step, optionToken, reason, true, undefined, text, sessionId, doctorSelection));
             setErrorMsg(aiChatFailureMessage(error));
         } finally {
             if (requestId === activeRequestIdRef.current) {
@@ -933,6 +951,10 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
             }
 
             case "StartBooking": {
+                if (action.payload.doctorId && action.payload.specialtyId) {
+                    await handleWizardStep('start', undefined, undefined, false, undefined, undefined, undefined, action.payload);
+                    break;
+                }
                 const url = action.payload.targetUrl && isSafeClientRoute(action.payload.targetUrl)
                     ? action.payload.targetUrl
                     : (action.payload.specialtyId
@@ -1517,92 +1539,13 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         }
     };
 
-    const confirmToolAction = async (actionId: string, concurrencyToken?: string): Promise<void> => {
-        if (!actionId || !concurrencyToken || loading || submittingBooking || isMutatingToolActionRef.current) return;
-        isMutatingToolActionRef.current = true;
-        try {
-            const result = await axiosClient.post<{
-                sessionId: string;
-                concurrencyToken?: string;
-            }, AiToolExecutionResult>(`/ai/tool-actions/${actionId}/confirm`, {
-                sessionId: sessionIdRef.current,
-                concurrencyToken
-            }, { suppressForbiddenRedirect: true });
-            setMessages(previous => [...previous, {
-                role: "model",
-                content: result.status === "completed"
-                    ? "Thao tác đã được xác nhận và gửi đến hệ thống ClinicCare."
-                    : result.error?.code === "ACTION_IN_PROGRESS"
-                        ? "Thao tác đang được xử lý, vui lòng chờ kết quả."
-                        : result.error?.code === "CONCURRENCY_CONFLICT"
-                            ? "Thông tin xác nhận đã cũ. Vui lòng tạo lại thao tác."
-                            : result.error?.code === "ACTION_EXPIRED"
-                                ? "Thao tác đã hết hạn. Vui lòng chọn lại từ lịch hẹn."
-                                : result.data?.status === "already_completed"
-                                    ? "Thao tác này đã được hoàn tất trước đó."
-                                    : result.error?.message || "ClinicCare chưa thể hoàn tất thao tác này.",
-                urgency: "ROUTINE",
-                toolResults: [result],
-            }]);
-        } catch (err: unknown) {
-            const response = (err as { response?: { data?: AiToolExecutionResult } })?.response;
-            const failed = response?.data;
-            const code = failed?.error?.code;
-            setMessages(previous => [...previous, {
-                role: "model",
-                content: code === "ACTION_IN_PROGRESS"
-                    ? "Thao tác đang được xử lý, vui lòng chờ kết quả."
-                    : code === "CONCURRENCY_CONFLICT"
-                        ? "Thông tin xác nhận đã cũ. Vui lòng tạo lại thao tác."
-                        : code === "ACTION_EXPIRED"
-                            ? "Thao tác đã hết hạn. Vui lòng chọn lại từ lịch hẹn."
-                            : failed?.error?.message || "Không thể xác nhận thao tác lúc này. Vui lòng thử lại hoặc mở lại lịch hẹn.",
-                urgency: "ROUTINE",
-                toolResults: failed ? [failed] : undefined
-            }]);
-        } finally {
-            isMutatingToolActionRef.current = false;
-        }
-    };
+    usePatientActionExpiry(messages, setMessages);
 
-    const cancelToolAction = async (actionId: string): Promise<void> => {
-        if (!actionId || loading || submittingBooking || isMutatingToolActionRef.current) return;
+    const mutateToolAction = async (mode: 'confirm' | 'cancel', actionId: string, concurrencyToken?: string): Promise<void> => {
+        if (!actionId || (mode === 'confirm' && !concurrencyToken) || loading || submittingBooking || isMutatingToolActionRef.current) return;
         isMutatingToolActionRef.current = true;
-        const retirePreview = (result: AiToolExecutionResult) => {
-            setMessages(previous => previous.map(message => ({
-                ...message,
-                toolResults: message.toolResults?.map(toolResult => toolResult.actionId === actionId
-                    ? { ...toolResult, ...result, actionId }
-                    : toolResult)
-            })));
-        };
         try {
-            const result = await axiosClient.post<{ sessionId: string }, AiToolExecutionResult>(`/ai/tool-actions/${encodeURIComponent(actionId)}/cancel`, {
-                sessionId: sessionIdRef.current
-            }, { suppressForbiddenRedirect: true });
-            if (result.status === "cancelled") retirePreview(result);
-            setMessages(previous => [...previous, {
-                role: "model",
-                content: result.status === "cancelled"
-                    ? "Thao tác đang chờ đã được hủy. Bản nháp hội thoại vẫn được giữ nguyên."
-                    : result.error?.message || "ClinicCare chưa thể hủy thao tác này.",
-                urgency: "ROUTINE"
-            }]);
-        } catch (err: unknown) {
-            const response = (err as { response?: { status?: number; data?: AiToolExecutionResult } })?.response;
-            const failed = response?.data;
-            const code = failed?.error?.code;
-            if (response?.status === 404 || response?.status === 409 || response?.status === 410 ||
-                ["ACTION_EXPIRED", "ACTION_NOT_CANCELLABLE", "ACTION_NOT_FOUND", "SESSION_MISMATCH"].includes(code ?? "")) {
-                retirePreview(failed ?? { status: "failed", actionId, error: { code, message: "Preview không còn có thể hủy." } });
-            }
-            setMessages(previous => [...previous, {
-                role: "model",
-                content: code === "ACTION_EXPIRED"
-                    ? "Thao tác đã hết hạn và không còn chờ xác nhận."
-                    : failed?.error?.message || "Không thể hủy thao tác lúc này. Vui lòng thử lại.",
-                urgency: "ROUTINE"
-            }]);
+            await updatePatientAction(mode, actionId, sessionIdRef.current, setMessages, concurrencyToken);
         } finally {
             isMutatingToolActionRef.current = false;
         }
@@ -1631,8 +1574,8 @@ export const useAiBookingFlow = (onNavigate?: () => void) => {
         wizard,
         handleWizardStep,
         handleActionClick,
-        confirmToolAction,
-        cancelToolAction,
+        confirmToolAction: (actionId: string, token?: string) => mutateToolAction('confirm', actionId, token),
+        cancelToolAction: (actionId: string) => mutateToolAction('cancel', actionId),
         formatVietnameseDate,
         aiAssistantStatus
     };

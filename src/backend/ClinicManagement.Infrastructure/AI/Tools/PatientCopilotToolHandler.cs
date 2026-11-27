@@ -446,7 +446,8 @@ public sealed partial class PatientCopilotToolHandler : IAiToolHandler
         if (action == null || action.UserId != context.ActorId.Value) return AiToolExecutionResult.Failed("ACTION_NOT_FOUND", "Thao tác không tồn tại hoặc không thuộc tài khoản này.");
         if (!string.Equals(action.SessionId, context.SessionId, StringComparison.Ordinal)) return AiToolExecutionResult.Failed("SESSION_MISMATCH", "Thao tác thuộc một phiên hội thoại khác.");
         if (action.State == AiPendingToolActionState.Completed || action.ExecutedAtUtc.HasValue)
-            return Completed(new { actionId, status = "already_completed", reference = action.ExecutionResultReference }, "idempotent_replay", "Thao tác này đã được hoàn tất trước đó.");
+            return Completed(new { actionId, status = "already_completed", reference = action.ExecutionResultReference },
+                "idempotent_replay", "Thao tác này đã được hoàn tất trước đó.", replay: true);
 
         var now = _dateTimeProvider.UtcNow;
         if (action.CancelledAtUtc.HasValue || action.State == AiPendingToolActionState.Cancelled)
@@ -566,9 +567,10 @@ public sealed partial class PatientCopilotToolHandler : IAiToolHandler
         DataSources = new[] { new AiToolDataSource("appointment_service", "service"), new AiToolDataSource("pending_action_store", "database") }
     };
 
-    private static AiToolExecutionResult Completed(object? data, string source, string? displayText = null) => new()
+    private static AiToolExecutionResult Completed(object? data, string source, string? displayText = null, bool replay = false) => new()
     {
-        Status = "completed", Data = data, ResultType = source, DisplayText = displayText, DataSources = new[] { new AiToolDataSource(source, "service") }
+        Status = "completed", Data = data, ResultType = source, DisplayText = displayText,
+        IsIdempotentReplay = replay, DataSources = new[] { new AiToolDataSource(source, "service") }
     };
 
     private static Dictionary<string, JsonElement> Parse(string? json)

@@ -58,17 +58,18 @@ public sealed class AiBookingWizardService(
         var guard = user.HasValue && typedInput is not null ? safety.Inspect(typedInput) : null;
         AiBookingWizardResponseDto response;
         if (!user.HasValue) response = Error("AUTHENTICATION_REQUIRED", "Bạn cần đăng nhập để đặt lịch.");
-        else if (guard?.IsEmergency == true) response = Emergency(guard);
+        else if (guard is { IsEmergency: true } or { IsSelfHarm: true }) response = SafetyResponse(guard);
         else if (request.Step == "start")
             response = await OnlineBookingBlockedAsync(user.Value, ct)
-                ?? await StartAsync(request.Hint, request.TypedMessage, user.Value, request.SessionId, ct);
+                ?? await StartAsync(request.Hint, request.TypedMessage, user.Value, request.SessionId, ct, request.SpecialtyId, request.DoctorId);
         else
         {
             var selection = tokens.Read(request.OptionToken, user.Value, request.SessionId, request.Step);
             if (selection is null)
                 response = Error("WIZARD_TOKEN_INVALID_OR_EXPIRED", "Lựa chọn không hợp lệ hoặc đã hết hạn. Vui lòng bắt đầu lại.");
             // Runs after the emergency check and goes through the same online-booking lock as "start".
-            else if (request.Step == "text" && AiBookingWizardRestart.IsNewRequest(typedInput, clock.VietnamToday, selection.Stage))
+            else if (request.Step == "text" && !AiBookingWizardText.IsQuestion(typedInput) &&
+                AiBookingWizardRestart.IsNewRequest(typedInput, clock.VietnamToday, selection.Stage))
                 response = await OnlineBookingBlockedAsync(user.Value, ct)
                     ?? await StartAsync(AiBookingWizardRestart.Hint(typedInput), typedInput, user.Value, request.SessionId, ct);
             else if (request.Step == "text")
@@ -111,10 +112,14 @@ public sealed class AiBookingWizardService(
 
     // A hint only chooses where a normal wizard begins. Any miss, ambiguity or
     // failure starts on the specialty step exactly as before, without an error.
-    private async Task<AiBookingWizardResponseDto> StartAsync(string? hint, string? typed, Guid user, string session, CancellationToken ct)
+    private async Task<AiBookingWizardResponseDto> StartAsync(string? hint, string? typed, Guid user, string session,
+        CancellationToken ct, long? specialtyId = null, long? doctorId = null)
     {
         var (preferredDay, dayPart) = AiBookingWizardPreference.Parse(typed, clock.VietnamToday);
         var fresh = new BookingWizardSelection(Guid.NewGuid(), PreferredDay: preferredDay, DayPart: dayPart);
+        if (specialtyId.HasValue && doctorId.HasValue)
+            return await RenderAsync(fresh with { Stage = BookingWizardStage.Day, SpecialtyId = specialtyId.Value, DoctorId = doctorId.Value },
+                user, session, ct, keepDoctorStepWhenEmpty: false);
         if (!string.IsNullOrWhiteSpace(hint))
         {
             try
@@ -328,7 +333,12 @@ public sealed class AiBookingWizardService(
         if (state.Stage == BookingWizardStage.Day) state = state with { PreferredDay = 0 };
         // Resolve only against the currently rendered options, including their limits and availability checks.
         var response = await RenderAsync(state, user, session, ct);
-        if (response.Step != state.Stage.ToString().ToLowerInvariant() || response.TextToken is null) return response;
+        if (response.Step != state.Stage.ToString().ToLowerInvariant() || response.TextToken is null ||
+            AiBookingWizardText.IsQuestion(input))
+        {
+            response.RouteToChat = true;
+            return response;
+        }
         var text = AiTextNormalizer.NormalizeForComparison(input);
         var message = $"Mình chưa xác định được lựa chọn \"{AiTextNormalizer.Normalize(input)}\". Bạn chọn giúp một mục bên dưới nhé.";
         AiBookingWizardOptionDto? option = null;
@@ -371,7 +381,7 @@ public sealed class AiBookingWizardService(
                 }
                 if (state.Stage == BookingWizardStage.Specialty)
                     label = string.Join(' ', label.Split(' ').Where(word => word != "khoa"));
-                return label.Length > 0 && ($" {candidate} ").Contains($" {label} ", StringComparison.Ordinal);
+                return label.Length > 0 && (candidate == label || candidate == NormalizeHint(item.Label));
             }).ToList();
             if (matches.Count == 1) option = matches[0];
             else if (matches.Count == 0 && state.Stage == BookingWizardStage.Specialty &&
@@ -382,6 +392,7 @@ public sealed class AiBookingWizardService(
             return await RenderAsync(selection, user, session, ct);
         response.Message = message;
         response.AssistantMode = "Clarifying";
+        response.RouteToChat = true;
         return response;
     }
 
@@ -447,12 +458,13 @@ public sealed class AiBookingWizardService(
         return new TimeOnly(hour, minute);
     }
 
-    private static AiBookingWizardResponseDto Emergency(AiSafetyGuardResult guard)
+    private static AiBookingWizardResponseDto SafetyResponse(AiSafetyGuardResult guard)
     {
-        var emergency = Error("EMERGENCY", AiSafetyGuard.PatientEmergencyMessage(guard));
+        var emergency = Error(guard.IsEmergency ? "EMERGENCY" : "SELF_HARM_RISK", AiSafetyGuard.PatientEmergencyMessage(guard));
         emergency.Step = "stopped";
         emergency.AssistantMode = "SafetyBlocked";
-        emergency.Actions.Add(new AiActionDto { Id = "act-emergency-115", Type = AiActionTypes.CallEmergency, Label = "Gọi cấp cứu 115", Style = "danger", Payload = new() { TargetUrl = "tel:115" } });
+        if (guard.IsEmergency)
+            emergency.Actions.Add(new AiActionDto { Id = "act-emergency-115", Type = AiActionTypes.CallEmergency, Label = "Gọi cấp cứu 115", Style = "danger", Payload = new() { TargetUrl = "tel:115" } });
         return emergency;
     }
 

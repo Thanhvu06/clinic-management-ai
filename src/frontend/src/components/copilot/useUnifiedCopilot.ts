@@ -95,6 +95,13 @@ const terminalActionError = (code?: string, status?: number) =>
         'FORBIDDEN_TOOL', 'FORBIDDEN_CAPABILITY', 'ROLE_MISMATCH', 'FACILITY_SCOPE_DENIED', 'RESOURCE_SCOPE_DENIED'
     ].includes(code ?? '');
 
+const terminalPreviewStatus = (status: string, code?: string): string => {
+    if (status === 'expired' || code === 'ACTION_EXPIRED') return 'expired';
+    if (status === 'cancelled' || code === 'ACTION_CANCELLED') return 'cancelled';
+    if (code === 'ACTION_ALREADY_COMPLETED') return 'completed';
+    return 'rejected';
+};
+
 const actionErrorMessage = (details: ReturnType<typeof actionErrorDetails>, fallback: string) => {
     if (details.status === 403 || ['FORBIDDEN_TOOL', 'FORBIDDEN_CAPABILITY', 'ROLE_MISMATCH', 'FACILITY_SCOPE_DENIED', 'RESOURCE_SCOPE_DENIED'].includes(details.code ?? ''))
         return 'Bạn không còn quyền hoặc phạm vi cơ sở cho tài nguyên này. Preview đã bị hủy.';
@@ -351,7 +358,7 @@ export const useUnifiedCopilot = () => {
     // Wake the UI at the exact boundary, clear the in-memory token, and force
     // a fresh prepare key so an expired action cannot be confirmed or replayed.
     useEffect(() => {
-        if (!pendingAction?.expiresAtUtc) return;
+        if (pendingAction?.status !== 'pending_confirmation' || !pendingAction.expiresAtUtc) return;
         const expiryMs = Date.parse(pendingAction.expiresAtUtc);
         if (!Number.isFinite(expiryMs)) return;
         const actionId = pendingAction.actionId;
@@ -365,7 +372,7 @@ export const useUnifiedCopilot = () => {
             }
             setActionClockMs(Date.now());
             setPendingAction(current => {
-                if (!current || current.actionId !== actionId) return current;
+                if (!current || current.actionId !== actionId || current.status !== 'pending_confirmation') return current;
                 actionKeysRef.current.delete(current.requestSignature);
                 setActionFeedback({ status: 'expired', message: 'Preview đã hết hạn. Hãy chuẩn bị lại trước khi xác nhận.' });
                 return { ...current, status: 'expired', confirmationToken: '' };
@@ -373,10 +380,11 @@ export const useUnifiedCopilot = () => {
         };
         timer = window.setTimeout(onExpiry, Math.min(Math.max(0, expiryMs - Date.now()) + 1, maxTimerDelay));
         return () => window.clearTimeout(timer);
-    }, [pendingAction?.actionId, pendingAction?.expiresAtUtc]);
+    }, [pendingAction?.actionId, pendingAction?.expiresAtUtc, pendingAction?.status]);
 
     const pendingActionExpired = useMemo(() => {
-        if (!pendingAction?.expiresAtUtc) return false;
+        if (pendingAction?.status === 'expired') return true;
+        if (pendingAction?.status !== 'pending_confirmation' || !pendingAction.expiresAtUtc) return false;
         const expiryMs = Date.parse(pendingAction.expiresAtUtc);
         return !Number.isFinite(expiryMs) || expiryMs <= actionClockMs;
     }, [actionClockMs, pendingAction]);
@@ -554,7 +562,7 @@ export const useUnifiedCopilot = () => {
 
     const confirmAction = useCallback(async () => {
         const action = pendingAction;
-        if (!action || actionLoading || actionBusyRef.current) return;
+        if (action?.status !== 'pending_confirmation' || actionLoading || actionBusyRef.current) return;
         const expiresAtMs = action.expiresAtUtc ? Date.parse(action.expiresAtUtc) : NaN;
         if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now() || !action.confirmationToken) {
             actionKeysRef.current.delete(action.requestSignature);
@@ -587,15 +595,19 @@ export const useUnifiedCopilot = () => {
             const result = await confirmRoleAction(action.actionId, { sessionId, concurrencyToken: action.confirmationToken }, controller.signal);
             if (!isCurrentRequest()) return;
             if (result.status === 'completed') {
-                setPendingAction(null);
+                setPendingAction({ ...action, status: 'completed', confirmationToken: '' });
                 actionKeysRef.current.delete(action.requestSignature);
+                if (result.isIdempotentReplay || result.resultType === 'idempotent_replay') {
+                    setActionFeedback(null);
+                    return;
+                }
                 window.dispatchEvent(new Event('cliniccare:copilot-action-completed'));
                 setActionFeedback({ status: 'completed', message: result.displayText || 'Thao tác đã hoàn tất và được backend xác nhận.' });
             } else {
                 const status = (result.status || '').toLowerCase();
                 const terminal = ['expired', 'cancelled', 'failed_terminal'].includes(status) || terminalActionError(result.error?.code);
                 if (terminal) {
-                    setPendingAction(null);
+                    setPendingAction({ ...action, status: terminalPreviewStatus(status, result.error?.code), confirmationToken: '' });
                     actionKeysRef.current.delete(action.requestSignature);
                 }
                 setActionFeedback({ status: result.status || 'failed', message: terminal && result.error ? actionErrorMessage({ code: result.error.code, status: undefined, message: result.error.message }, result.error.message || 'Preview không còn hợp lệ.') : result.error?.message || 'Thao tác chưa hoàn tất; dữ liệu vẫn do backend quyết định.' });
@@ -605,7 +617,7 @@ export const useUnifiedCopilot = () => {
                 const details = actionErrorDetails(error);
                 const terminal = terminalActionError(details.code, details.status);
                 if (terminal) {
-                    setPendingAction(null);
+                    setPendingAction({ ...action, status: terminalPreviewStatus('failed', details.code), confirmationToken: '' });
                     actionKeysRef.current.delete(action.requestSignature);
                 }
                 setActionFeedback({ status: 'failed', message: actionErrorMessage(details, error instanceof Error ? error.message : 'Không thể xác nhận thao tác.') });
@@ -620,7 +632,7 @@ export const useUnifiedCopilot = () => {
 
     const cancelAction = useCallback(async () => {
         const action = pendingAction;
-        if (!action || actionLoading || actionBusyRef.current) return;
+        if (action?.status !== 'pending_confirmation' || actionLoading || actionBusyRef.current) return;
         actionBusyRef.current = true;
         const requestId = ++actionRequestNumberRef.current;
         const requestIdentityKey = identityKey;
@@ -643,14 +655,14 @@ export const useUnifiedCopilot = () => {
             const result = await cancelRoleAction(action.actionId, { sessionId }, controller.signal);
             if (!isCurrentRequest()) return;
             if (result.status === 'cancelled') {
-                setPendingAction(null);
+                setPendingAction({ ...action, status: 'cancelled', confirmationToken: '' });
                 actionKeysRef.current.delete(action.requestSignature);
                 setActionFeedback({ status: 'cancelled', message: result.displayText || 'Đã hủy thao tác đang chờ. Không có thay đổi nghiệp vụ nào được thực hiện.' });
             } else {
                 const status = (result.status || '').toLowerCase();
                 const terminal = ['expired', 'cancelled', 'failed_terminal'].includes(status) || terminalActionError(result.error?.code);
                 if (terminal) {
-                    setPendingAction(null);
+                    setPendingAction({ ...action, status: terminalPreviewStatus(status, result.error?.code), confirmationToken: '' });
                     actionKeysRef.current.delete(action.requestSignature);
                 }
                 setActionFeedback({ status: result.status || 'failed', message: result.error?.message || 'Backend chưa thể hủy thao tác đang chờ.' });
@@ -660,7 +672,7 @@ export const useUnifiedCopilot = () => {
                 const details = actionErrorDetails(error);
                 const terminal = details.status === 404 || details.status === 410 || terminalActionError(details.code, details.status);
                 if (terminal) {
-                    setPendingAction(null);
+                    setPendingAction({ ...action, status: terminalPreviewStatus('failed', details.code), confirmationToken: '' });
                     actionKeysRef.current.delete(action.requestSignature);
                 }
                 setActionFeedback({ status: 'failed', message: actionErrorMessage(details, 'Không thể hủy thao tác lúc này.') });

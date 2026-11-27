@@ -8,6 +8,7 @@ import { BookingSummaryCard } from "./BookingSummaryCard";
 import { BookingWizard } from "./BookingWizard";
 import { BookingActionChoices } from "./BookingActionChoices";
 import { ProviderStatus } from "./copilot/ProviderStatus";
+import { patientActionPreviewLabel } from "./copilot/patientActionConfirmation";
 import { patientSuggestions, isAdditionalCopy } from "./copilot/patientPresentation";
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
@@ -280,7 +281,8 @@ const PatientMedicalChatWidget: React.FC = () => {
                                         </div>
                                     )}
 
-                                    {!isNotUnderstood(msg) && msg.toolResults?.map((toolResult, toolIndex) => toolResult.status === 'completed'
+                                    {!isNotUnderstood(msg) && msg.toolResults?.map((toolResult, toolIndex) => patientActionPreviewLabel(toolResult) && toolResult.status !== 'pending_confirmation' ? null
+                                        : toolResult.status === 'completed'
                                         ? <GroundedToolData key={toolIndex} result={toolResult} />
                                         : toolResult.status === 'failed' ? <p key={toolIndex} className={styles.toolError}>{aiToolErrorMessage(toolResult.error?.code, toolResult.error?.message)}</p> : toolResult.displayText && isAdditionalCopy(toolResult.displayText, msg.content) ? <p key={toolIndex}>{toolResult.displayText}</p> : null)}
 
@@ -315,11 +317,15 @@ const PatientMedicalChatWidget: React.FC = () => {
     <BookingSummaryCard draft={msg.bookingDraft} formatVietnameseDate={formatVietnameseDate} />
 )}
 
-{msg.toolResults?.map((toolResult, toolIndex) => toolResult.status === 'pending_confirmation' && msg.toolResults?.findIndex(result => result.status === 'pending_confirmation') === toolIndex
-                                                ? <div key={toolIndex} className={msg.urgency === 'EMERGENCY' ? styles.cardData : styles.bookingSummaryCard} role="status" aria-label="Trạng thái thao tác AI">
-                                                    <h4 className={styles.bookingSummaryTitle}>Đang chờ xác nhận</h4>
-                                                    <p className={styles.specialtyReason}>Thao tác ghi chưa được thực hiện. Hãy kiểm tra thông tin và xác nhận trong luồng lịch hẹn.</p>
-                                                {toolResult.status === "pending_confirmation" && toolResult.actionId && (<>
+                                    {msg.toolResults?.map((toolResult, toolIndex) => {
+                                        const label = patientActionPreviewLabel(toolResult);
+                                        if (!label) return null;
+                                        const pending = toolResult.status === 'pending_confirmation' && label === 'Đang chờ xác nhận';
+                                        return <div key={toolIndex} className={msg.urgency === 'EMERGENCY' ? styles.cardData : styles.bookingSummaryCard} role="status" aria-label="Trạng thái thao tác AI">
+                                                    <h4 className={styles.bookingSummaryTitle}>{label}</h4>
+                                                    {!pending && toolResult.displayText && <p>{toolResult.displayText}</p>}
+                                                    {pending && <p className={styles.specialtyReason}>Thao tác ghi chưa được thực hiện. Hãy kiểm tra thông tin và xác nhận trong luồng lịch hẹn.</p>}
+                                                {pending && toolResult.actionId && (<>
                                                     <button
                                                         type="button"
                                                         className={`${styles.actionBtn} ${styles.btnPrimary}`}
@@ -355,7 +361,8 @@ const PatientMedicalChatWidget: React.FC = () => {
                                                         {executingActionId === toolResult.actionId ? "Đang hủy..." : "Hủy thao tác"}
                                                     </button>
                                                 </>)}
-                                                </div> : null)}
+                                                </div>;
+                                    })}
 
 {/* Action Buttons */}
                                     {!msg.bookingResult && !msg.toolResults?.some(result => result.status === "pending_confirmation") && msg.actions && msg.actions.length > 0 && msg.urgency !== "EMERGENCY" && (
