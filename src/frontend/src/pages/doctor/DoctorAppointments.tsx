@@ -14,6 +14,7 @@ import { PageHeader, DataTable, StatusBadge, LoadingState, Pagination, InlineErr
 import type { DataTableColumn } from '../../components/common';
 import styles from './DoctorAppointments.module.css';
 import { getApiErrorMessage } from '../../utils/apiError';
+import { AppointmentStatusBadge } from '../../components/common/AppointmentStatusBadge';
 import { getAppointmentStatusLabel } from '../../utils/appointmentStatusLabels';
 interface DoctorAppointment {
     id: number;
@@ -218,7 +219,7 @@ export const DoctorAppointments: React.FC = () => {
             header: 'Lý do khám',
             accessor: (apt) => <div className={styles.reasonCell}>{apt.reason || <Typography.Text type="secondary">Không có ghi chú</Typography.Text>}</div>
         },
-        { header: 'Trạng thái', accessor: (apt) => <><StatusBadge status={apt.status} label={getAppointmentStatusLabel(apt.status)} /><ExpiryBadge overdue={apt.isCompletionOverdue} completion /></> },
+        { header: 'Trạng thái', accessor: (apt) => <><AppointmentStatusBadge status={apt.status} /><ExpiryBadge overdue={apt.isCompletionOverdue} completion /></> },
         {
             header: 'Thao tác',
             align: 'right',
@@ -342,7 +343,7 @@ export const DoctorAppointments: React.FC = () => {
                                 <div className={styles.detailBlock}>
                                     <Flex justify="space-between" className={styles.statusRow}>
                                         <span className={styles.mediumText}>Trạng thái hiện tại</span>
-                                        <StatusBadge status={modal.apt.status} label={getAppointmentStatusLabel(modal.apt.status)} />
+                                        <AppointmentStatusBadge status={modal.apt.status} />
                                     </Flex>
                                     {history.length > 0 && (
                                         <div className={styles.historyTimeline}>

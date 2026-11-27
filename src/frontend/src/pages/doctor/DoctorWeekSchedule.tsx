@@ -1,4 +1,5 @@
 import React from 'react';
+import { AppointmentStatusBadge } from '../../components/common';
 import type { DoctorScheduleDayDto } from '../../types';
 import { formatDateOnly } from '../../utils/formatters';
 import styles from './DoctorWeekSchedule.module.css';
@@ -17,9 +18,8 @@ const SLOT_CLASS: Record<DoctorSlotState, string> = {
     Free: styles.slot,
 };
 
-const STATUS_CLASS: Record<DoctorSlotState, string> = {
+const STATUS_CLASS: Record<Exclude<DoctorSlotState, 'NoShow'>, string> = {
     Booked: styles.slotStatusBooked,
-    NoShow: styles.slotStatusNoShow,
     Past: styles.slotStatusFree,
     Free: styles.slotStatusFree,
 };
@@ -51,7 +51,8 @@ export const DoctorWeekSchedule: React.FC<DoctorWeekScheduleProps> = ({ days }) 
                                             <div key={slot.slotId} className={SLOT_CLASS[state]} data-slot-state={state}>
                                                 <div className={styles.slotTime}>
                                                     <span>{hhmm(slot.startTime)} - {hhmm(slot.endTime)}</span>
-                                                    <span className={STATUS_CLASS[state]}>{SLOT_STATE_LABEL[state]}</span>
+                                                    {state === 'NoShow' ? <AppointmentStatusBadge status={state} size="sm" />
+                                                        : <span className={STATUS_CLASS[state]}>{SLOT_STATE_LABEL[state]}</span>}
                                                 </div>
                                                 {isSlotTaken(slot) && (
                                                     <div className={styles.slotPatient}>

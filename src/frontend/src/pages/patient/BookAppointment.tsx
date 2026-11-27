@@ -1,6 +1,8 @@
 import { ChatConsultationLink } from '../../components/chat/ChatConsultationLink';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { isBookingRejected } from './bookingRejection';
+import { loadBookingSlots, type BookingSlot } from './bookingSlots';
+import { InlineError } from '../../components/common/InlineError';
 import { toLocalDateString, formatDateOnly } from '../../utils/formatters';
 import React, { useState, useEffect, useRef } from "react";
 import { BookingExpiryHeader } from './BookingExpiryHeader';
@@ -43,14 +45,6 @@ interface Doctor {
     specialtyId?: number;
     specialtyName?: string;
     description?: string;
-}
-
-interface Slot {
-    slotId: number;
-    doctorId: number;
-    slotDate: string;
-    startTime: string;
-    endTime: string;
 }
 
 interface BookingSuccessData {
@@ -105,11 +99,12 @@ export const BookAppointment: React.FC = () => {
     const doctorId = activeDraft?.doctorId ?? pageDoctorId;
     const slotDate = activeDraft?.slotDate ?? pageSlotDate;
     const slotId = activeDraft?.slotId ?? pageSlotId;
+    const findDefaultDate = useRef(!activeDraft?.slotDate);
     const reason = activeDraft?.reason ?? pageReason;
 
     const [specialties, setSpecialties] = useState<Specialty[]>([]);
     const [doctors, setDoctors] = useState<Doctor[]>([]);
-    const [slots, setSlots] = useState<Slot[]>([]);
+    const [slots, setSlots] = useState<BookingSlot[]>([]);
 
     const [loadingSpecs, setLoadingSpecs] = useState(true);
     const [loadingDocs, setLoadingDocs] = useState(false);
@@ -266,7 +261,7 @@ export const BookAppointment: React.FC = () => {
 
         let targetSpecId: number | null = null;
         let targetDocId: number | null = null;
-        let targetSlotDate = slotDate;
+        let targetSlotDate: string | undefined;
 
         if (pendingSpecialtyId) {
             targetSpecId = pendingSpecialtyId;
@@ -302,7 +297,7 @@ export const BookAppointment: React.FC = () => {
                     slotId: specialtyChanged ? undefined : previous?.slotId,
                     startTime: specialtyChanged ? undefined : previous?.startTime,
                     endTime: specialtyChanged ? undefined : previous?.endTime,
-                    slotDate: targetSlotDate,
+                    slotDate: targetSlotDate ?? previous?.slotDate,
                     reason: previous?.reason,
                     isComplete: false,
                     version: previous?.version !== undefined ? (specialtyChanged ? previous.version + 1 : previous.version) : undefined,
@@ -316,6 +311,7 @@ export const BookAppointment: React.FC = () => {
             setActiveDraft(previous => ({
                 ...previous,
                 doctorId: targetDocId,
+                slotDate: targetSlotDate ?? previous?.slotDate,
                 slotId: undefined,
                 startTime: undefined,
                 endTime: undefined,
@@ -324,7 +320,7 @@ export const BookAppointment: React.FC = () => {
                 confirmationId: undefined
             }));
         }
-    }, [specialties, pendingSpecialtyId, location.search, setPendingSpecialtyId, setActiveDraft, showAlert, slotDate]);
+    }, [specialties, pendingSpecialtyId, location.search, setPendingSpecialtyId, setActiveDraft]);
 
     // 3. Fetch Doctors when specialtyId changes
     useEffect(() => {
@@ -384,7 +380,6 @@ export const BookAppointment: React.FC = () => {
         };
     }, [specialtyId, doctorId, revisitRequestId, setActiveDraft, showAlert, doctorsReloadKey]);
 
-    // 4. Fetch Slots when doctorId and slotDate are set
     useEffect(() => {
         if (!doctorId || !slotDate) {
             setSlots([]);
@@ -398,28 +393,26 @@ export const BookAppointment: React.FC = () => {
             try {
                 setLoadingSlots(true);
                 setSlotsError(false);
-                const specParam = specialtyId ? `&specialtyId=${specialtyId}` : '';
-                const res = await axiosClient.get<unknown, ApiResponse<Slot[]>>(
-                    `/doctors/${doctorId}/available-slots?fromDate=${slotDate}&toDate=${slotDate}${specParam}`
-                );
+                const hasExplicitDate = new URLSearchParams(location.search).has('date');
+                const result = await loadBookingSlots(doctorId, specialtyId, slotDate, findDefaultDate.current && !slotId && !hasExplicitDate);
                 if (!active) return;
-                if (res.success && res.data) {
-                    setSlots(res.data);
-                    if (slotId && !res.data.some(slot => slot.slotId === slotId)) {
-                        setPageSlotId("");
-                        setActiveDraft(previous => previous ? {
-                            ...previous,
-                            slotId: undefined,
-                            startTime: undefined,
-                            endTime: undefined,
-                            isComplete: false,
-                            version: previous.version !== undefined ? previous.version + 1 : undefined,
-                            confirmationId: undefined
-                        } : previous);
-                    }
-                } else {
-                    setSlots([]);
-                    setSlotsError(true);
+                findDefaultDate.current = false;
+                setSlots(result.slots);
+                if (result.date !== slotDate) {
+                    setPageSlotDate(result.date);
+                    setActiveDraft(previous => previous ? { ...previous, slotDate: result.date } : previous);
+                }
+                if (slotId && !result.slots.some(slot => slot.slotId === slotId)) {
+                    setPageSlotId("");
+                    setActiveDraft(previous => previous ? {
+                        ...previous,
+                        slotId: undefined,
+                        startTime: undefined,
+                        endTime: undefined,
+                        isComplete: false,
+                        version: previous.version !== undefined ? previous.version + 1 : undefined,
+                        confirmationId: undefined
+                    } : previous);
                 }
             } catch (err) {
                 if (!active) return;
@@ -435,7 +428,7 @@ export const BookAppointment: React.FC = () => {
         return () => {
             active = false;
         };
-    }, [doctorId, slotDate, specialtyId, slotId, setActiveDraft, slotsReloadKey]);
+    }, [doctorId, slotDate, specialtyId, slotId, location.search, setActiveDraft, slotsReloadKey]);
 
     // Handler when selecting specialty: discards doctor & slot
     const handleSelectSpecialty = (id: number) => {
@@ -460,6 +453,7 @@ export const BookAppointment: React.FC = () => {
     // Handler when selecting doctor: discards slot
     const handleSelectDoctor = (id: number) => {
         if (doctorId !== id) {
+            findDefaultDate.current = true;
             const doctor = doctors.find(item => item.id === id);
             setPageDoctorId(id);
             setPageSlotId("");
@@ -473,7 +467,7 @@ export const BookAppointment: React.FC = () => {
                 slotId: undefined,
                 startTime: undefined,
                 endTime: undefined,
-                slotDate,
+                slotDate: slotDate || getNextWorkingDateString(),
                 reason: previous?.reason ?? reason,
                 isComplete: false,
                 version: previous?.version !== undefined ? previous.version + 1 : undefined,
@@ -482,7 +476,7 @@ export const BookAppointment: React.FC = () => {
         }
     };
 
-    const handleSelectSlot = (slot: Slot) => {
+    const handleSelectSlot = (slot: BookingSlot) => {
         setPageSlotId(slot.slotId);
         setActiveDraft(previous => {
             const unchangedSlot = previous?.slotId === slot.slotId && previous?.slotDate === slot.slotDate;
@@ -505,6 +499,7 @@ export const BookAppointment: React.FC = () => {
     };
 
     const handleSlotDateChange = (nextDate: string) => {
+        findDefaultDate.current = false;
         setPageSlotDate(nextDate);
         setPageSlotId("");
         setActiveDraft(previous => previous ? {
@@ -928,7 +923,7 @@ export const BookAppointment: React.FC = () => {
                             </Form.Item>
                             <Form.Item label="Khung giờ khám còn trống" required>
                                 {loadingSlots ? <div className={styles.loadingPanel}><Spin /><span>Đang kiểm tra lịch trống của bác sĩ...</span></div>
-                                    : slotsError ? <Alert type="error" showIcon title="Không tải được khung giờ khám." action={<Button onClick={() => setSlotsReloadKey(key => key + 1)}>Thử lại</Button>} />
+                                    : slotsError ? <InlineError title="Không tải được khung giờ khám." message="Bạn có thể thử tải lại khung giờ của bác sĩ." onRetry={() => setSlotsReloadKey(key => key + 1)} />
                                     : slots.length === 0 ? <Empty description={`Bác sĩ chưa có lịch trống ngày ${formatDateOnly(slotDate)}. Bạn chọn ngày khác nhé.`} />
                                     : <div className={styles.slotGrid}>{slots.map(s => <Button key={s.slotId} className={`${styles.slotBtn} ${slotId === s.slotId ? styles.slotBtnActive : ""}`} type={slotId === s.slotId ? 'primary' : 'default'} aria-pressed={slotId === s.slotId} onClick={() => handleSelectSlot(s)}><Clock size={14} />{s.startTime.substring(0, 5)}</Button>)}</div>}
                             </Form.Item>

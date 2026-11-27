@@ -19,8 +19,7 @@ it('uses the same staff appointment labels in the workspace and appointment list
         expect(getVisitStatusLabel(status)).toBe(getAppointmentStatusLabel(status));
     }
     expect(getVisitStatusLabel('Pending')).toBe('Chờ xác nhận');
-    expect(getVisitStatusLabel('Confirmed')).toBe('Chờ tiếp nhận');
-    expect(getAppointmentStatusLabel('Confirmed', 'patient')).toBe('Đã xác nhận');
+    expect(getVisitStatusLabel('Confirmed')).toBe('Đã xác nhận');
 });
 
 it('preserves server ordering with upcoming appointments before descending past appointments', async () => {
@@ -42,8 +41,8 @@ it('uses the shared appointment label for the next patient on the doctor dashboa
             queueOrder: 1, isVitalsRecorded: false }, todayQueue: []
     } });
     render(<MemoryRouter><DialogProvider><DoctorDashboard /></DialogProvider></MemoryRouter>);
-    expect(await screen.findByText('Chờ tiếp nhận')).toBeInTheDocument();
-    expect(screen.queryByText('Đã xác nhận')).not.toBeInTheDocument();
+    expect(await screen.findByText('Đã xác nhận')).toBeInTheDocument();
+    expect(screen.queryByText('Chờ tiếp nhận')).not.toBeInTheDocument();
 });
 
 it('shows business reference codes in audit logs without displaying numeric entity ids', async () => {

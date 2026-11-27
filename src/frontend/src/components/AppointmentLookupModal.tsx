@@ -1,7 +1,7 @@
-import { getAppointmentStatusLabel } from '../utils/appointmentStatusLabels';
+import { AppointmentStatusBadge } from './common/AppointmentStatusBadge';
 import { formatDateOnly } from '../utils/formatters';
 import React, { useState } from 'react';
-import { Search, Calendar, Clock, User, Stethoscope, AlertCircle, X, CheckCircle, Clock4, XCircle } from 'lucide-react';
+import { Search, Calendar, Clock, User, Stethoscope, AlertCircle, X } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import type { ApiResponse } from '../types';
 import styles from './AppointmentLookupModal.module.css';
@@ -62,41 +62,6 @@ export const AppointmentLookupModal: React.FC<AppointmentLookupModalProps> = ({ 
             setResults([]);
         } finally {
             setLoading(false);
-        }
-    };
-
-    const getStatusBadge = (status: string) => {
-        switch (status) {
-            case 'Confirmed':
-                return (
-                    <span className={styles.flexLayout1}>
-                        <CheckCircle size={14} /> {getAppointmentStatusLabel(status, 'patient')}
-                    </span>
-                );
-            case 'Pending':
-                return (
-                    <span className={styles.flexLayout2}>
-                        <Clock4 size={14} /> {getAppointmentStatusLabel(status, 'patient')}
-                    </span>
-                );
-            case 'Completed':
-                return (
-                    <span className={styles.flexLayout3}>
-                        <CheckCircle size={14} /> {getAppointmentStatusLabel(status, 'patient')}
-                    </span>
-                );
-            case 'Cancelled':
-                return (
-                    <span className={styles.flexLayout4}>
-                        <XCircle size={14} /> {getAppointmentStatusLabel(status, 'patient')}
-                    </span>
-                );
-            default:
-                return (
-                    <span className={styles.text1}>
-                        {getAppointmentStatusLabel(status, 'patient')}
-                    </span>
-                );
         }
     };
 
@@ -182,7 +147,7 @@ export const AppointmentLookupModal: React.FC<AppointmentLookupModalProps> = ({ 
                                                     <span className={styles.text3}>Mã lịch hẹn</span>
                                                     <div className={styles.text4}>{item.appointmentCode}</div>
                                                 </div>
-                                                <div>{getStatusBadge(item.status)}</div>
+                                                <div><AppointmentStatusBadge status={item.status} /></div>
                                             </div>
 
                                             <div className={styles.gridLayout1}>

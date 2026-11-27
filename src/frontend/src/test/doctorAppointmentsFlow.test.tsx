@@ -97,7 +97,7 @@ describe('DoctorAppointments flow', () => {
     it('opens Confirmed details with reception guidance, no-show action and existing prescription', async () => {
         renderPage();
         const row = (await screen.findByText('Bệnh nhân 4')).closest('tr')!;
-        expect(within(row).getByText('Chờ tiếp nhận')).toBeInTheDocument();
+        expect(within(row).getByText('Đã xác nhận')).toBeInTheDocument();
         expect(within(row).queryByText('Khám')?.closest('button') ?? null).not.toBeInTheDocument();
         fireEvent.click(within(row).getByText('Chi tiết').closest('button')!);
         expect(await screen.findByText('Bệnh nhân cần được tiếp nhận tại hàng đợi khám trước khi bắt đầu khám.')).toBeInTheDocument();
@@ -129,7 +129,7 @@ describe('DoctorAppointments flow', () => {
         // Antd exposes a virtual option list; verify all rendered option labels in the popup.
         expect(options.length).toBeGreaterThan(0);
         const popup = document.querySelector('.ant-select-dropdown')!;
-        for (const label of ['Chờ tiếp nhận', 'Đã tiếp nhận', 'Đang khám', 'Đã khám xong', 'Vắng mặt', 'Đã hủy']) {
+        for (const label of ['Đã xác nhận', 'Đã tiếp nhận', 'Đang khám', 'Đã khám xong', 'Vắng mặt', 'Đã hủy']) {
             expect(within(popup as HTMLElement).getByText(label)).toBeInTheDocument();
         }
         expect(popup.querySelectorAll('.ant-select-item-option')).toHaveLength(6);
@@ -138,7 +138,7 @@ describe('DoctorAppointments flow', () => {
     }, 15000);
 
     it.each([
-        ['Pending', 'Chờ xác nhận'], ['Confirmed', 'Chờ tiếp nhận'],
+        ['Pending', 'Chờ xác nhận'], ['Confirmed', 'Đã xác nhận'],
         ['PendingReschedule', 'Chờ duyệt đổi lịch'], ['PendingCancellation', 'Chờ duyệt hủy'],
         ['Cancelled', 'Đã hủy'], ['Completed', 'Đã khám xong'], ['NoShow', 'Vắng mặt'],
         ['CheckedIn', 'Đã tiếp nhận'], ['InConsultation', 'Đang khám'],

@@ -6,7 +6,7 @@ internal static class CopilotDisplayText
 {
     private static readonly IReadOnlyDictionary<string, string> Labels = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        ["Pending"] = "Đang chờ", ["Confirmed"] = "Chờ tiếp nhận", ["CheckedIn"] = "Đã tiếp nhận",
+        ["Pending"] = "Đang chờ", ["Confirmed"] = "Đã xác nhận", ["CheckedIn"] = "Đã tiếp nhận",
         ["InConsultation"] = "Đang khám", ["Completed"] = "Đã hoàn tất", ["Cancelled"] = "Đã hủy", ["NoShow"] = "Vắng mặt",
         ["PendingReschedule"] = "Chờ duyệt đổi lịch", ["PendingCancellation"] = "Chờ duyệt hủy lịch",
         ["Reschedule"] = "Đổi lịch", ["Cancellation"] = "Hủy lịch", ["Approved"] = "Đã duyệt", ["Rejected"] = "Đã từ chối",
@@ -24,5 +24,10 @@ internal static class CopilotDisplayText
 
     internal static string? Localize(string? text) => text is null ? null : Tokens.Replace(text.Replace(" (IsActive)", "", StringComparison.Ordinal), match => Labels[match.Value]);
 
-    internal static string DoctorStatus(string status) => status == "Completed" ? "Đã khám xong" : Labels.GetValueOrDefault(status, "Không xác định");
+    internal static string DoctorStatus(string status) => status switch
+    {
+        "Pending" => "Chờ xác nhận",
+        "Completed" => "Đã khám xong",
+        _ => Labels.GetValueOrDefault(status, "Không xác định")
+    };
 }

@@ -1,6 +1,7 @@
+import { AppointmentStatusBadge } from '../../components/common/AppointmentStatusBadge';
 import { getAppointmentStatusLabel } from '../../utils/appointmentStatusLabels';
 import { Button, Input, Select, Modal } from 'antd';
-import { PageHeader, DataTable, StatusBadge, LoadingState, EmptyState, InlineError } from '../../components/common';
+import { PageHeader, DataTable, LoadingState, EmptyState, InlineError } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
 import styles from './ReceptionAppointments.module.css';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -281,7 +282,6 @@ export const ReceptionAppointments: React.FC = () => {
         }
     };
 
-    const getStatusBadge = (status: string) => <StatusBadge status={status} label={getAppointmentStatusLabel(status)} />;
 
     const translateAction = (action: string) => {
         switch (action) {
@@ -299,7 +299,7 @@ export const ReceptionAppointments: React.FC = () => {
         { header: 'Lịch khám', accessor: apt => <><div className={styles.primaryText}>{apt.appointmentCode}</div><div className={styles.appointmentTime}><Clock size={12} /> {formatDateOnly(apt.appointmentDate)} {apt.startTime.substring(0,5)}</div></> },
         { header: 'Bệnh nhân', accessor: apt => <><div className={styles.primaryText}>{apt.patientName}</div><div className={styles.secondaryText}>{apt.patientPhone}</div></> },
         { header: 'Bác sĩ & chuyên khoa', accessor: apt => <><div className={styles.primaryText}>{apt.doctorName}</div><div className={styles.secondaryText}>{apt.specialtyName}</div></> },
-        { header: 'Trạng thái', accessor: apt => getStatusBadge(apt.status) },
+        { header: 'Trạng thái', accessor: apt => <AppointmentStatusBadge status={apt.status} /> },
         { header: 'Thao tác', align: 'right', className: styles.actionsCell, accessor: apt => <>
             {apt.status === 'Confirmed' && <Button type="primary" className={styles.checkInButton} onClick={() => handleCheckIn(apt)} disabled={checkingInId === apt.id || apt.appointmentDate !== toLocalDateString()} title={apt.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${apt.appointmentDate.split('-').reverse().join('/')}` : undefined} ><UserCheck size={14} aria-hidden="true" />{checkingInId === apt.id ? 'Đang tiếp nhận...' : 'Tiếp nhận'}</Button>}
             <Button onClick={() => openDetail(apt)} ><Eye size={14} aria-hidden="true" />Chi tiết</Button>
@@ -338,7 +338,7 @@ export const ReceptionAppointments: React.FC = () => {
                     <small className={styles.departmentHint}>Đã chọn sẵn theo chuyên khoa của lịch hẹn, có thể đổi.</small>
                 </section>
                 <section className={styles.detailSection}>
-                    <div className={styles.workflowHeading}><span>Tiến trình xử lý</span>{getStatusBadge(modal.apt.status)}</div>
+                    <div className={styles.workflowHeading}><span>Tiến trình xử lý</span><AppointmentStatusBadge status={modal.apt.status} /></div>
                     {historyLoading ? <LoadingState message="Đang tải lịch sử..." /> : historyError ? <InlineError title="" message={historyError} /> : history.length === 0 ? <EmptyState title="Không có dữ liệu lịch sử." /> : <div className={styles.timeline}>{history.map(h => <div key={h.id} className={styles.timelineEntry}><div className={styles.secondaryText}>{formatDateTime(h.createdAt)}</div><div className={styles.primaryText}>{translateAction(h.action)}</div>{h.note && <div className={styles.historyNote}>{h.note}</div>}</div>)}</div>}
                 </section>
             </Modal>}

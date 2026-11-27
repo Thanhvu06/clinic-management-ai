@@ -2,9 +2,8 @@ import { appointmentStatusLabels } from './appointmentStatusLabels';
 import type { VisitStatus } from '../types/visit';
 
 export const statusLabels: Record<string, string> & Record<VisitStatus, string> = {
-    ...appointmentStatusLabels, NoShow: appointmentStatusLabels.NoShow,
-    Cancelled: 'Đã hủy', Completed: 'Đã khám xong', CheckedIn: 'Đã tiếp nhận', Registered: 'Đã đăng ký',
-    WaitingForDoctor: 'Chờ bác sĩ', WaitingDoctor: 'Chờ bác sĩ', InConsultation: 'Đang khám',
+    ...appointmentStatusLabels, Registered: 'Đã đăng ký',
+    WaitingForDoctor: 'Chờ bác sĩ', WaitingDoctor: 'Chờ bác sĩ',
     WaitingForDiagnostics: 'Chờ cận lâm sàng', InDiagnostics: 'Đang làm cận lâm sàng', ResultsReady: 'Đã có kết quả',
     Transferred: 'Đã chuyển', ConsultationCompleted: 'Đã kết thúc khám', InPharmacy: 'Đang tại quầy thuốc', InBilling: 'Đang thanh toán',
     Expired: 'Hết hạn',

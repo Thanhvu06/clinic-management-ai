@@ -1,9 +1,10 @@
+import { AppointmentStatusBadge } from '../../components/common/AppointmentStatusBadge';
 import { getAppointmentStatusLabel } from '../../utils/appointmentStatusLabels';
 import { getApiErrorMessage } from '../../utils/apiError';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Badge, Button, Card, Input, Select } from 'antd';
-import { PageHeader, MetricStrip, DataTable, StatusBadge, EmptyState, LoadingState, InlineError } from '../../components/common';
+import { PageHeader, MetricStrip, DataTable, EmptyState, LoadingState, InlineError } from '../../components/common';
 import type { DataTableColumn } from '../../components/common/DataTable';
 import {
     Search, CheckCircle2,
@@ -271,14 +272,13 @@ export const ReceptionWorkspace: React.FC = () => {
         }
     };
 
-    const renderStatusBadge = (status: string) => <StatusBadge status={status === 'CheckedIn' || status === 'InProgress' ? 'inconsultation' : status} label={getAppointmentStatusLabel(status)} />;
     const totalPages = Math.ceil(totalItems / pageSize) || 1;
     const queueColumns: DataTableColumn<AppointmentItem>[] = [
         { header: 'Mã / giờ hẹn', accessor: item => <><span className={styles.appointmentCode}>{item.appointmentCode}</span><div className={styles.appointmentWhen}><span className={styles.appointmentTime}>{item.startTime.substring(0, 5)} - {item.endTime.substring(0, 5)}</span>{item.appointmentDate !== toLocalDateString() && <span className={styles.appointmentDate}>{formatDateOnly(item.appointmentDate)}</span>}</div></> },
         { header: 'Người bệnh', accessor: item => <><div className={styles.patientName}>{item.patientName}</div><div className={styles.patientIdentifiers}>{item.medicalRecordNumber ? `Mã bệnh án: ${item.medicalRecordNumber}` : ''}{item.patientPhone ? ` • ${item.patientPhone}` : ''}</div></> },
         { header: 'Chuyên khoa / bác sĩ', accessor: item => <><div className={styles.specialtyName}>{item.specialtyName}</div><div className={styles.doctorName}>BS: {item.doctorName || 'Chưa phân công'}</div></> },
         { header: 'Lý do khám', accessor: item => item.reason || '-', className: styles.visitReason },
-        { header: 'Trạng thái', accessor: item => renderStatusBadge(item.status) },
+        { header: 'Trạng thái', accessor: item => <AppointmentStatusBadge status={item.status} /> },
         { header: 'Thao tác', align: 'right', className: styles.queueActionsCell, accessor: item => (
             <>
                 {item.status === 'Confirmed' && (
@@ -326,9 +326,9 @@ export const ReceptionWorkspace: React.FC = () => {
                 ariaLabel="Số liệu tiếp nhận hôm nay"
                 items={[
                     { label: 'Lịch khám hôm nay', value: statsError ? '—' : stats?.appointmentsToday ?? 0 },
-                    { label: 'Chờ xác nhận hôm nay', value: statsError ? '—' : stats?.pendingAppointmentsToday ?? 0, tone: 'attention' },
-                    { label: 'Chờ tiếp đón / đang khám', value: statsError ? '—' : stats?.confirmedAppointmentsToday ?? 0 },
-                    { label: 'Đã khám xong hôm nay', value: statsError ? '—' : stats?.completedAppointmentsToday ?? 0 },
+                    { label: `${getAppointmentStatusLabel('Pending')} hôm nay`, value: statsError ? '—' : stats?.pendingAppointmentsToday ?? 0, tone: 'attention' },
+                    { label: `${getAppointmentStatusLabel('Confirmed')} hôm nay`, value: statsError ? '—' : stats?.confirmedAppointmentsToday ?? 0 },
+                    { label: `${getAppointmentStatusLabel('Completed')} hôm nay`, value: statsError ? '—' : stats?.completedAppointmentsToday ?? 0 },
                 ]}
             />
             {statsError && <div className={styles.statsError}><span>Không tải được số liệu</span><Button size="small" disabled={statsLoading} onClick={() => fetchStats(selectedFacilityId)}>{statsLoading ? 'Đang tải...' : 'Thử lại'}</Button></div>}
@@ -342,7 +342,7 @@ export const ReceptionWorkspace: React.FC = () => {
             <section className={styles.worklistCard}>
                     <div className={styles.worklistTabs}>
                         <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'today' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('today'); setPage(1); }}><span>Hôm nay (ưu tiên tiếp nhận)</span><span className={styles.tabCount}>{activeTab === 'today' ? totalItems : (stats?.appointmentsToday ?? 0)}</span></Button>
-                        <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'pending' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('pending'); setPage(1); }}><span>Chờ xác nhận</span><span className={styles.tabCount}>{activeTab === 'pending' ? totalItems : (stats?.pendingAppointmentsTotal ?? 0)}</span></Button>
+                        <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'pending' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('pending'); setPage(1); }}><span>{getAppointmentStatusLabel('Pending')}</span><span className={styles.tabCount}>{activeTab === 'pending' ? totalItems : (stats?.pendingAppointmentsTotal ?? 0)}</span></Button>
                         <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'upcoming' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('upcoming'); setPage(1); }}><span>Sắp tới</span></Button>
                         <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'recent' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('recent'); setPage(1); }}><span>Gần đây</span></Button>
                         <Button htmlType="button" className={`${styles.worklistTab} ${activeTab === 'history' ? styles.activeWorklistTab : ''}`} onClick={() => { setWorklistError(null); setIsStale(false); setActiveTab('history'); setPage(1); }}><span>Toàn bộ lịch sử</span></Button>

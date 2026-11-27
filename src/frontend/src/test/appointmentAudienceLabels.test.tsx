@@ -20,7 +20,7 @@ vi.mock('../api/organizationApi', () => ({ organizationApi: {
 } }));
 
 const expected = [
-    ['Pending', 'Chờ xác nhận'], ['Confirmed', 'Chờ tiếp nhận'], ['PendingReschedule', 'Chờ duyệt đổi lịch'],
+    ['Pending', 'Chờ xác nhận'], ['Confirmed', 'Đã xác nhận'], ['PendingReschedule', 'Chờ duyệt đổi lịch'],
     ['PendingCancellation', 'Chờ duyệt hủy'], ['CheckedIn', 'Đã tiếp nhận'], ['InConsultation', 'Đang khám'],
     ['InProgress', 'Đang khám'], ['Completed', 'Đã khám xong'], ['Cancelled', 'Đã hủy'], ['NoShow', 'Vắng mặt'],
     ['FutureStatus', 'Không xác định'], ['toString', 'Không xác định'],
@@ -45,17 +45,15 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe('Shared appointment labels by audience', () => {
-    it.each(expected)('labels %s for staff and patients', (status, staff) => {
-        expect(getAppointmentStatusLabel(status)).toBe(staff);
-        expect(getAppointmentStatusLabel(status, 'staff')).toBe(staff);
-        expect(getAppointmentStatusLabel(status, 'patient')).toBe(status === 'Confirmed' ? 'Đã xác nhận' : staff);
+describe('Shared appointment labels', () => {
+    it.each(expected)('labels %s', (status, label) => {
+        expect(getAppointmentStatusLabel(status)).toBe(label);
     });
 
     it.each([['workspace', ReceptionWorkspace], ['appointments', ReceptionAppointments]] as const)('renders the four staff labels in reception %s without changing check-in actions', async (_, Page) => {
         mount(<Page />);
         await screen.findByText('APT-LABEL-1');
-        for (const [index, label] of ['Chờ tiếp nhận', 'Đã tiếp nhận', 'Đang khám', 'Đã khám xong'].entries()) {
+        for (const [index, label] of ['Đã xác nhận', 'Đã tiếp nhận', 'Đang khám', 'Đã khám xong'].entries()) {
             const row = screen.getByText(`APT-LABEL-${index + 1}`).closest('tr')!;
             expect(within(row).getByText(label)).toBeInTheDocument();
             if (index === 0) expect(within(row).getByRole('button', { name: 'Tiếp nhận' })).toBeInTheDocument();
@@ -69,7 +67,7 @@ describe('Shared appointment labels by audience', () => {
         await screen.findByText('APT-LABEL-1');
         fireEvent.mouseDown(screen.getByRole('combobox'));
         const dropdown = await screen.findByRole('listbox');
-        const option = within(dropdown.parentElement!).getByText('Chờ tiếp nhận');
+        const option = within(dropdown.parentElement!).getByText('Đã xác nhận');
         fireEvent.click(option);
         await vi.waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/reception/appointments?page=1&pageSize=10&status=Confirmed'));
     });
