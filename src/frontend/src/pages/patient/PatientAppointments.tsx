@@ -18,6 +18,8 @@ import { StatusBadge } from '../../components/common/StatusBadge';
 import { EmptyState } from '../../components/common/EmptyState';
 import { LoadingState } from '../../components/common/LoadingState';
 import { InlineError } from '../../components/common/InlineError';
+import { getApiErrorMessage } from '../../utils/apiError';
+import { cancelsImmediately, cancelDialogCopy } from './patientCancelPolicy';
 interface Appointment {
     id: number;
     appointmentCode: string;
@@ -171,18 +173,20 @@ export const PatientAppointments: React.FC = () => {
 
         setCanceling(true);
         setCancelModal(p => ({ ...p, inlineError: "" }));
+        const immediate = cancelsImmediately(app);
         try {
-            const res = await axiosClient.post<any, ApiResponse<any>>(`/appointments/${app.id}/cancellation-requests`, { reason: trimmedReason });
+            const res = await axiosClient.post<any, ApiResponse<any>>(`/appointments/${app.id}/${immediate ? 'cancel' : 'cancellation-requests'}`, { reason: trimmedReason });
             if (res.success) {
                 setCancelModal(p => ({ ...p, isOpen: false }));
-                showAlert('Đã gửi yêu cầu hủy lịch thành công! Vui lòng chờ lễ tân xử lý.', 'Thành công', 'success');
+                showAlert(immediate
+                    ? 'Đã hủy lịch hẹn. Khung giờ đã được giải phóng.'
+                    : 'Đã gửi yêu cầu hủy lịch thành công! Vui lòng chờ lễ tân xử lý.', 'Thành công', 'success');
                 refreshData();
             } else {
                 setCancelModal(p => ({ ...p, inlineError: res.message || "Không thể hủy lịch" }));
             }
-        } catch (error: any) {
-            const msg = error?.message || "Có lỗi xảy ra khi hủy lịch.";
-            setCancelModal(p => ({ ...p, inlineError: msg }));
+        } catch (error: unknown) {
+            setCancelModal(p => ({ ...p, inlineError: getApiErrorMessage(error, "Có lỗi xảy ra khi hủy lịch.") }));
         } finally {
             setCanceling(false);
         }
@@ -432,9 +436,9 @@ export const PatientAppointments: React.FC = () => {
             </div>}
             <Modal getContainer={false} open={cancelModal.isOpen} title={`Hủy lịch hẹn ${cancelModal.app?.appointmentCode}`} onCancel={handleCancelClose} mask={{ closable: !canceling }} closable={!canceling} keyboard={!canceling} footer={<>
                 <Button onClick={handleCancelClose} disabled={canceling}>Đóng</Button>
-                <Button type="primary" danger onClick={submitCancel} disabled={canceling}>{canceling ? 'Đang xử lý...' : 'Xác nhận gửi yêu cầu'}</Button>
+                <Button type="primary" danger onClick={submitCancel} disabled={canceling}>{canceling ? 'Đang xử lý...' : cancelDialogCopy(cancelModal.app).confirmLabel}</Button>
             </>}>
-                <Alert type="warning" showIcon className={styles.modalAlert} title="Yêu cầu hủy sẽ được gửi đến lễ tân duyệt. Bạn có chắc chắn muốn yêu cầu hủy lịch khám này?" />
+                <Alert type="warning" showIcon className={styles.modalAlert} title={cancelDialogCopy(cancelModal.app).notice} />
                 <Form layout="vertical"><Form.Item label="Lý do hủy lịch" htmlFor="cancel-reason" required><Input.TextArea id="cancel-reason" rows={3} placeholder="Vui lòng nhập lý do (ít nhất 5 ký tự)..." value={cancelModal.reason} onChange={event => setCancelModal(p => ({ ...p, reason: event.target.value }))} disabled={canceling} /></Form.Item></Form>
                 {cancelModal.inlineError && <Alert type="error" title={cancelModal.inlineError} showIcon />}
             </Modal>

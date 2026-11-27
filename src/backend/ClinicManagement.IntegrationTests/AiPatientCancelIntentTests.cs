@@ -25,9 +25,9 @@ public sealed class AiPatientCancelIntentTests : IntegrationTestBase
     }
 
     [Theory]
-    [InlineData("hủy lịch")]
-    [InlineData("huỷ lịch hẹn")]
-    [InlineData("tôi muốn hủy lịch")]
+    [InlineData("hủy")]
+    [InlineData("HỦY!")]
+    [InlineData("không đặt nữa")]
     public async Task Cancel_WithOwnedDraft_UsesExistingCancellation_WithoutAskingForIds(string message)
     {
         await ClearCancellationFixturesAsync();
@@ -135,7 +135,7 @@ public sealed class AiPatientCancelIntentTests : IntegrationTestBase
         var second = await CreateDraftAsync(Patient1Id);
         var response = await ChatAsync("hủy lịch", first.SessionId);
         Assert.Equal("ClarificationRequired", response.DialogueOutcome);
-        Assert.Contains("quay lại cuộc trò chuyện", response.Message);
+        Assert.Contains("chưa xác định được bản nháp cần hủy", response.Message);
         AssertPublicText(response);
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

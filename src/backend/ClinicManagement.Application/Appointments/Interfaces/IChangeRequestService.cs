@@ -9,6 +9,8 @@ public interface IChangeRequestService
     // For Patients
     Task<ChangeRequestDto> CreateRescheduleRequestAsync(long appointmentId, CreateRescheduleRequestDto request, Guid? sourceAiActionId = null);
     Task<ChangeRequestDto> CreateCancellationRequestAsync(long appointmentId, CreateCancellationRequestDto request, Guid? sourceAiActionId = null);
+    // Only an appointment still awaiting confirmation can be cancelled without reception review.
+    Task<PatientCancellationResultDto> CancelPendingAppointmentAsync(long appointmentId, CreateCancellationRequestDto request);
     Task WithdrawRequestAsync(long requestId);
     Task<PagedResult<ChangeRequestDto>> GetMyChangeRequestsAsync(string? status, int page, int pageSize);
     

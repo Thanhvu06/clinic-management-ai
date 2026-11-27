@@ -238,7 +238,7 @@ export const ReceptionAppointments: React.FC = () => {
             } finally {
                 setActionLoading(false);
             }
-        });
+        }, 'Xác nhận lịch hẹn', { tone: 'primary' });
     };
 
     const handleCheckIn = async (apt: ReceptionAppointment) => {
@@ -255,8 +255,8 @@ export const ReceptionAppointments: React.FC = () => {
                 setCurrentTicket(res.data);
                 setTicketModalOpen(true);
                 showAlert(
-                    'Tiếp nhận thành công!',
                     `Bệnh nhân ${res.data.patientName} đã được cấp STT ${res.data.queueNumber} tại ${res.data.departmentName || 'phòng khám'}.`,
+                    'Tiếp nhận thành công!',
                     'success'
                 );
                 fetchAppointments();
@@ -317,7 +317,7 @@ export const ReceptionAppointments: React.FC = () => {
             </form>
             {loading ? <LoadingState message="Đang tải dữ liệu..." /> : loadError ? <InlineError message={loadError} onRetry={fetchAppointments} /> : appointments.length === 0 ? <EmptyState title="Không tìm thấy lịch hẹn nào." /> : <div className={styles.tableScroll}><DataTable columns={columns} data={appointments} keyExtractor={apt => apt.id} /></div>}
             <div className={styles.secondaryText}>Tổng cộng: {totalItems} lịch hẹn</div>
-            {modal.isOpen && modal.apt && <Modal open onCancel={closeDetail} width={600} className={styles.detailModal} mask={{closable:false}} keyboard={false} closable={{'aria-label':'Đóng chi tiết lịch hẹn'}} title={<>Chi tiết lịch hẹn <span className={styles.detailCode}>{modal.apt.appointmentCode}</span></>} footer={<>
+            {modal.isOpen && modal.apt && <Modal open onCancel={closeDetail} width={600} className={styles.detailModal} mask={{closable:false}} keyboard closable={{'aria-label':'Đóng chi tiết lịch hẹn'}} title={<>Chi tiết lịch hẹn <span className={styles.detailCode}>{modal.apt.appointmentCode}</span></>} footer={<>
                 <Button onClick={closeDetail}>Đóng</Button>
                 {modal.apt.status === 'Pending' && <Button type="primary" onClick={handleConfirm} disabled={actionLoading}>{actionLoading ? 'Đang xử lý...' : 'Xác nhận lịch hẹn'}</Button>}
                 {modal.apt.status === 'Confirmed' && <Button type="primary" className={`${styles.checkInButton} ${styles.modalCheckInButton}`} onClick={() => handleCheckIn(modal.apt!)} disabled={checkingInId === modal.apt.id || modal.apt.appointmentDate !== toLocalDateString()} title={modal.apt.appointmentDate !== toLocalDateString() ? `Chỉ tiếp nhận vào ngày khám ${modal.apt.appointmentDate.split('-').reverse().join('/')}` : undefined} ><UserCheck size={16} aria-hidden="true" />{checkingInId === modal.apt.id ? 'Đang tiếp nhận...' : 'Tiếp nhận & cấp STT'}</Button>}

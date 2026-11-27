@@ -15,6 +15,13 @@ public class CreateRescheduleRequestDto
     public string Reason { get; set; } = string.Empty;
 }
 
+public class PatientCancellationResultDto
+{
+    public long AppointmentId { get; set; }
+    public string AppointmentCode { get; set; } = string.Empty;
+    public string Status { get; set; } = nameof(AppointmentStatus.Cancelled);
+}
+
 public class CreateCancellationRequestDto
 {
     [Required(ErrorMessage = "Lý do hủy lịch là bắt buộc.")]

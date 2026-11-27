@@ -7,6 +7,7 @@ namespace ClinicManagement.Infrastructure.AI.Knowledge;
 /// Answers questions about cancelling ("hủy hẹn trước mấy tiếng", "hủy lịch có mất phí không") from the
 /// appointments document. A command such as "hủy lịch hẹn ngày mai của tôi" has none of these cues and keeps
 /// the cancellation flow. The document states no cancellation fee and no minimum notice, so neither is invented.
+/// A pending appointment is cancelled at once; a confirmed one still needs reception approval.
 /// </summary>
 public static class CancellationPolicyAnswer
 {
@@ -40,8 +41,8 @@ public static class CancellationPolicyAnswer
         if (Fee.IsMatch(plain))
             parts.Add("Tài liệu quy định của ClinicCare về đặt, đổi, hủy lịch không nêu khoản phí hay tiền phạt nào khi hủy lịch; nếu cần xác nhận về chi phí hoặc khoản đã thanh toán, vui lòng liên hệ lễ tân.");
         if (Timing.IsMatch(plain))
-            parts.Add("Tài liệu không quy định phải hủy trước bao nhiêu giờ. Yêu cầu hủy còn chờ tới giờ bắt đầu lịch gốc sẽ hết hạn xử lý, vì vậy hãy gửi yêu cầu càng sớm càng tốt trước giờ khám.");
-        parts.Add("Cách hủy: trong Lịch hẹn của tôi, chọn lịch còn cho phép thao tác, bấm Hủy lịch, nhập lý do rồi Xác nhận gửi yêu cầu; yêu cầu chờ lễ tân xử lý, chưa hủy ngay.");
+            parts.Add("Tài liệu không quy định phải hủy trước bao nhiêu giờ. Lịch còn Chờ xác nhận được hủy ngay trên website trước giờ bắt đầu; với lịch Đã xác nhận, yêu cầu hủy còn chờ tới giờ bắt đầu lịch gốc sẽ hết hạn xử lý, vì vậy hãy gửi yêu cầu càng sớm càng tốt trước giờ khám.");
+        parts.Add("Cách hủy: trong Lịch hẹn của tôi, chọn lịch còn cho phép thao tác, bấm Hủy lịch và nhập lý do. Lịch còn Chờ xác nhận được hủy ngay và giải phóng khung giờ; lịch Đã xác nhận sẽ gửi yêu cầu hủy chờ lễ tân duyệt, chưa hủy ngay.");
         parts.Add("Hủy lịch khác với Vắng mặt: tạm khóa đặt lịch online chỉ tính các lịch bị ghi nhận Vắng mặt (không đến khám).");
         parts.Add("Cần hỗ trợ thêm, vui lòng liên hệ lễ tân.");
         return string.Join(" ", parts);

@@ -563,6 +563,8 @@ public class AiChatRequestDto
     [MaxLength(64)]
     public string? Intent { get; set; }
 
+    public bool HasOpenBookingWizard { get; set; }
+
     [Range(1, long.MaxValue)]
     public long? PendingSpecialtyId { get; set; }
 

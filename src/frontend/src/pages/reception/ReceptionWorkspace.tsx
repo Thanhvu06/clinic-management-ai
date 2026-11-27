@@ -243,16 +243,16 @@ export const ReceptionWorkspace: React.FC = () => {
                 setCurrentTicket(res.data);
                 setTicketModalOpen(true);
                 showAlert(
-                    'Tiếp nhận ca khám thành công!',
                     `Đã cấp STT ${res.data.queueNumber} tại ${res.data.departmentName || 'phòng khám'} cho bệnh nhân ${res.data.patientName}.`,
+                    'Tiếp nhận ca khám thành công!',
                     'success'
                 );
                 handleRefreshAll();
             } else {
-                showAlert('Lỗi tiếp nhận', res.message || 'Không thể tiếp nhận ca khám.', 'error');
+                showAlert(res.message || 'Không thể tiếp nhận ca khám.', 'Lỗi tiếp nhận', 'error');
             }
         } catch (err: any) {
-            showAlert('Lỗi tiếp nhận', getApiErrorMessage(err, 'Không thể tiếp nhận ca khám.'), 'error');
+            showAlert(getApiErrorMessage(err, 'Không thể tiếp nhận ca khám.'), 'Lỗi tiếp nhận', 'error');
         } finally {
             setActionLoadingId(null);
         }
@@ -267,7 +267,7 @@ export const ReceptionWorkspace: React.FC = () => {
                 setTicketModalOpen(true);
             }
         } catch {
-            showAlert('Thông báo', 'Không thể lấy thông tin phiếu khám.', 'error');
+            showAlert('Không thể lấy thông tin phiếu khám.', 'Thông báo', 'error');
         }
     };
 
