@@ -78,7 +78,7 @@ describe('Doctor appointment detail', () => {
             expect(screen.getByText(label)).toBeInTheDocument();
             expect(screen.queryByText(raw)).not.toBeInTheDocument();
         }
-        expect(screen.getAllByText('Từ Chờ tiếp nhận → Đã hủy')).toHaveLength(9);
+        expect(screen.getAllByText('Từ Đã xác nhận → Đã hủy')).toHaveLength(9);
     });
     it('hides null optional context and renders empty past visits', async () => {
         const context = structuredClone(clinicalContext);

@@ -113,11 +113,6 @@
     color: var(--cc-color-primary);
 }
 
-.slotStatusNoShow {
-    font-weight: 400;
-    color: var(--cc-color-warning);
-}
-
 .slotPatient {
     margin-top: var(--cc-space-xxs);
     font-size: 0.8rem;

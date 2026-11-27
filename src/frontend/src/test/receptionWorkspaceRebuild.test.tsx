@@ -175,7 +175,7 @@ describe('Reception Workspace Rebuild', () => {
         // Metric cards rendered
         await waitFor(() => {
             expect(screen.getByText('Lịch khám hôm nay')).toBeInTheDocument();
-            expect(screen.getByText('Chờ tiếp đón / đang khám')).toBeInTheDocument();
+            expect(screen.getByText('Đã xác nhận hôm nay')).toBeInTheDocument();
             expect(screen.getByText('Đã khám xong hôm nay')).toBeInTheDocument();
         });
 

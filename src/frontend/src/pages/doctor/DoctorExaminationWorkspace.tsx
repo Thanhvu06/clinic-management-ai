@@ -29,7 +29,7 @@ import type {
 } from '../../types';
 import { useDialog } from '../../contexts/DialogContext';
 import { useCopilotResource } from '../../components/copilot/copilotResourceContext';
-import { LoadingState, InlineError, EmptyState, StatusBadge } from '../../components/common';
+import { LoadingState, InlineError, EmptyState, AppointmentStatusBadge } from '../../components/common';
 import { DoctorExaminationSyncAction } from './DoctorExaminationHeader';
 import tabStyles from './DoctorExaminationWorkspace.module.css';
 
@@ -1706,7 +1706,7 @@ const DoctorExaminationContent: React.FC = () => {
             <div className={tabStyles.workspaceActionBar}>
                 <div className={[tabStyles.iconTextRow, tabStyles.recordStatusSummary].join(' ')}>
                     <span className={tabStyles.recordStatusLabel}>Trạng thái hồ sơ:</span>
-                    <StatusBadge status={isCompleted ? 'Completed' : 'InConsultation'} label={isCompleted ? 'Đã hoàn tất' : 'Đang khám'} />
+                    <AppointmentStatusBadge status={isCompleted ? 'Completed' : 'InConsultation'} />
                     {diagnosticOrders.length > 0 && (
                         <span className={tabStyles.diagnosticsSummary}>
                             CLS ({diagnosticOrders.length} phiếu)

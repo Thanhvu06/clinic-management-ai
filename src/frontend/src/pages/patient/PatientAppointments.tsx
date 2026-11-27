@@ -1,4 +1,3 @@
-import { getAppointmentStatusLabel } from '../../utils/appointmentStatusLabels';
 import { toLocalDateString, formatDateOnly } from '../../utils/formatters';
 import React, { useState, useEffect, useRef } from "react";
 import { Alert, Button, Card, Form, Input, Modal } from 'antd';
@@ -14,7 +13,7 @@ import { Breadcrumb } from "../../components/Breadcrumb";
 import { getNextWorkingDateString } from "../../utils/doctorNameHelper";
 import styles from './PatientAppointments.module.css';
 import { PageHeader } from '../../components/common/PageHeader';
-import { StatusBadge } from '../../components/common/StatusBadge';
+import { AppointmentStatusBadge } from '../../components/common/AppointmentStatusBadge';
 import { EmptyState } from '../../components/common/EmptyState';
 import { LoadingState } from '../../components/common/LoadingState';
 import { InlineError } from '../../components/common/InlineError';
@@ -135,7 +134,7 @@ export const PatientAppointments: React.FC = () => {
 
     const getStatusBadge = (status: string | null) => {
         if (!status) return '—';
-        return <StatusBadge status={status.startsWith('Pending') ? 'Pending' : status} label={getAppointmentStatusLabel(status, 'patient')} />;
+        return <AppointmentStatusBadge status={status} />;
     };
 
     const getActionLabel = (action: string) => {

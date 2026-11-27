@@ -32,6 +32,7 @@ import { InvoiceReceiptModal } from '../../components/billing/InvoiceReceiptModa
 import { DataTable, LoadingState, StatusBadge, PageHeader, StatCard, InlineError } from '../../components/common';
 import type { DataTableColumn } from '../../components/common';
 import { ExpiryBadge } from '../../components/common/ExpiryBadge';
+import { getAppointmentStatusLabel } from '../../utils/appointmentStatusLabels';
 import { getVisitStatusLabel } from '../../utils/visitStatusLabels';
 import { formatDateOnly } from '../../utils/formatters';
 import styles from './ReceptionBilling.module.css';
@@ -666,7 +667,7 @@ export const ReceptionBilling: React.FC = () => {
                         <label htmlFor="invoice-source-reference" className={styles.formLabel}>{createSourceType === 'visit' ? 'Chọn lượt khám *' : createSourceType === 'appointment' ? 'Chọn lịch hẹn đã khám xong *' : 'Chọn đăng ký gói khám đã xác nhận *'}</label>
                         <Select id="invoice-source-reference" className={styles.invoiceSourceSelect} showSearch={{ optionFilterProp: 'label' }} value={referenceId || undefined} onChange={value => setReferenceId(value)} options={invoiceSourceOptions} loading={invoiceSourcesLoading} disabled={creatingInvoice} notFoundContent={invoiceSourcesLoading ? <LoadingState message="Đang tải danh sách nguồn hóa đơn..." height="auto" /> : 'Không có mục nào chờ lập hóa đơn'} />
                         {invoiceSourcesError && <InlineError title="" message={invoiceSourcesError} onRetry={() => { void loadInvoiceSources(createSourceType); }} />}
-                        <span className={styles.fieldHint}>{createSourceType === 'visit' ? 'Chỉ hiện lượt khám đã xong và còn khoản chưa thu.' : createSourceType === 'appointment' ? 'Lịch hẹn phải ở trạng thái "Completed" và chưa có hóa đơn còn hiệu lực.' : 'Đăng ký gói khám phải ở trạng thái "Confirmed" và chưa có hóa đơn còn hiệu lực.'}</span></div>
+                        <span className={styles.fieldHint}>{createSourceType === 'visit' ? 'Chỉ hiện lượt khám đã xong và còn khoản chưa thu.' : createSourceType === 'appointment' ? `Lịch hẹn phải ở trạng thái “${getAppointmentStatusLabel('Completed')}” và chưa có hóa đơn còn hiệu lực.` : 'Đăng ký gói khám phải ở trạng thái "Confirmed" và chưa có hóa đơn còn hiệu lực.'}</span></div>
                 </form>
             </Modal>}
             {paymentModalOpen && paymentInvoice && <Modal open width={520} className={styles.formModal} onCancel={() => !processingPayment && setPaymentModalOpen(false)} closable={{disabled:processingPayment}} title={`Thu tiền hóa đơn ${paymentInvoice.invoiceCode}`} footer={<><Button disabled={processingPayment} onClick={() => setPaymentModalOpen(false)}>Đóng</Button><Button type="primary" htmlType="submit" form="reception-process-payment" disabled={processingPayment}>{processingPayment ? 'Đang xử lý...' : 'Xác nhận đã thu tiền'}</Button></>}>

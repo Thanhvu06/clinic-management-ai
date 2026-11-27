@@ -162,13 +162,13 @@ export const DoctorQueue: React.FC = () => {
 
     const statusTabOptions = [
         { value: 'ALL', label: `Tất cả (${statusCounts.ALL})` },
-        { value: 'Confirmed', label: `Chờ tiếp nhận (${statusCounts.Confirmed})` },
-        { value: 'CheckedIn', label: `Đã tiếp nhận (${statusCounts.CheckedIn})` },
-        { value: 'InConsultation', label: `Đang khám (${statusCounts.InConsultation})` },
+        { value: 'Confirmed', label: `${getVisitStatusLabel('Confirmed')} (${statusCounts.Confirmed})` },
+        { value: 'CheckedIn', label: `${getVisitStatusLabel('CheckedIn')} (${statusCounts.CheckedIn})` },
+        { value: 'InConsultation', label: `${getVisitStatusLabel('InConsultation')} (${statusCounts.InConsultation})` },
         { value: 'InDiagnostics', label: `Chờ CLS (${statusCounts.InDiagnostics})` },
         { value: 'ResultsReady', label: `Có kết quả CLS (${statusCounts.ResultsReady})` },
         { value: 'Completed', label: `${getVisitStatusLabel('Completed')} (${statusCounts.Completed})` },
-        { value: 'NoShow', label: `Vắng mặt (${statusCounts.NoShow})` },
+        { value: 'NoShow', label: `${getVisitStatusLabel('NoShow')} (${statusCounts.NoShow})` },
     ];
 
     const columns: DataTableColumn<DoctorQueueItemDto>[] = [

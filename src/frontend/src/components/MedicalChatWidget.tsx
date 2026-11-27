@@ -77,7 +77,7 @@ const GroundedToolData: React.FC<{ result: AiToolExecutionResult }> = ({ result 
             rows = asRecords(data.items).map(item => ({ key: String(item.id ?? item.appointmentId), text: `${String(item.appointmentCode ?? item.id ?? "Lịch hẹn")} · ${formatDateOnly(String(item.slotDate ?? item.appointmentDate ?? ""))}` }));
             break;
         case "appointment_detail":
-            rows = [{ key: "detail", text: `${String(data.appointmentCode ?? data.id ?? "Lịch hẹn")} · ${getAppointmentStatusLabel(String(data.status ?? ""), "patient")}` }];
+            rows = [{ key: "detail", text: `${String(data.appointmentCode ?? data.id ?? "Lịch hẹn")} · ${getAppointmentStatusLabel(String(data.status ?? ""))}` }];
             break;
         case "pending_action":
             rows = [{ key: "pending", text: `Lịch hẹn ${String(data.appointmentCode ?? data.appointmentId ?? "")} · chờ xác nhận` }];
