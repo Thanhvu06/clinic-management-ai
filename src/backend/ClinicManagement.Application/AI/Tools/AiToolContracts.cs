@@ -251,6 +251,9 @@ public sealed class AiSafetyGuardResult
 public interface IAiSafetyGuard
 {
     AiSafetyGuardResult Inspect(string? message);
+
+    Task<AiSafetyGuardResult> InspectPatientAsync(string? message, CancellationToken ct = default) =>
+        Task.FromResult(Inspect(message));
 }
 
 public sealed class AiPlannerToolCall

@@ -7,6 +7,17 @@ public sealed partial class AiSafetyGuard
     private static readonly string[] Ingestion = ["uống", "nuốt", "ăn"];
     private static readonly string[] Inhalation = ["hít", "hít thở", "ngửi"];
     private static readonly string[] Contact = ["dính", "bắn", "văng", "đổ", "tiêm"];
+    private static readonly string[] AbnormalQuantities =
+    [
+        "nửa chai", "nửa lọ", "nửa vỉ", "cả lọ", "cả chai", "cả vỉ", "cả hộp", "nguyên chai",
+        "nguyên lọ", "nguyên vỉ", "nguyên hộp", "hết", "sạch", "nhiều", "quá nhiều", "gấp đôi",
+        "gấp ba", "gấp hai", "gấp 2", "gấp 3"
+    ];
+    private static readonly string[] IngestionSubstances =
+    [
+        "thuốc", "viên thuốc", "viên nén", "siro", "si rô", "xi rô", "sirô", "rượu", "bia",
+        "cồn", "paracetamol", "acetaminophen", "ibuprofen", "thuốc ngủ", "thuốc ho"
+    ];
     private static readonly string[] DoseRoutes = ["uống", "nuốt", "dùng", "tiêm"];
     private static readonly string[] DoseAlerts = ["quá liều thuốc", "quá liều", "cả vỉ", "cả lọ", "cả chai", "cả hộp", "nhầm thuốc", "nhầm liều"];
     private static readonly string[] ContactSites = ["mắt", "da", "tay", "mặt"];
@@ -24,8 +35,12 @@ public sealed partial class AiSafetyGuard
     ];
     private static readonly string[] Fumes = ["khí gas", "khí ga", "khí co", "khí clo", "khói", "khí độc", "carbon monoxide", "hơi xăng", "hơi dung môi"];
     private static readonly Regex NonIncidentPrefix = new(
-        @"\b(?:phong tranh|tranh|neu|gia su|co nen|nen|cach|nguy co khi|tac hai khi)(?:\s+(?:lo|vo tinh|bi|phai|khong))?$",
+        @"\b(?:phong tranh|tranh|neu|gia su|co nen|nen|cach|nguy co khi|tac hai khi|dau hieu cua|trieu chung cua)(?:\s+(?:lo|vo tinh|bi|phai|khong))?$",
         RegexOptions.CultureInvariant);
+    private static readonly Regex HistoricalPrefix = new(
+        @"\b(?:tien su(?: bi)?|tung (?:bi|mac|gap)|da (?:duoc )?(?:kham|dieu tri|xu tri|kiem tra) sau (?:lan|vu))(?: (?:lo|vo tinh|bi))?$",
+        RegexOptions.CultureInvariant);
+
     private static readonly Regex RoutineDose = new(
         @"\b(?:moi ngay|moi tuan|trong \d+ ngay|theo don|chia (?:lam )?\d+ lan|lieu khuyen cao)\b",
         RegexOptions.CultureInvariant);
@@ -54,7 +69,35 @@ public sealed partial class AiSafetyGuard
     private static bool HasExposureAfter(string text, TextToken[] tokens, string[] routes, IEnumerable<PhraseMatch> hazards) =>
         hazards.Any(hazard => FindMatches(tokens, routes).Any(route => route.EndTokenIndex < hazard.StartTokenIndex &&
             !IsNegated(text, tokens, route.StartTokenIndex) && !IsNonIncident(text, tokens, route.StartTokenIndex) &&
-            AreNearby(text, tokens, route, hazard)));
+            !IsHistoricalMention(text, tokens, route.StartTokenIndex) && AreNearby(text, tokens, route, hazard)));
+
+    private static bool HasAbnormalIngestion(string text, TextToken[] tokens)
+    {
+        var quantities = FindMatches(tokens, AbnormalQuantities).ToArray();
+        var substances = FindMatches(tokens, IngestionSubstances).ToArray();
+        foreach (var route in FindReportedMatches(text, tokens, Ingestion))
+        {
+            var end = route.EndTokenIndex;
+            while (end + 1 < tokens.Length && end - route.EndTokenIndex < 15 &&
+                   !HasClauseBoundaryBetween(text, tokens[end].EndIndex, tokens[end + 1].StartIndex))
+                end++;
+
+            var clause = string.Join(' ', tokens[route.StartTokenIndex..(end + 1)].Select(token => token.Comparison));
+            if (RoutineDose.IsMatch(clause) && !AcuteDose.IsMatch(clause) ||
+                Regex.IsMatch(clause, @"\b(?:may|bao nhieu)\b|\bhet (?:hang|han|ho|sot|dau|ngay|tuan|thang|mot lieu|lieu nay|don)\b"))
+                continue;
+
+            if (quantities.Any(quantity => quantity.StartTokenIndex > route.EndTokenIndex &&
+                    !IsNegated(text, tokens, quantity.StartTokenIndex) && quantity.EndTokenIndex <= end &&
+                    substances.Any(substance => substance.StartTokenIndex <= end &&
+                        substance.EndTokenIndex >= route.StartTokenIndex - 4 &&
+                        Math.Abs(substance.StartTokenIndex - quantity.StartTokenIndex) <= 6 &&
+                        !HasClauseBoundaryBetween(text, tokens[Math.Min(substance.StartTokenIndex, quantity.StartTokenIndex)].EndIndex,
+                            tokens[Math.Max(substance.EndTokenIndex, quantity.EndTokenIndex)].StartIndex))))
+                return true;
+        }
+        return false;
+    }
 
     private static List<PhraseMatch> FindMedicationMisuseMatches(string text, TextToken[] tokens)
     {
@@ -84,6 +127,9 @@ public sealed partial class AiSafetyGuard
         Math.Abs(first.StartTokenIndex - second.StartTokenIndex) <= 9 &&
         !HasClauseBoundaryBetween(text, tokens[Math.Min(first.StartTokenIndex, second.StartTokenIndex)].EndIndex,
             tokens[Math.Max(first.EndTokenIndex, second.EndTokenIndex)].StartIndex);
+
+    private static bool IsHistoricalMention(string text, TextToken[] tokens, int start) =>
+        HistoricalPrefix.IsMatch(StripDiacritics(text[..tokens[start].StartIndex].TrimEnd()));
 
     private static bool IsNonIncident(string text, TextToken[] tokens, int route) =>
         NonIncidentPrefix.IsMatch(StripDiacritics(text[..tokens[route].StartIndex].TrimEnd()));

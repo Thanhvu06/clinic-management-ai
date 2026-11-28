@@ -55,7 +55,7 @@ public sealed class AiBookingWizardService(
             "reason" => request.Reason,
             _ => null
         };
-        var guard = user.HasValue && typedInput is not null ? safety.Inspect(typedInput) : null;
+        var guard = user.HasValue && typedInput is not null ? await safety.InspectPatientAsync(typedInput, ct) : null;
         AiBookingWizardResponseDto response;
         if (!user.HasValue) response = Error("AUTHENTICATION_REQUIRED", "Bạn cần đăng nhập để đặt lịch.");
         else if (guard is { IsEmergency: true } or { IsSelfHarm: true }) response = SafetyResponse(guard);
