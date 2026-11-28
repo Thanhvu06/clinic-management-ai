@@ -63,11 +63,11 @@ public sealed partial class AiSafetyGuard : IAiSafetyGuard
         if (string.IsNullOrWhiteSpace(normalized)) return new AiSafetyGuardResult();
 
         var tokens = Tokenize(normalized);
-        var selfHarm = MatchesSafetyPhrase(normalized, tokens, SelfHarmPhrases);
+        var selfHarm = HasSelfHarmIntent(normalized, tokens);
         AiSafetyGuardResult Emergency(string category) =>
             new() { IsEmergency = true, IsSelfHarm = selfHarm, MatchedCategory = category };
 
-        if (HasHazardousExposure(normalized, tokens)) return Emergency("nuốt, uống hoặc hít phải chất độc hay vật nguy hiểm");
+        if (HasHazardousExposure(normalized, tokens)) return Emergency("phơi nhiễm chất độc hoặc dị vật nguy hiểm");
         var chestPainMatches = FindChestPainMatches(normalized, tokens);
         var medicationMatches = FindMedicationMisuseMatches(normalized, tokens);
         foreach (var phrase in EmergencyPhrases)
@@ -273,26 +273,6 @@ public sealed partial class AiSafetyGuard : IAiSafetyGuard
                     break;
                 }
                 if (!ChestPainFillers.Contains(tokens[end].Comparison)) break;
-            }
-        }
-        return matches;
-    }
-
-    private static List<PhraseMatch> FindMedicationMisuseMatches(string text, IReadOnlyList<TextToken> tokens)
-    {
-        var matches = new[] { "uống quá liều thuốc", "uống quá liều", "uống cả vỉ", "uống nhầm thuốc" }
-            .SelectMany(phrase => FindPhraseMatches(tokens, phrase)).ToList();
-        for (var start = 0; start < tokens.Count; start++)
-        {
-            if (!MatchesSyllable(tokens[start], Tokenize("uống")[0])) continue;
-            for (var dose = start + 1; dose + 3 < tokens.Count && dose <= start + 5; dose++)
-            {
-                if (HasClauseBoundaryBetween(text, tokens[start].EndIndex, tokens[dose + 3].StartIndex)) break;
-                var multiple = int.TryParse(tokens[dose].Comparison, out var count) ? count > 1
-                    : tokens[dose].Comparison is "nhieu" or "hai" or "ba" or "bon" or "nam" or "sau" or "bay" or "tam" or "chin" or "muoi";
-                if (multiple && tokens[dose + 1].Comparison == "vien" &&
-                    tokens[dose + 2].Comparison is "mot" or "cung" && tokens[dose + 3].Comparison == "luc")
-                    matches.Add(new PhraseMatch(start, dose + 3));
             }
         }
         return matches;

@@ -32,6 +32,10 @@ public static class MedicinePriceQuestion
 
     public static bool HasMedicineContext(string message) => MedicineContext.IsMatch(Accented(message));
 
+    internal static bool NamesMedicineAsSuch(string message) =>
+        Regex.IsMatch(Accented(message), @"\b(?:thuốc|dược phẩm|siro|si rô)\b") ||
+        Regex.IsMatch(message.TrimStart().ToLowerInvariant(), @"^(?:bang gia |gia )?thuoc\b");
+
     public static bool IsPriceQuestion(string message)
     {
         var plain = KnowledgeText.Normalize(message);

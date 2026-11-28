@@ -1,4 +1,5 @@
 import { formatDateOnly } from '../utils/formatters';
+import { Button } from 'antd';
 import { formatCopilotClock } from './copilot/displayFormatters';
 import { getAppointmentStatusLabel } from '../utils/appointmentStatusLabels';
 import { BookingSuccessCard } from "./BookingSuccessCard";
@@ -402,7 +403,13 @@ const PatientMedicalChatWidget: React.FC = () => {
 
                                                     </button>
                                                 );
-                                            }} />
+                                            }}>
+                                            {msg.dialogueOutcome === 'OutsideClinicPricing' && (
+                                                <Button disabled={suggestionsBusy} onClick={() => void handleSendMessage(
+                                                    'Cho mình xem bảng giá phí khám theo từng chuyên khoa.', { intent: 'PricingInquiry' }
+                                                )}>{loading ? 'Đang tra phí khám…' : 'Hỏi phí khám'}</Button>
+                                            )}
+                                        </BookingActionChoices>
                                     )}
                                     {msg.isError && idx === latestAssistantIndex && retryButton()}
                                 </div>

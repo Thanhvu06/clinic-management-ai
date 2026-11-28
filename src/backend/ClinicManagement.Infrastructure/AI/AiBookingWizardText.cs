@@ -10,6 +10,7 @@ internal static class AiBookingWizardText
         RegexOptions.CultureInvariant);
 
     internal static bool IsQuestion(string? input) =>
-        input is not null && (PatientChatDoctorName.InformationName(input) is not null ||
+        input is not null && (PatientChatDoctorName.InformationName(input) is not null || AiSafetyGuard.HasDistressIdiom(input) ||
+            Knowledge.PatientChatPricing.HasOutsidePriceEvidence(input) ||
             Question.IsMatch(AiTextNormalizer.NormalizeForComparison(input)));
 }
