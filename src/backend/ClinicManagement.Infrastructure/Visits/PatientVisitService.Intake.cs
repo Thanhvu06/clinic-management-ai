@@ -382,12 +382,12 @@ public partial class PatientVisitService
         return new CheckInTicketDto
         {
             VisitId = visit.Id,
-            VisitCode = visit.VisitCode,
+            VisitCode = visit.DisplayCode,
             AppointmentId = null,
             AppointmentCode = null,
             PatientId = patient.Id,
             PatientName = patient.FullName ?? string.Empty,
-            MedicalRecordNumber = patient.MedicalRecordNumber ?? string.Empty,
+            MedicalRecordNumber = patient.DisplayCode ?? string.Empty,
             PhoneNumber = patient.PhoneNumber ?? string.Empty,
             QueueNumber = queueNumber,
             QueueDisplay = $"{department.Code}-{queueNumber:D3}",
@@ -412,7 +412,7 @@ public partial class PatientVisitService
         _dbContext.SystemAuditLogs.Add(new SystemAuditLog
         {
             UserId = actor, Action = "WALK_IN_INTAKE", EntityName = "PatientVisit",
-            EntityId = visit.Id.ToString(), Description = $"Tiếp nhận khám không hẹn {visit.VisitCode}",
+            EntityId = visit.Id.ToString(), Description = $"Tiếp nhận khám không hẹn {visit.DisplayCode}",
             CreatedAt = _dateTimeProvider.UtcNow
         });
     }

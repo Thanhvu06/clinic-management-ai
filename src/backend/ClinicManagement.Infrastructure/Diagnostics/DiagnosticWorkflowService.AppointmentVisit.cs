@@ -101,7 +101,7 @@ public partial class DiagnosticWorkflowService
                     Action = "DiagnosticOrderCreated",
                     EntityName = "DiagnosticOrder",
                     EntityId = order.Id.ToString(),
-                    Description = $"Bác sĩ tạo phiếu chỉ định #{order.OrderCode} gồm {services.Count} dịch vụ.",
+                    Description = $"Bác sĩ tạo phiếu chỉ định #{order.DisplayCode} gồm {services.Count} dịch vụ.",
                     CreatedAt = DateTime.UtcNow
                 });
 
@@ -129,7 +129,7 @@ public partial class DiagnosticWorkflowService
                             UserId = techUserId,
                             Type = NotificationType.Diagnostic,
                             Title = "Chỉ định cận lâm sàng mới",
-                            Message = $"Phiếu chỉ định #{order.OrderCode} vừa được chỉ định. Vui lòng tiếp nhận và thực hiện.",
+                            Message = $"Phiếu chỉ định #{order.DisplayCode} vừa được chỉ định. Vui lòng tiếp nhận và thực hiện.",
                             Route = $"/diagnostics/orders/{order.Id}",
                             RelatedEntityType = "DiagnosticOrder",
                             RelatedEntityId = order.Id.ToString(),
@@ -152,7 +152,7 @@ public partial class DiagnosticWorkflowService
                         UserId = patientUserId.Value,
                         Type = NotificationType.Diagnostic,
                         Title = "Chỉ định cận lâm sàng mới",
-                        Message = $"Bác sĩ đã tạo phiếu chỉ định cận lâm sàng #{order.OrderCode} cho lịch khám của bạn.",
+                        Message = $"Bác sĩ đã tạo phiếu chỉ định cận lâm sàng #{order.DisplayCode} cho lịch khám của bạn.",
                         Route = "/patient/diagnostic-results",
                         RelatedEntityType = "DiagnosticOrder",
                         RelatedEntityId = order.Id.ToString(),

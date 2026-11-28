@@ -11,6 +11,8 @@ public class HealthPackageRegistration
     [Required]
     [StringLength(50)]
     public string RegistrationCode { get; set; } = string.Empty;
+    public string? ShortCode { get; set; }
+    public string DisplayCode => ShortCode ?? RegistrationCode;
 
     public long HealthPackageId { get; set; }
     public long PatientId { get; set; }

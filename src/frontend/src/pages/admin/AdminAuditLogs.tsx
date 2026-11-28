@@ -4,10 +4,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axiosClient from '../../api/axiosClient';
 import type { ApiResponse } from '../../types';
 import { RefreshCw, Clock, User } from 'lucide-react';
-import { Button, Select, Tag, Typography } from 'antd';
+import { Button, Input, Select, Tag, Typography } from 'antd';
 import { PageHeader, FilterBar, DataTable, Pagination, EmptyState, LoadingState, InlineError } from '../../components/common';
 import styles from './AdminAuditLogs.module.css';
 import { getAuditActorRoleLabel } from '../../utils/auditActor';
+import { getApiErrorMessage } from '../../utils/apiError';
 
 interface AuditLog {
     id: number;
@@ -32,6 +33,7 @@ export const AdminAuditLogs: React.FC = () => {
     // Filters
     const [actionFilter, setActionFilter] = useState('');
     const [entityFilter, setEntityFilter] = useState('');
+    const [referenceCode, setReferenceCode] = useState('');
 
     const fetchLogs = useCallback(async () => {
         setLoading(true);
@@ -43,6 +45,7 @@ export const AdminAuditLogs: React.FC = () => {
             });
             if (actionFilter) params.append('action', actionFilter);
             if (entityFilter) params.append('entityName', entityFilter);
+            if (referenceCode) params.append('code', referenceCode);
 
             const res = await axiosClient.get<any, ApiResponse<any>>(`/admin/audit-logs?${params.toString()}`);
             if (!res.success || !res.data) throw new Error(res.message || 'Không thể tải nhật ký kiểm toán.');
@@ -51,11 +54,12 @@ export const AdminAuditLogs: React.FC = () => {
                 setTotalItems(res.data.totalItems);
             }
         } catch (error) {
-            setLoadError((error as Error)?.message || 'Không thể tải nhật ký kiểm toán.');
+            const fallback = error instanceof Error ? error.message : 'Không thể tải nhật ký kiểm toán.';
+            setLoadError(getApiErrorMessage(error, fallback));
         } finally {
             setLoading(false);
         }
-    }, [page, actionFilter, entityFilter]);
+    }, [page, actionFilter, entityFilter, referenceCode]);
 
     useEffect(() => {
         fetchLogs();
@@ -81,6 +85,8 @@ export const AdminAuditLogs: React.FC = () => {
                 <Button icon={<RefreshCw size={16} />} onClick={fetchLogs}>Làm mới</Button>
             } />
             <FilterBar>
+                <Input.Search className={styles.auditFilter} aria-label="Mã tham chiếu" placeholder="Nhập mã tham chiếu"
+                    allowClear enterButton="Tìm" onSearch={value => { setReferenceCode(value.trim()); setPage(1); }} />
                 <Select className={styles.auditFilter} aria-label="Loại hành động" value={actionFilter}
                     onChange={value => { setActionFilter(value); setPage(1); }} options={[
                         { value: '', label: 'Tất cả loại hành động' },

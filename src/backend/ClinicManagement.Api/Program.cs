@@ -260,6 +260,7 @@ if (slotCoverageOnly)
     builder.Services.AddHostedService(sp => sp.GetRequiredService<DevelopmentSlotCoverageWorker>());
 }
 
+builder.Services.AddSingleton(new ClinicManagement.Api.Controllers.AppointmentLookupAttempts(TimeProvider.System));
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = 429;

@@ -7,6 +7,8 @@ public class Payment
 {
     public long Id { get; set; }
     public string PaymentCode { get; set; } = string.Empty;
+    public string? ShortCode { get; set; }
+    public string DisplayCode => ShortCode ?? PaymentCode;
     public long InvoiceId { get; set; }
     public decimal Amount { get; set; }
     public PaymentMethod Method { get; set; }

@@ -157,11 +157,11 @@ public class PatientService : IPatientService
             return new PatientPrescriptionDto
             {
                 Id = p.Id,
-                Code = $"RX-{_dateTimeProvider.ConvertUtcToVietnam(p.CreatedAt):yyMMdd}-{p.Id:D4}",
+                Code = BusinessDisplay.PrescriptionCode(p, _dateTimeProvider),
                 AppointmentId = p.AppointmentId,
-                AppointmentCode = p.Appointment?.AppointmentCode ?? string.Empty,
+                AppointmentCode = p.Appointment?.DisplayCode ?? string.Empty,
                 PatientVisitId = p.PatientVisitId,
-                VisitCode = p.PatientVisit?.VisitCode,
+                VisitCode = p.PatientVisit?.DisplayCode,
                 AppointmentDate = p.Appointment?.AppointmentDate ?? (p.PatientVisit != null ? p.PatientVisit.VisitDate : DateOnly.FromDateTime(p.CreatedAt)),
                 DoctorName = doctorTitle + doctorFullName,
                 SpecialtyName = p.Appointment?.Specialty?.Name ?? (p.PatientVisit?.Department != null ? p.PatientVisit.Department.Name : "Đa khoa"),
@@ -212,7 +212,7 @@ public class PatientService : IPatientService
             {
                 AppointmentId = vs.AppointmentId ?? vs.PatientVisit?.AppointmentId ?? 0,
                 PatientVisitId = vs.PatientVisitId,
-                AppointmentCode = vs.PatientVisit?.VisitCode ?? vs.Appointment?.AppointmentCode ?? string.Empty,
+                AppointmentCode = vs.PatientVisit?.DisplayCode ?? vs.Appointment?.DisplayCode ?? string.Empty,
                 AppointmentDate = vs.PatientVisit?.VisitDate ?? vs.Appointment!.AppointmentDate,
                 RecordedAtUtc = vs.RecordedAtUtc,
                 Height = vs.Height,

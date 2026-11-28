@@ -1992,7 +1992,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
                 if (apt != null)
                 {
                     verifiedAppointmentId = apt.Id;
-                    verifiedAppointmentCode = apt.AppointmentCode;
+                    verifiedAppointmentCode = apt.DisplayCode;
                 }
             }
         }

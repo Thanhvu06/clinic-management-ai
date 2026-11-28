@@ -19,7 +19,7 @@ public sealed partial class PatientCopilotToolHandler
             .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(a => new
             {
-                a.Id, a.AppointmentCode, a.AppointmentDate, a.StartTime, a.EndTime,
+                a.Id, AppointmentCode = (a.ShortCode ?? a.AppointmentCode), a.AppointmentDate, a.StartTime, a.EndTime,
                 status = a.Status.ToString(), doctorName = _db.Users.Where(u => u.Id == a.Doctor.UserId).Select(u => u.FullName).FirstOrDefault(),
                 specialtyName = a.Specialty.Name, facilityName = a.Facility == null ? null : a.Facility.Name, a.Reason
             }).ToListAsync(cancellationToken);

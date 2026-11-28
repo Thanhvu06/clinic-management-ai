@@ -33,8 +33,10 @@ public class DoctorQueueItemDto
     public bool IsCompletionOverdue { get; set; }
     public long? AppointmentId { get; set; }
     public string AppointmentCode { get; set; } = string.Empty;
+    public string? LegacyAppointmentCode { get; set; }
     public long? PatientVisitId { get; set; }
     public string? VisitCode { get; set; }
+    public string? LegacyVisitCode { get; set; }
     public int? QueueNumber { get; set; }
     public int QueueOrder { get; set; }
     public DateOnly AppointmentDate { get; set; }

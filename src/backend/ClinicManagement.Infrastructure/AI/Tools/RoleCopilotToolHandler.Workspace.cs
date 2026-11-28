@@ -49,7 +49,7 @@ public sealed partial class RoleCopilotToolHandler
             items.Add(new
             {
                 prescription.Id,
-                prescriptionCode = BusinessDisplay.PrescriptionCode(prescription.Id, prescription.CreatedAt, _clock),
+                prescriptionCode = prescription.PrescriptionCode ?? BusinessDisplay.LegacyPrescriptionCode(prescription.Id, prescription.CreatedAt, _clock),
                 prescription.PatientName,
                 status = prescription.Status,
                 prescription.CreatedAt,

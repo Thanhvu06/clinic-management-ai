@@ -149,7 +149,7 @@ public class AppointmentService : IAppointmentService
             return new AppointmentDto
             {
                 Id = initialExisting.Id,
-                AppointmentCode = initialExisting.AppointmentCode,
+                AppointmentCode = initialExisting.DisplayCode,
                 PatientId = initialExisting.PatientId,
                 DoctorId = initialExisting.DoctorId,
                 DoctorName = initialDoctorName,
@@ -306,7 +306,7 @@ public class AppointmentService : IAppointmentService
                 return new AppointmentDto
                 {
                     Id = existingAppointment.Id,
-                    AppointmentCode = existingAppointment.AppointmentCode,
+                    AppointmentCode = existingAppointment.DisplayCode,
                     PatientId = existingAppointment.PatientId,
                     DoctorId = existingAppointment.DoctorId,
                     DoctorName = doctorName,
@@ -352,7 +352,7 @@ public class AppointmentService : IAppointmentService
                     return new AppointmentDto
                     {
                         Id = samePatientAppointment.Id,
-                        AppointmentCode = samePatientAppointment.AppointmentCode,
+                        AppointmentCode = samePatientAppointment.DisplayCode,
                         PatientId = samePatientAppointment.PatientId,
                         DoctorId = samePatientAppointment.DoctorId,
                         DoctorName = doctorName,
@@ -426,7 +426,7 @@ public class AppointmentService : IAppointmentService
                 UserId = currentUserId.Value,
                 Type = NotificationType.Appointment,
                 Title = "Đặt lịch khám thành công",
-                Message = $"Lịch khám #{appointment.AppointmentCode} ngày {appointment.AppointmentDate:dd/MM/yyyy} lúc {appointment.StartTime:HH\\:mm} đã được gửi, đang chờ phòng khám xác nhận.",
+                Message = $"Lịch khám #{appointment.DisplayCode} ngày {appointment.AppointmentDate:dd/MM/yyyy} lúc {appointment.StartTime:HH\\:mm} đã được gửi, đang chờ phòng khám xác nhận.",
                 Route = "/patient/appointments",
                 RelatedEntityType = "Appointment",
                 RelatedEntityId = appointment.Id.ToString(),
@@ -456,7 +456,7 @@ public class AppointmentService : IAppointmentService
                         UserId = recUserId,
                         Type = NotificationType.Appointment,
                         Title = "Lịch khám mới chờ xử lý",
-                        Message = $"Bệnh nhân đã đặt lịch khám #{appointment.AppointmentCode} ngày {appointment.AppointmentDate:dd/MM/yyyy}.",
+                        Message = $"Bệnh nhân đã đặt lịch khám #{appointment.DisplayCode} ngày {appointment.AppointmentDate:dd/MM/yyyy}.",
                         Route = "/reception/appointments",
                         RelatedEntityType = "Appointment",
                         RelatedEntityId = appointment.Id.ToString(),
@@ -480,7 +480,7 @@ public class AppointmentService : IAppointmentService
                     UserId = doctorUserId,
                     Type = NotificationType.Appointment,
                     Title = "Lịch khám mới chờ tiếp nhận",
-                    Message = $"Bệnh nhân đã đặt lịch khám #{appointment.AppointmentCode} ngày {appointment.AppointmentDate:dd/MM/yyyy} lúc {appointment.StartTime:HH\\:mm}.",
+                    Message = $"Bệnh nhân đã đặt lịch khám #{appointment.DisplayCode} ngày {appointment.AppointmentDate:dd/MM/yyyy} lúc {appointment.StartTime:HH\\:mm}.",
                     Route = $"/doctor/appointments/{appointment.Id}",
                     RelatedEntityType = "Appointment",
                     RelatedEntityId = appointment.Id.ToString(),
@@ -493,7 +493,7 @@ public class AppointmentService : IAppointmentService
             var resultDto = new AppointmentDto
             {
                 Id = appointment.Id,
-                AppointmentCode = appointment.AppointmentCode,
+                AppointmentCode = appointment.DisplayCode,
                 PatientId = appointment.PatientId,
                 DoctorId = appointment.DoctorId,
                 DoctorName = doctorName,
@@ -594,7 +594,7 @@ public class AppointmentService : IAppointmentService
                 return new AppointmentDto
                 {
                     Id = samePatientAppointment.Id,
-                    AppointmentCode = samePatientAppointment.AppointmentCode,
+                    AppointmentCode = samePatientAppointment.DisplayCode,
                     PatientId = samePatientAppointment.PatientId,
                     DoctorId = samePatientAppointment.DoctorId,
                     DoctorName = doctorName,
@@ -661,7 +661,7 @@ public class AppointmentService : IAppointmentService
                            select new AppointmentDto
                            {
                                Id = a.Id,
-                               AppointmentCode = a.AppointmentCode,
+                               AppointmentCode = (a.ShortCode ?? a.AppointmentCode),
                                PatientId = a.PatientId,
                                DoctorId = a.DoctorId,
                                DoctorName = u.FullName,
@@ -700,7 +700,7 @@ public class AppointmentService : IAppointmentService
                                  select new AppointmentDto
                                  {
                                      Id = a.Id,
-                                     AppointmentCode = a.AppointmentCode,
+                                     AppointmentCode = (a.ShortCode ?? a.AppointmentCode),
                                      PatientId = a.PatientId,
                                      DoctorId = a.DoctorId,
                                      DoctorName = u.FullName,
@@ -758,10 +758,10 @@ public class AppointmentService : IAppointmentService
     public async Task<List<AppointmentLookupDto>> LookupAppointmentsAsync(string query, string? phone = null)
     {
         var cleanPhone = NormalizeLookupPhone(phone);
-        if (string.IsNullOrWhiteSpace(query) || query.Trim().Length < 4 || string.IsNullOrEmpty(cleanPhone))
+        if (string.IsNullOrWhiteSpace(query) || DisplayCodeSearch.Compact(query).Length < 3 || string.IsNullOrEmpty(cleanPhone))
             return new List<AppointmentLookupDto>();
 
-        var cleanQuery = query.Trim();
+        var cleanQuery = DisplayCodeSearch.Canonical(query);
 
         var queryable = from a in _dbContext.Appointments
                         join p in _dbContext.Patients on a.PatientId equals p.Id
@@ -769,11 +769,11 @@ public class AppointmentService : IAppointmentService
                         join s in _dbContext.Specialties on a.SpecialtyId equals s.Id
                         join d in _dbContext.Doctors on a.DoctorId equals d.Id
                         join du in _dbContext.Users on d.UserId equals du.Id
-                        where a.AppointmentCode == cleanQuery.ToUpper()
+                        where a.ShortCode == cleanQuery || a.AppointmentCode.ToUpper() == cleanQuery
                         orderby a.AppointmentDate descending, a.StartTime descending
                         select new
                         {
-                            a.AppointmentCode,
+                            AppointmentCode = a.ShortCode ?? a.AppointmentCode,
                             a.AppointmentDate,
                             a.StartTime,
                             a.EndTime,

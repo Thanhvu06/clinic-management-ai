@@ -26,7 +26,7 @@ public sealed class ChangeRequestExpiryRule(AppDbContext db, IDateTimeProvider c
             r.ProcessedAt = Clock.UtcNow;
             r.ProcessedByUserId = null;
             var a = r.Appointment;
-            var code = $"YC{r.Id} / {a.AppointmentCode}";
+            var code = $"YC{r.Id} / {a.DisplayCode}";
             Audit(nameof(AppointmentChangeRequest), r.Id, code, "Hết hạn xử lý");
             if (a.Status == AppointmentStatus.PendingReschedule || a.Status == AppointmentStatus.PendingCancellation)
             {
@@ -38,7 +38,7 @@ public sealed class ChangeRequestExpiryRule(AppDbContext db, IDateTimeProvider c
                     AppointmentId = a.Id, Action = AppointmentHistoryAction.RequestExpired,
                     OldStatus = old, NewStatus = a.Status, Note = "Hết hạn xử lý", PerformedByUserId = null, CreatedAt = Clock.UtcNow
                 });
-                Audit(nameof(Appointment), a.Id, a.AppointmentCode, "Hết hạn xử lý, khôi phục trạng thái lịch gốc");
+                Audit(nameof(Appointment), a.Id, a.DisplayCode, "Hết hạn xử lý, khôi phục trạng thái lịch gốc");
             }
             Notify(a.Patient.UserId, NotificationType.AppointmentChangeRequest, nameof(AppointmentChangeRequest), r.Id, code, "Hết hạn xử lý", "/patient/appointments");
             await NotifyReceptionAsync(a.FacilityId, nameof(AppointmentChangeRequest), r.Id, code, "Hết hạn xử lý", ct, "/reception/change-requests");

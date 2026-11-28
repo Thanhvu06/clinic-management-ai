@@ -4,7 +4,7 @@ import styles from './VisitSteps.module.css';
 
 const steps = [
     { icon: CalendarDays, title: 'Đặt lịch trực tuyến', detail: 'Chọn chuyên khoa, bác sĩ và giờ khám phù hợp.' },
-    { icon: ClipboardCheck, title: 'Làm thủ tục tại quầy lễ tân', detail: 'Đọc mã lịch hẹn (APT-...) khi đến phòng khám.' },
+    { icon: ClipboardCheck, title: 'Làm thủ tục tại quầy lễ tân', detail: 'Đọc mã lịch hẹn (ví dụ LH0001) khi đến phòng khám.' },
     { icon: Stethoscope, title: 'Khám cùng bác sĩ', detail: 'Bác sĩ khám, chỉ định cận lâm sàng nếu cần.' },
     { icon: ReceiptText, title: 'Nhận đơn thuốc và thanh toán', detail: 'Xem đơn thuốc, kết quả đã công bố trên tài khoản.' },
 ];

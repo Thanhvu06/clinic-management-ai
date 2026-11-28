@@ -37,7 +37,7 @@ public partial class DoctorAppointmentService
     private DoctorAppointmentDto MapToDto(Appointment a, string patientName, string patientPhone, Gender? gender, DateOnly? dob) => new()
     {
         Id = a.Id,
-        AppointmentCode = a.AppointmentCode,
+        AppointmentCode = a.DisplayCode,
         PatientId = a.PatientId,
         DoctorId = a.DoctorId,
         SpecialtyId = a.SpecialtyId,

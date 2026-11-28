@@ -37,6 +37,7 @@ public class CreatePrescriptionItemDto
 
 public class PrescriptionDetailDto
 {
+    public string? PrescriptionCode { get; set; }
     public long Id { get; set; }
     public long? AppointmentId { get; set; }
     public string AppointmentCode { get; set; } = string.Empty;

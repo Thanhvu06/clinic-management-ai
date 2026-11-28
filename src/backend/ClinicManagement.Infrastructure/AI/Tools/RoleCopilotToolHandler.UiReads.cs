@@ -25,7 +25,7 @@ public sealed partial class RoleCopilotToolHandler
             .Where(o => o.Status == DiagnosticOrderStatus.Completed && o.CompletedAtUtc >= start && o.CompletedAtUtc < end);
         var count = await query.CountAsync(ct);
         var items = await query.OrderByDescending(o => o.CompletedAtUtc).ThenByDescending(o => o.Id).Take(100)
-            .Select(o => new { o.OrderCode, status = o.Status.ToString(), o.CompletedAtUtc,
+            .Select(o => new { OrderCode = (o.ShortCode ?? o.OrderCode), status = o.Status.ToString(), o.CompletedAtUtc,
                 services = o.Items.OrderBy(i => i.Id).Select(i => i.DiagnosticService.Name).ToList() }).ToListAsync(ct);
         return Completed(items, "technician_completed_today", $"Có {count} chỉ định hoàn tất hôm nay trong phạm vi cơ sở của màn hình cận lâm sàng." + LimitNotice(count, items.Count));
     }
@@ -68,7 +68,7 @@ public sealed partial class RoleCopilotToolHandler
                     AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status) &&
                     (a.AppointmentDate > _clock.VietnamToday || a.AppointmentDate == _clock.VietnamToday && a.StartTime >= _clock.VietnamTime))
                 .OrderBy(a => a.AppointmentDate).ThenBy(a => a.StartTime).ThenBy(a => a.Id)
-                .Select(a => new { a.AppointmentCode, a.AppointmentDate, a.StartTime }).FirstOrDefaultAsync(ct);
+                .Select(a => new { AppointmentCode = (a.ShortCode ?? a.AppointmentCode), a.AppointmentDate, a.StartTime }).FirstOrDefaultAsync(ct);
             var phone = MaskPatientPhone(patient.PhoneNumber);
             rows.Add(new { patient.FullName, patient.MedicalRecordNumber, birthYear = patient.DateOfBirth?.Year, phone,
                 upcomingAppointment = next });

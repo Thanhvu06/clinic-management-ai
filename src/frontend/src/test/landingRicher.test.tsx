@@ -75,7 +75,7 @@ describe('Richer public landing', () => {
         fireEvent.click(within(shortcuts).getByRole('link', { name: 'Hỏi trợ lý AI' }));
         expect(mocks.openChat).toHaveBeenCalledOnce();
         fireEvent.click(within(shortcuts).getByRole('button', { name: 'Tra cứu lịch hẹn' }));
-        expect(screen.getByPlaceholderText(/APT-/)).toBeInTheDocument();
+        expect(screen.getByPlaceholderText(/LH0001/)).toBeInTheDocument();
         expect(screen.getByAltText('Hành lang sáng thoáng tại cơ sở y tế')).toHaveAttribute('width', '1600');
         expect(screen.getByText('Ảnh minh họa: Unsplash')).toBeInTheDocument();
         const directions = screen.getByRole('link', { name: 'Chỉ đường' });

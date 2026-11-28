@@ -28,8 +28,8 @@ public sealed class DiagnosticOrderExpiryRule(AppDbContext db, IDateTimeProvider
             o.Note = string.IsNullOrEmpty(previousNote) ? "Quá hạn thực hiện"
                 : $"{previousNote[..Math.Min(previousNote.Length, 980)]}\nQuá hạn thực hiện";
             foreach (var item in o.Items.Where(i => i.Status == DiagnosticItemStatus.Ordered)) item.Status = DiagnosticItemStatus.Cancelled;
-            Audit(nameof(DiagnosticOrder), o.Id, o.OrderCode, "Quá hạn thực hiện");
-            Notify(o.OrderingDoctor.UserId, NotificationType.Diagnostic, nameof(DiagnosticOrder), o.Id, o.OrderCode, "Quá hạn thực hiện", "/doctor/queue");
+            Audit(nameof(DiagnosticOrder), o.Id, o.DisplayCode, "Quá hạn thực hiện");
+            Notify(o.OrderingDoctor.UserId, NotificationType.Diagnostic, nameof(DiagnosticOrder), o.Id, o.DisplayCode, "Quá hạn thực hiện", "/doctor/queue");
         }
         return items.Count;
     }

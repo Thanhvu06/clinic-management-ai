@@ -142,9 +142,14 @@ export const DoctorQueue: React.FC = () => {
 
     const filteredQueue = queue.filter(item => {
         const matchesStatus = statusFilter === 'ALL' || item.status === statusFilter;
+        const compactCode = searchTerm.replace(/\s/g, '').toUpperCase();
+        const shortCode = compactCode.replace(/^(LH|LK)(\d+)$/, (_, prefix: string, digits: string) =>
+            prefix + digits.replace(/^0+(?=\d)/, '').padStart(4, '0'));
+        const matchesCode = [item.appointmentCode, item.visitCode, item.legacyAppointmentCode, item.legacyVisitCode]
+            .some(code => code?.toUpperCase().includes(compactCode) || code === shortCode);
         const matchesSearch = !searchTerm ||
             item.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.appointmentCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            matchesCode ||
             item.patientPhone.includes(searchTerm);
         return matchesStatus && matchesSearch;
     });
@@ -183,7 +188,7 @@ export const DoctorQueue: React.FC = () => {
                 </Flex>
             )
         },
-        { header: 'Mã lịch', width: 130, accessor: (item) => <span className={styles.text2}>{item.appointmentCode}</span> },
+        { header: 'Mã khám / lịch', width: 130, accessor: (item) => <span className={styles.text2}>{item.visitCode || item.appointmentCode}</span> },
         {
             header: 'Bệnh nhân',
             accessor: (item) => (

@@ -78,6 +78,7 @@ public class NotificationService : INotificationService
             })
             .ToListAsync(cancellationToken);
 
+        await NotificationDisplayCodes.ApplyAsync(_dbContext, items, cancellationToken);
         return new PagedResult<NotificationDto>(items, totalItems, page, pageSize);
     }
 

@@ -239,7 +239,7 @@ public partial class PatientVisitService : IPatientVisitService
             _dbContext.PatientVisits.Add(visit);
         else
             visit.UpdatedAtUtc = now;
-        var visitCode = visit.VisitCode;
+        var visitCode = visit.DisplayCode;
         // Each re-check-in issues a new queue ticket; first-check-in keys stay unchanged.
         var notificationSuffix = existingVisit == null ? string.Empty
             : $":recheck:{department.Id}:{appointment.AppointmentDate:yyyyMMdd}:{queueNumber}";
@@ -291,7 +291,7 @@ public partial class PatientVisitService : IPatientVisitService
                 UserId = doctor.UserId,
                 Type = NotificationType.Appointment,
                 Title = "Bệnh nhân đã đến phòng khám",
-                Message = $"Bệnh nhân {appointment.Patient?.FullName} cho lịch khám #{appointment.AppointmentCode} đã có mặt tại phòng chờ.",
+                Message = $"Bệnh nhân {appointment.Patient?.FullName} cho lịch khám #{appointment.DisplayCode} đã có mặt tại phòng chờ.",
                 Route = $"/doctor/appointments/{appointment.Id}",
                 RelatedEntityType = "Appointment",
                 RelatedEntityId = appointment.Id.ToString(),
@@ -309,12 +309,12 @@ public partial class PatientVisitService : IPatientVisitService
         return new CheckInTicketDto
         {
             VisitId = visit.Id,
-            VisitCode = visit.VisitCode,
+            VisitCode = visit.DisplayCode,
             AppointmentId = appointment.Id,
-            AppointmentCode = appointment.AppointmentCode,
+            AppointmentCode = appointment.DisplayCode,
             PatientId = appointment.PatientId,
             PatientName = appointment.Patient?.FullName ?? "Bệnh nhân",
-            MedicalRecordNumber = appointment.Patient?.MedicalRecordNumber ?? string.Empty,
+            MedicalRecordNumber = appointment.Patient?.DisplayCode ?? string.Empty,
             PhoneNumber = appointment.Patient?.PhoneNumber ?? string.Empty,
             QueueNumber = queueNumber,
             QueueDisplay = $"{department.Code}-{queueNumber:D3}",
@@ -365,12 +365,12 @@ public partial class PatientVisitService : IPatientVisitService
         return new PatientVisitDetailDto
         {
             Id = visit.Id,
-            VisitCode = visit.VisitCode,
+            VisitCode = visit.DisplayCode,
             AppointmentId = visit.AppointmentId,
-            AppointmentCode = visit.Appointment?.AppointmentCode,
+            AppointmentCode = visit.Appointment?.DisplayCode,
             PatientId = visit.PatientId,
             PatientName = visit.Patient.FullName ?? string.Empty,
-            MedicalRecordNumber = visit.Patient.MedicalRecordNumber ?? string.Empty,
+            MedicalRecordNumber = visit.Patient.DisplayCode ?? string.Empty,
             PhoneNumber = visit.Patient.PhoneNumber ?? string.Empty,
             DateOfBirth = visit.Patient.DateOfBirth,
             Gender = visit.Patient.Gender?.ToString(),
@@ -468,14 +468,14 @@ public partial class PatientVisitService : IPatientVisitService
             return new DepartmentQueueItemDto
             {
                 VisitId = v.Id,
-                VisitCode = v.VisitCode,
+                VisitCode = v.DisplayCode,
                 AppointmentId = v.AppointmentId,
-                AppointmentCode = v.Appointment?.AppointmentCode,
+                AppointmentCode = v.Appointment?.DisplayCode,
                 QueueNumber = v.QueueNumber,
                 QueueDisplay = $"{v.Department?.Code ?? "Q"}-{v.QueueNumber:D3}",
                 PatientId = v.PatientId,
                 PatientName = v.Patient.FullName ?? "Bệnh nhân",
-                MedicalRecordNumber = v.Patient.MedicalRecordNumber ?? string.Empty,
+                MedicalRecordNumber = v.Patient.DisplayCode ?? string.Empty,
                 PhoneNumber = v.Patient.PhoneNumber ?? string.Empty,
                 Gender = v.Patient.Gender?.ToString(),
                 DateOfBirth = v.Patient.DateOfBirth,
@@ -609,7 +609,7 @@ public partial class PatientVisitService : IPatientVisitService
                         Action = AppointmentHistoryAction.Confirmed,
                         OldStatus = AppointmentStatus.CheckedIn,
                         NewStatus = AppointmentStatus.Confirmed,
-                        Note = $"Trả lịch hẹn về trạng thái đã xác nhận sau khi hủy lượt khám {visit.VisitCode}.",
+                        Note = $"Trả lịch hẹn về trạng thái đã xác nhận sau khi hủy lượt khám {visit.DisplayCode}.",
                         PerformedByUserId = currentUserId,
                         CreatedAt = _dateTimeProvider.UtcNow
                     });
@@ -683,12 +683,12 @@ public partial class PatientVisitService : IPatientVisitService
         return new CheckInTicketDto
         {
             VisitId = visit.Id,
-            VisitCode = visit.VisitCode,
+            VisitCode = visit.DisplayCode,
             AppointmentId = visit.AppointmentId,
-            AppointmentCode = visit.Appointment?.AppointmentCode,
+            AppointmentCode = visit.Appointment?.DisplayCode,
             PatientId = visit.PatientId,
             PatientName = visit.Patient?.FullName ?? "Bệnh nhân",
-            MedicalRecordNumber = visit.Patient?.MedicalRecordNumber ?? string.Empty,
+            MedicalRecordNumber = visit.Patient?.DisplayCode ?? string.Empty,
             PhoneNumber = visit.Patient?.PhoneNumber ?? string.Empty,
             QueueNumber = visit.QueueNumber,
             QueueDisplay = $"{deptCode}-{visit.QueueNumber:D3}",

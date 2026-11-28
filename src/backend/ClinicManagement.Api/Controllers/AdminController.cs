@@ -65,11 +65,15 @@ public class AdminController : ControllerBase
         [FromQuery] string? action,
         [FromQuery] string? entityName,
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 15)
+        [FromQuery] int pageSize = 15,
+        [FromQuery] string? code = null)
     {
         page = Math.Max(1, page);
         pageSize = pageSize < 1 ? 10 : Math.Min(pageSize, 100);
-        var query = from l in dbContext.SystemAuditLogs.AsNoTracking().Where(l => l.EntityName != "DevelopmentData")
+        var logs = dbContext.SystemAuditLogs.AsNoTracking().Where(l => l.EntityName != "DevelopmentData");
+        if (!string.IsNullOrWhiteSpace(code))
+            logs = ClinicManagement.Infrastructure.Admin.AuditBusinessReferences.FindByCode(dbContext, logs, code);
+        var query = from l in logs
                     join u in dbContext.Users.AsNoTracking() on l.UserId equals u.Id into uJoin
                     from user in uJoin.DefaultIfEmpty()
                     select new

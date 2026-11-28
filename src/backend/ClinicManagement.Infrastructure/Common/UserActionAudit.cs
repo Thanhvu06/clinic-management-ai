@@ -31,5 +31,5 @@ public static class UserActionAudit
         });
 
     public static void Appointment(AppDbContext db, Guid? userId, string action, Appointment appointment, string description, DateTime utcNow) =>
-        Record(db, userId, action, nameof(Domain.Entities.Appointment), appointment.Id, $"{description} {appointment.AppointmentCode}", utcNow);
+        Record(db, userId, action, nameof(Domain.Entities.Appointment), appointment.Id, $"{description} {appointment.DisplayCode}", utcNow);
 }

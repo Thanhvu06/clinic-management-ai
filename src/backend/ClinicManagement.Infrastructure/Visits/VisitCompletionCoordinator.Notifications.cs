@@ -13,7 +13,7 @@ public static partial class VisitCompletionCoordinator
     {
         var visit = await db.PatientVisits.SingleAsync(v => v.Id == visitId, cancellationToken);
         await FacilityWorkflowNotifications.SendAsync(db, notifications, visit.FacilityId, "Receptionist",
-            NotificationType.Appointment, $"Lượt khám {visit.VisitCode} đã hoàn tất, chờ lập hóa đơn",
+            NotificationType.Appointment, $"Lượt khám {visit.DisplayCode} đã hoàn tất, chờ lập hóa đơn",
             "/reception/billing", "PatientVisit", visit.Id, "clinical_completed", cancellationToken, title: "Chờ lập hóa đơn");
     }
 }

@@ -1,3 +1,4 @@
+using ClinicManagement.Infrastructure.Common;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using ClinicManagement.Application.AI;
@@ -11,15 +12,15 @@ namespace ClinicManagement.Infrastructure.AI;
 
 public partial class AiSpecialtyService
 {
-    private static readonly Regex AppointmentCancelCode = new(@"\bapt-[a-z0-9]+(?:-[a-z0-9]+)*\b",
-        RegexOptions.CultureInvariant);
+    private static readonly Regex AppointmentCancelCode = new(DisplayCodeSearch.AppointmentPattern,
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private static bool IsShortDraftCancellation(string message) =>
         AiTextNormalizer.Normalize(message).ToLowerInvariant().TrimEnd('!', '.', '?', '…', ' ') is
             "hủy" or "huỷ" or "thôi" or "không đặt nữa";
 
     private static bool IsTargetedAppointmentCancellation(string text) =>
-        Regex.IsMatch(text, @"^(?:(?:(?:toi|minh|em) muon|hay|xin|giup toi) )?huy (?:ma )?(?:apt-|ngay |hom nay\b|(?:sang|trua|chieu|toi) mai\b|\d{1,2}[/\-])");
+        Regex.IsMatch(text, @"^(?:(?:(?:toi|minh|em) muon|hay|xin|giup toi) )?huy (?:ma )?(?:apt-|lh\s*[0-9]|ngay |hom nay\b|(?:sang|trua|chieu|toi) mai\b|\d{1,2}[/\-])");
 
     private AppointmentCancelTarget ReadAppointmentCancelTarget(string message)
     {
@@ -28,7 +29,7 @@ public partial class AiSpecialtyService
         var code = AppointmentCancelCode.Match(text);
         var dateText = code.Success ? text.Remove(code.Index, code.Length) : text;
         var day = AppointmentCancelDate.Parse(dateText, _dateTimeProvider.VietnamToday, out var invalidDate);
-        return new(day, invalidDate, code.Success ? code.Value.ToUpperInvariant() : null);
+        return new(day, invalidDate, code.Success ? DisplayCodeSearch.Canonical(code.Value) : null);
     }
 
     private async Task<AiChatResponseDto?> ResolveAppointmentCancelAsync(
@@ -53,9 +54,9 @@ public partial class AiSpecialtyService
         var eligible = PatientCopilotToolHandler.FutureAppointments(own, _dateTimeProvider)
             .Where(a => a.Status == AppointmentStatus.Pending || a.Status == AppointmentStatus.Confirmed);
         if (day.HasValue) eligible = eligible.Where(a => a.AppointmentDate == day.Value);
-        if (target.Code is not null) eligible = eligible.Where(a => a.AppointmentCode == target.Code);
+        if (target.Code is not null) eligible = eligible.Where(a => a.ShortCode == target.Code || a.AppointmentCode.ToUpper() == target.Code);
         var appointments = await eligible.OrderBy(a => a.AppointmentDate).ThenBy(a => a.StartTime).ThenBy(a => a.Id)
-            .Select(a => new CancelCandidate(a.Id, a.AppointmentCode, a.AppointmentDate, a.StartTime, a.Status,
+            .Select(a => new CancelCandidate(a.Id, (a.ShortCode ?? a.AppointmentCode), a.AppointmentDate, a.StartTime, a.Status,
                 a.Specialty.Name, _dbContext.Users.Where(u => u.Id == a.Doctor.UserId).Select(u => u.FullName).FirstOrDefault()))
             .Take(21)
             .ToListAsync(ct);

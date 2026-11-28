@@ -29,7 +29,7 @@ export function LandingFaq() {
 const faqItems = [
     {
         question: 'Tôi cần chuẩn bị gì khi đến khám theo lịch hẹn?',
-        answer: 'Bạn đến trước giờ hẹn 10–15 phút và đọc mã lịch hẹn (APT-...) hoặc số điện thoại tại quầy lễ tân để làm thủ tục.'
+        answer: 'Bạn đến trước giờ hẹn 10–15 phút và đọc mã lịch hẹn (ví dụ LH0001) hoặc số điện thoại tại quầy lễ tân để làm thủ tục.'
     },
     {
         question: 'Trợ lý AI dùng để làm gì?',

@@ -67,7 +67,7 @@ public partial class DiagnosticWorkflowService
             .Select(order => new TurnaroundOrderRow
             {
                 Id = order.Id,
-                OrderCode = order.OrderCode,
+                OrderCode = (order.ShortCode ?? order.OrderCode),
                 PatientUserId = order.Patient.UserId,
                 PatientFullName = order.Patient.FullName,
                 OrderedAtUtc = order.OrderedAtUtc,

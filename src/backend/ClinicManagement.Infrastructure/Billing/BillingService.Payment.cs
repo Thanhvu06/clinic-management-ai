@@ -122,7 +122,7 @@ public partial class BillingService
                     Action = "PROCESS_PAYMENT",
                     EntityName = "Payment",
                     EntityId = paymentCode,
-                    Description = $"Thu tiền hóa đơn #{currentInvoice.InvoiceCode}: {ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(payment.Amount)} ({(payment.Method == PaymentMethod.Cash ? "Tiền mặt" : "Chuyển khoản")})",
+                    Description = $"Thu tiền hóa đơn #{currentInvoice.DisplayCode}: {ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(payment.Amount)} ({(payment.Method == PaymentMethod.Cash ? "Tiền mặt" : "Chuyển khoản")})",
                     CreatedAt = _dateTimeProvider.UtcNow
                 });
 
@@ -134,7 +134,7 @@ public partial class BillingService
                         UserId = currentInvoice.Patient.UserId.Value,
                         Type = NotificationType.Payment,
                         Title = "Thanh toán thành công",
-                        Message = $"Hóa đơn #{currentInvoice.InvoiceCode} đã được thanh toán thành công ({ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(payment.Amount)} qua {methodLabel}).",
+                        Message = $"Hóa đơn #{currentInvoice.DisplayCode} đã được thanh toán thành công ({ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(payment.Amount)} qua {methodLabel}).",
                         Route = "/patient/invoices",
                         RelatedEntityType = "Invoice",
                         RelatedEntityId = currentInvoice.Id.ToString(),
@@ -152,9 +152,9 @@ public partial class BillingService
                 return new PaymentDto
                 {
                     Id = payment.Id,
-                    PaymentCode = payment.PaymentCode,
+                    PaymentCode = payment.DisplayCode,
                     InvoiceId = payment.InvoiceId,
-                    InvoiceCode = currentInvoice.InvoiceCode,
+                    InvoiceCode = currentInvoice.DisplayCode,
                     Amount = payment.Amount,
                     Method = payment.Method,
                     MethodName = methodLabel,

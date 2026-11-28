@@ -91,7 +91,7 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
                                   select new DoctorScheduleAppointmentRow(
                                       a.Id,
                                       a.AppointmentSlotId,
-                                      a.AppointmentCode,
+                                      a.ShortCode ?? a.AppointmentCode,
                                       a.Status,
                                       u != null ? u.FullName : (p.FullName ?? string.Empty))).ToListAsync();
 
@@ -279,7 +279,7 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
             pastVisitDtos.Add(new PastVisitSummaryDto
             {
                 AppointmentId = a.Id,
-                AppointmentCode = a.AppointmentCode,
+                AppointmentCode = (a.ShortCode ?? a.AppointmentCode),
                 Date = a.AppointmentDate,
                 DoctorName = docName ?? "Bác sĩ",
                 SpecialtyName = a.Specialty?.Name ?? string.Empty,
@@ -297,7 +297,7 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
             {
                 AppointmentId = 0,
                 PatientVisitId = v.Id,
-                AppointmentCode = v.VisitCode,
+                AppointmentCode = (v.ShortCode ?? v.VisitCode),
                 Date = v.VisitDate,
                 DoctorName = docName ?? "Bác sĩ",
                 SpecialtyName = v.Department?.Specialty?.Name ?? v.Department?.Name ?? string.Empty,
@@ -350,7 +350,7 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
             {
                 AppointmentId = vs.AppointmentId ?? 0,
                 PatientVisitId = vs.PatientVisitId,
-                AppointmentCode = vs.Appointment?.AppointmentCode ?? vs.PatientVisit?.VisitCode ?? "VISIT",
+                AppointmentCode = vs.Appointment?.DisplayCode ?? vs.PatientVisit?.DisplayCode ?? "VISIT",
                 AppointmentDate = vs.Appointment?.AppointmentDate ?? (vs.PatientVisit != null ? vs.PatientVisit.VisitDate : DateOnly.FromDateTime(vs.RecordedAtUtc)),
                 RecordedAtUtc = vs.RecordedAtUtc,
                 Height = vs.Height,
@@ -535,7 +535,7 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
             PerformedByUserId = userId,
             CreatedAt = DateTime.UtcNow
         });
-        RecordConsultationStarted(userId, nameof(Appointment), appointment.Id, $"lịch hẹn {appointment.AppointmentCode}");
+        RecordConsultationStarted(userId, nameof(Appointment), appointment.Id, $"lịch hẹn {appointment.DisplayCode}");
 
         await _dbContext.SaveChangesAsync();
     }
@@ -675,7 +675,7 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
                     UserId = patientUserId.Value,
                     Type = NotificationType.Revisit,
                     Title = "Đề xuất tái khám mới",
-                    Message = $"Bác sĩ đã gửi đề xuất tái khám sau buổi khám #{appointment.AppointmentCode}. Vui lòng xác nhận lịch tái khám.",
+                    Message = $"Bác sĩ đã gửi đề xuất tái khám sau buổi khám #{appointment.DisplayCode}. Vui lòng xác nhận lịch tái khám.",
                     Route = "/patient/revisit",
                     RelatedEntityType = "RevisitRequest",
                     RelatedEntityId = revisitReq.Id.ToString(),
@@ -1038,7 +1038,7 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
         Id = v.Id,
         AppointmentId = v.AppointmentId,
         PatientVisitId = v.PatientVisitId,
-        VisitCode = v.PatientVisit?.VisitCode,
+        VisitCode = v.PatientVisit?.DisplayCode,
         Temperature = v.Temperature,
         BloodPressureSystolic = v.BloodPressureSystolic,
         BloodPressureDiastolic = v.BloodPressureDiastolic,
@@ -1058,7 +1058,7 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
         Id = vs.Id,
         AppointmentId = vs.AppointmentId,
         PatientVisitId = vs.PatientVisitId,
-        VisitCode = vs.PatientVisit?.VisitCode,
+        VisitCode = vs.PatientVisit?.DisplayCode,
         DoctorId = vs.DoctorId,
         DoctorName = doctorName,
         ChiefComplaint = vs.ChiefComplaint,
@@ -1085,7 +1085,7 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
             Id = p.Id,
             AppointmentId = p.AppointmentId,
             PatientVisitId = p.PatientVisitId,
-            VisitCode = p.PatientVisit?.VisitCode,
+            VisitCode = p.PatientVisit?.DisplayCode,
             DoctorId = p.DoctorId,
             DoctorName = doctorName,
             PatientId = p.PatientId,
@@ -1150,7 +1150,7 @@ public partial class DoctorAppointmentService : IDoctorAppointmentService
         }
 
         if (visit.Status != VisitStatus.InConsultation)
-            RecordConsultationStarted(userId, nameof(PatientVisit), visit.Id, $"lượt khám {visit.VisitCode}");
+            RecordConsultationStarted(userId, nameof(PatientVisit), visit.Id, $"lượt khám {visit.DisplayCode}");
         visit.Status = VisitStatus.InConsultation;
         visit.AssignedDoctorId = doctor.Id;
 

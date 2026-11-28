@@ -25,7 +25,7 @@ const questions = [
     'Khám gói sức khỏe cần chuẩn bị gì?',
 ];
 const answers = [
-    'Bạn đến trước giờ hẹn 10–15 phút và đọc mã lịch hẹn (APT-...) hoặc số điện thoại tại quầy lễ tân để làm thủ tục.',
+    'Bạn đến trước giờ hẹn 10–15 phút và đọc mã lịch hẹn (ví dụ LH0001) hoặc số điện thoại tại quầy lễ tân để làm thủ tục.',
     'Trợ lý AI đọc mô tả triệu chứng của bạn và gợi ý chuyên khoa có trong danh mục của phòng khám. Trợ lý không chẩn đoán và không kê đơn; bác sĩ là người khám và kết luận.',
     'Có. Vào mục Lịch hẹn của tôi để gửi yêu cầu đổi giờ hoặc hủy lịch. Lễ tân sẽ duyệt yêu cầu và báo lại cho bạn.',
     'Mỗi khung giờ đặt lịch dài 30 phút.',
@@ -61,7 +61,7 @@ describe('Public landing refresh L1–L7', () => {
         expect(within(actions).getByRole('link', { name: 'Hỏi trợ lý AI' })).toHaveAttribute('href', '/patient/ai-consultation');
         expect(within(actions).getByRole('link', { name: 'Bảng giá thuốc' })).toHaveAttribute('href', '/medicines');
         fireEvent.click(within(actions).getByRole('button', { name: 'Tra cứu lịch hẹn' }));
-        expect(screen.getByPlaceholderText(/APT-/)).toBeInTheDocument();
+        expect(screen.getByPlaceholderText(/LH0001/)).toBeInTheDocument();
         fireEvent.click(within(actions).getByRole('link', { name: 'Bảng giá thuốc' }));
         expect(screen.getByLabelText('Đường dẫn hiện tại')).toHaveTextContent('/medicines');
     });

@@ -140,7 +140,7 @@ describe('API messages and remaining date displays', () => {
 
     it('formats the appointment lookup result date without changing its API query', async () => {
         mount(<AppointmentLookupModal isOpen onClose={vi.fn()} />);
-        fireEvent.change(screen.getByPlaceholderText('Ví dụ: APT-260829-0001'), { target: { value: 'APT-API-81' } });
+        fireEvent.change(screen.getByPlaceholderText('Ví dụ: LH0001'), { target: { value: 'APT-API-81' } });
         fireEvent.change(screen.getByLabelText('Số điện thoại chủ lịch hẹn'), { target: { value: '0901234567' } });
         fireEvent.click(screen.getByRole('button', { name: 'Tra cứu' }));
         await waitFor(() => expect(screen.getByText('20/10/2026')).toBeInTheDocument());

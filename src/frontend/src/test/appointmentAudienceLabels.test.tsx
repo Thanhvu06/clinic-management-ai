@@ -87,7 +87,7 @@ describe('Shared appointment labels', () => {
 
     it('renders patient labels for the four statuses in appointment lookup results', async () => {
         mount(<AppointmentLookupModal isOpen onClose={vi.fn()} />);
-        fireEvent.change(screen.getByPlaceholderText('Ví dụ: APT-260829-0001'), { target: { value: 'APT-LABEL-1' } });
+        fireEvent.change(screen.getByPlaceholderText('Ví dụ: LH0001'), { target: { value: 'APT-LABEL-1' } });
         fireEvent.change(screen.getByLabelText('Số điện thoại chủ lịch hẹn'), { target: { value: '0900000004' } });
         fireEvent.click(screen.getByRole('button', { name: 'Tra cứu' }));
         for (const label of ['Đã xác nhận', 'Đã tiếp nhận', 'Đang khám', 'Đã khám xong']) expect(await screen.findByText(label)).toBeInTheDocument();

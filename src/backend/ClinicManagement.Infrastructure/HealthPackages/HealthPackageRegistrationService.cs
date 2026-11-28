@@ -1,3 +1,4 @@
+using ClinicManagement.Infrastructure.Common;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -136,7 +137,7 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
         return new HealthPackageRegistrationDto
         {
             Id = registration.Id,
-            RegistrationCode = registration.RegistrationCode,
+            RegistrationCode = registration.DisplayCode,
             HealthPackageId = package.Id,
             HealthPackageCode = package.Code,
             HealthPackageName = package.Name,
@@ -172,7 +173,7 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
                     select new HealthPackageRegistrationDto
                     {
                         Id = r.Id,
-                        RegistrationCode = r.RegistrationCode,
+                        RegistrationCode = (r.ShortCode ?? r.RegistrationCode),
                         HealthPackageId = hp.Id,
                         HealthPackageCode = hp.Code,
                         HealthPackageName = hp.Name,
@@ -209,7 +210,7 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
                             select new HealthPackageRegistrationDto
                             {
                                 Id = r.Id,
-                                RegistrationCode = r.RegistrationCode,
+                                RegistrationCode = (r.ShortCode ?? r.RegistrationCode),
                                 HealthPackageId = hp.Id,
                                 HealthPackageCode = hp.Code,
                                 HealthPackageName = hp.Name,
@@ -263,8 +264,8 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
             UserId = userId,
             Action = "CANCEL_PACKAGE_REGISTRATION",
             EntityName = nameof(HealthPackageRegistration),
-            EntityId = reg.RegistrationCode,
-            Description = $"Bệnh nhân hủy đăng ký gói khám {reg.HealthPackage.Name} (Mã: {reg.RegistrationCode}){(string.IsNullOrWhiteSpace(reg.CancellationReason) ? "" : $". Lý do: {reg.CancellationReason}")}",
+            EntityId = reg.DisplayCode,
+            Description = $"Bệnh nhân hủy đăng ký gói khám {reg.HealthPackage.Name} (Mã: {reg.DisplayCode}){(string.IsNullOrWhiteSpace(reg.CancellationReason) ? "" : $". Lý do: {reg.CancellationReason}")}",
             CreatedAt = DateTime.UtcNow
         });
 
@@ -275,7 +276,7 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
         return new HealthPackageRegistrationDto
         {
             Id = reg.Id,
-            RegistrationCode = reg.RegistrationCode,
+            RegistrationCode = reg.DisplayCode,
             HealthPackageId = reg.HealthPackage.Id,
             HealthPackageCode = reg.HealthPackage.Code,
             HealthPackageName = reg.HealthPackage.Name,
@@ -323,7 +324,9 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.Trim().ToLower();
-            query = query.Where(x => x.Registration.RegistrationCode.ToLower().Contains(s)
+            var code = DisplayCodeSearch.Canonical(s);
+            var prefix = DisplayCodeSearch.Compact(s);
+            query = query.Where(x => (x.Registration.RegistrationCode.ToUpper().Contains(prefix) || x.Registration.ShortCode == code || (x.Registration.ShortCode != null && x.Registration.ShortCode.StartsWith(prefix)))
                                   || x.Package.Name.ToLower().Contains(s)
                                   || x.Package.Code.ToLower().Contains(s)
                                   || x.PatientName.ToLower().Contains(s)
@@ -340,7 +343,7 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
             .Select(x => new HealthPackageRegistrationDto
             {
                 Id = x.Registration.Id,
-                RegistrationCode = x.Registration.RegistrationCode,
+                RegistrationCode = (x.Registration.ShortCode ?? x.Registration.RegistrationCode),
                 HealthPackageId = x.Package.Id,
                 HealthPackageCode = x.Package.Code,
                 HealthPackageName = x.Package.Name,
@@ -389,8 +392,8 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
             UserId = userId,
             Action = "CONFIRM_PACKAGE_REGISTRATION",
             EntityName = nameof(HealthPackageRegistration),
-            EntityId = reg.RegistrationCode,
-            Description = $"Lễ tân xác nhận đăng ký gói khám {reg.HealthPackage.Name} (Mã: {reg.RegistrationCode}){(string.IsNullOrWhiteSpace(reg.AdminNotes) ? "" : $". Ghi chú: {reg.AdminNotes}")}",
+            EntityId = reg.DisplayCode,
+            Description = $"Lễ tân xác nhận đăng ký gói khám {reg.HealthPackage.Name} (Mã: {reg.DisplayCode}){(string.IsNullOrWhiteSpace(reg.AdminNotes) ? "" : $". Ghi chú: {reg.AdminNotes}")}",
             CreatedAt = DateTime.UtcNow
         });
 
@@ -421,7 +424,7 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
         return new HealthPackageRegistrationDto
         {
             Id = reg.Id,
-            RegistrationCode = reg.RegistrationCode,
+            RegistrationCode = reg.DisplayCode,
             HealthPackageId = reg.HealthPackage.Id,
             HealthPackageCode = reg.HealthPackage.Code,
             HealthPackageName = reg.HealthPackage.Name,
@@ -472,8 +475,8 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
             UserId = userId,
             Action = "RECEPTION_CANCEL_PACKAGE_REGISTRATION",
             EntityName = nameof(HealthPackageRegistration),
-            EntityId = reg.RegistrationCode,
-            Description = $"Lễ tân hủy đăng ký gói khám {reg.HealthPackage.Name} (Mã: {reg.RegistrationCode}){(string.IsNullOrWhiteSpace(reg.CancellationReason) ? "" : $". Lý do: {reg.CancellationReason}")}",
+            EntityId = reg.DisplayCode,
+            Description = $"Lễ tân hủy đăng ký gói khám {reg.HealthPackage.Name} (Mã: {reg.DisplayCode}){(string.IsNullOrWhiteSpace(reg.CancellationReason) ? "" : $". Lý do: {reg.CancellationReason}")}",
             CreatedAt = DateTime.UtcNow
         });
 
@@ -504,7 +507,7 @@ public class HealthPackageRegistrationService : IHealthPackageRegistrationServic
         return new HealthPackageRegistrationDto
         {
             Id = reg.Id,
-            RegistrationCode = reg.RegistrationCode,
+            RegistrationCode = reg.DisplayCode,
             HealthPackageId = reg.HealthPackage.Id,
             HealthPackageCode = reg.HealthPackage.Code,
             HealthPackageName = reg.HealthPackage.Name,

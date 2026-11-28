@@ -258,7 +258,7 @@ public partial class ChangeRequestService : IChangeRequestService
                 await NotifyReceptionistsAsync(
                     appointment.Id,
                     "Yêu cầu dời lịch khám mới",
-                    $"Bệnh nhân yêu cầu dời lịch khám #{appointment.AppointmentCode}.",
+                    $"Bệnh nhân yêu cầu dời lịch khám #{appointment.DisplayCode}.",
                     changeRequest.Id.ToString(),
                     $"chg_req_resched_{changeRequest.Id}");
 
@@ -366,7 +366,7 @@ public partial class ChangeRequestService : IChangeRequestService
                 await NotifyReceptionistsAsync(
                     appointment.Id,
                     "Yêu cầu hủy lịch khám mới",
-                    $"Bệnh nhân yêu cầu hủy lịch khám #{appointment.AppointmentCode}.",
+                    $"Bệnh nhân yêu cầu hủy lịch khám #{appointment.DisplayCode}.",
                     changeRequest.Id.ToString(),
                     $"chg_req_cancel_{changeRequest.Id}");
 
@@ -481,7 +481,7 @@ public partial class ChangeRequestService : IChangeRequestService
                         ProcessedByUserId = cr.ProcessedByUserId,
                         CreatedAt = cr.CreatedAt,
                         ProcessedAt = cr.ProcessedAt,
-                        AppointmentCode = a.AppointmentCode,
+                        AppointmentCode = (a.ShortCode ?? a.AppointmentCode),
                         PatientName = pu.FullName,
                         DoctorName = du.FullName,
                         SpecialtyName = s.Name,
@@ -548,7 +548,7 @@ public partial class ChangeRequestService : IChangeRequestService
                         ProcessedByUserId = cr.ProcessedByUserId,
                         CreatedAt = cr.CreatedAt,
                         ProcessedAt = cr.ProcessedAt,
-                        AppointmentCode = a.AppointmentCode,
+                        AppointmentCode = (a.ShortCode ?? a.AppointmentCode),
                         PatientName = pu.FullName,
                         DoctorName = du.FullName,
                         SpecialtyName = s.Name,
@@ -626,7 +626,7 @@ public partial class ChangeRequestService : IChangeRequestService
                         ProcessedByUserId = cr.ProcessedByUserId,
                         CreatedAt = cr.CreatedAt,
                         ProcessedAt = cr.ProcessedAt,
-                        AppointmentCode = a.AppointmentCode,
+                        AppointmentCode = (a.ShortCode ?? a.AppointmentCode),
                         PatientName = pu.FullName,
                         DoctorName = du.FullName,
                         SpecialtyName = s.Name,
@@ -780,7 +780,7 @@ public partial class ChangeRequestService : IChangeRequestService
             await NotifyPatientForAppointmentAsync(
                 appointment.Id,
                 "Yêu cầu dời lịch khám đã được duyệt",
-                $"Yêu cầu dời lịch khám #{appointment.AppointmentCode} của bạn đã được chấp thuận. Lịch mới: {targetSlot.SlotDate:dd/MM/yyyy} ({targetSlot.StartTime:HH\\:mm} - {targetSlot.EndTime:HH\\:mm}).",
+                $"Yêu cầu dời lịch khám #{appointment.DisplayCode} của bạn đã được chấp thuận. Lịch mới: {targetSlot.SlotDate:dd/MM/yyyy} ({targetSlot.StartTime:HH\\:mm} - {targetSlot.EndTime:HH\\:mm}).",
                 $"appt_chg_proc_{requestId}_approved");
 
             await _dbContext.SaveChangesAsync();
@@ -850,7 +850,7 @@ public partial class ChangeRequestService : IChangeRequestService
             await NotifyPatientForAppointmentAsync(
                 appointment.Id,
                 "Yêu cầu hủy lịch khám đã được duyệt",
-                $"Yêu cầu hủy lịch khám #{appointment.AppointmentCode} của bạn đã được chấp thuận.",
+                $"Yêu cầu hủy lịch khám #{appointment.DisplayCode} của bạn đã được chấp thuận.",
                 $"appt_chg_proc_{requestId}_approved");
 
             await _dbContext.SaveChangesAsync();
@@ -922,7 +922,7 @@ public partial class ChangeRequestService : IChangeRequestService
             await NotifyPatientForAppointmentAsync(
                 changeReq.AppointmentId,
                 "Yêu cầu thay đổi lịch khám bị từ chối",
-                $"Yêu cầu thay đổi cho lịch khám #{appointment.AppointmentCode} đã bị từ chối. Lý do: {rejectReason}.",
+                $"Yêu cầu thay đổi cho lịch khám #{appointment.DisplayCode} đã bị từ chối. Lý do: {rejectReason}.",
                 $"appt_chg_proc_{requestId}_rejected");
 
             await _dbContext.SaveChangesAsync();
