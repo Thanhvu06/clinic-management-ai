@@ -24,9 +24,14 @@ public class AppointmentController : ControllerBase
     [AllowAnonymous]
     [HttpGet("lookup")]
     [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("AppointmentLookupPolicy")]
-    public async Task<IActionResult> LookupAppointments([FromQuery] string? query, [FromQuery] string? phone = null)
+    public async Task<IActionResult> LookupAppointments(
+        [FromServices] AppointmentLookupAttempts attempts, [FromQuery] string? query, [FromQuery] string? phone = null)
     {
-        var results = await _appointmentService.LookupAppointmentsAsync(query ?? string.Empty, phone);
+        var code = query ?? string.Empty;
+        var results = await attempts.RunAsync(HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown", code,
+            () => _appointmentService.LookupAppointmentsAsync(code, phone));
+        if (results is null)
+            return StatusCode(429, new ApiResponse { Message = "Bạn đã thử quá nhiều lần. Vui lòng thử lại sau 15 phút." });
         return Ok(ApiResponse<List<AppointmentLookupDto>>.Ok(results));
     }
 

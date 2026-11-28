@@ -45,7 +45,7 @@ public partial class BillingService
             Action = "CANCEL_INVOICE",
             EntityName = "Invoice",
             EntityId = invoice.Id.ToString(),
-            Description = $"Hủy hóa đơn #{invoice.InvoiceCode}. Lý do: {invoice.CancellationReason}",
+            Description = $"Hủy hóa đơn #{invoice.DisplayCode}. Lý do: {invoice.CancellationReason}",
             CreatedAt = _dateTimeProvider.UtcNow
         });
 
@@ -56,7 +56,7 @@ public partial class BillingService
                 UserId = invoice.Patient.UserId.Value,
                 Type = NotificationType.Invoice,
                 Title = "Hóa đơn đã bị hủy",
-                Message = $"Hóa đơn #{invoice.InvoiceCode} đã bị hủy. Lý do: {invoice.CancellationReason}.",
+                Message = $"Hóa đơn #{invoice.DisplayCode} đã bị hủy. Lý do: {invoice.CancellationReason}.",
                 Route = "/patient/invoices",
                 RelatedEntityType = "Invoice",
                 RelatedEntityId = invoice.Id.ToString(),

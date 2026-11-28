@@ -33,15 +33,15 @@ public sealed partial class RoleConfirmedActionToolHandler
     {
         var prescriptionId = GetLong(args, "prescriptionId")!.Value;
         var prescription = await _db.Prescriptions.AsNoTracking().Where(x => x.Id == prescriptionId)
-            .Select(x => new { x.Id, x.PatientId, x.PatientVisitId, x.AppointmentId, x.Status, x.CreatedAt })
+            .Select(x => new { x.Id, x.PatientId, x.PatientVisitId, x.AppointmentId, x.Status, x.CreatedAt, x.ShortCode })
             .FirstOrDefaultAsync(ct);
         if (prescription == null)
             return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Đơn thuốc không còn tồn tại để hiển thị preview.");
         var encounter = prescription.PatientVisitId.HasValue
-            ? await _db.PatientVisits.AsNoTracking().Where(x => x.Id == prescription.PatientVisitId.Value).Select(x => new { x.VisitCode, x.FacilityId, x.DepartmentId }).FirstOrDefaultAsync(ct)
+            ? await _db.PatientVisits.AsNoTracking().Where(x => x.Id == prescription.PatientVisitId.Value).Select(x => new { VisitCode = (x.ShortCode ?? x.VisitCode), x.FacilityId, x.DepartmentId }).FirstOrDefaultAsync(ct)
             : null;
         var appointment = prescription.AppointmentId.HasValue
-            ? await _db.Appointments.AsNoTracking().Where(x => x.Id == prescription.AppointmentId.Value).Select(x => new { x.AppointmentCode, x.FacilityId }).FirstOrDefaultAsync(ct)
+            ? await _db.Appointments.AsNoTracking().Where(x => x.Id == prescription.AppointmentId.Value).Select(x => new { AppointmentCode = (x.ShortCode ?? x.AppointmentCode), x.FacilityId }).FirstOrDefaultAsync(ct)
             : null;
         var currentFacilityId = encounter?.FacilityId ?? appointment?.FacilityId;
         if (!currentFacilityId.HasValue || currentFacilityId != action.FacilityId)
@@ -53,7 +53,7 @@ public sealed partial class RoleConfirmedActionToolHandler
             return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Không đủ dữ liệu thuốc đang hoạt động để hiển thị preview.");
         var resource = new AiToolActionPreviewResource
         {
-            Identity = $"Đơn thuốc {AiDisplayText.PrescriptionCode(prescription.Id, prescription.CreatedAt)}",
+            Identity = $"Đơn thuốc {(prescription.ShortCode ?? AiDisplayText.PrescriptionCode(prescription.Id, prescription.CreatedAt))}",
             Facility = facilityLabel,
             Department = department?.Label,
             Subject = PatientLabel(prescription.PatientId),

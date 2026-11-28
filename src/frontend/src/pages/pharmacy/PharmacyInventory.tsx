@@ -21,6 +21,7 @@ interface StockTransaction {
     balanceAfter: number;
     prescriptionId?: number;
     prescriptionCreatedAt?: string;
+    prescriptionCode?: string;
     reason?: string;
     actorName: string;
     createdAt: string;
@@ -150,7 +151,7 @@ export const PharmacyInventory: React.FC = () => {
                     {header:'Loại giao dịch',accessor:t => getTypeBadge(t.type)},
                     {header:'Số lượng biến động',accessor:t => <strong className={t.quantityChange > 0 ? styles.stockIncrease : styles.stockDecrease}>{t.quantityChange > 0 ? `+${t.quantityChange}` : t.quantityChange} {t.unit}</strong>},
                     {header:'Tổng tồn sau giao dịch (gồm lô hết hạn)',accessor:t => <strong>{t.balanceAfter} {t.unit}</strong>},
-                    {header:'Lý do / căn cứ',accessor:t => t.prescriptionId ? formatPrescriptionReference({ id: t.prescriptionId, createdAt: t.prescriptionCreatedAt }, t.reason) : t.reason || '-'},
+                    {header:'Lý do / căn cứ',accessor:t => t.prescriptionId ? formatPrescriptionReference({ id: t.prescriptionId, createdAt: t.prescriptionCreatedAt, prescriptionCode: t.prescriptionCode }, t.reason) : t.reason || '-'},
                     {header:'Người thực hiện',accessor:t => <div className={styles.inlineContent}><User size={14} className={styles.actorIcon} /><span>{t.actorName}</span></div>}
                 ]} /></div>}
                 {!loading && filteredTransactions.length > 0 && totalItems > 15 && <div className={styles.pagination}><span className={styles.secondary}>Tổng số: {totalItems} giao dịch</span><div className={styles.pageControls}><Button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Trang trước</Button><span>Trang {page}</span><Button disabled={page * 15 >= totalItems} onClick={() => setPage(p => p + 1)}>Trang sau</Button></div></div>}

@@ -133,14 +133,14 @@ public class AdminLeaveService : IAdminLeaveService
                 var start = a.AppointmentDate.ToDateTime(a.StartTime);
                 var end = a.AppointmentDate.ToDateTime(a.EndTime);
                 return start < leave.EndDateTime && end > leave.StartDateTime;
-            }).OrderBy(a => a.AppointmentCode).ToList();
+            }).OrderBy(a => a.DisplayCode).ToList();
 
             if (strictlyAffected.Count > 0)
             {
                 var patientUserIds = strictlyAffected.Where(a => a.Patient.UserId.HasValue).Select(a => a.Patient.UserId!.Value).Distinct().ToList();
                 var names = await _dbContext.Users.Where(u => patientUserIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FullName);
                 var details = string.Join("; ", strictlyAffected.Select(a =>
-                    $"{a.AppointmentCode} ({a.AppointmentDate:dd/MM/yyyy} {a.StartTime:HH:mm}–{a.EndTime:HH:mm}, {(a.Patient.UserId.HasValue && names.TryGetValue(a.Patient.UserId.Value, out var name) ? name : a.Patient.FullName ?? "Bệnh nhân")})"));
+                    $"{a.DisplayCode} ({a.AppointmentDate:dd/MM/yyyy} {a.StartTime:HH:mm}–{a.EndTime:HH:mm}, {(a.Patient.UserId.HasValue && names.TryGetValue(a.Patient.UserId.Value, out var name) ? name : a.Patient.FullName ?? "Bệnh nhân")})"));
                 throw new BusinessException("LEAVE_HAS_AFFECTED_APPOINTMENTS",
                     $"Có {strictlyAffected.Count} lịch hẹn bị ảnh hưởng: {details}. Cần giải quyết lịch hẹn trước khi duyệt.");
             }

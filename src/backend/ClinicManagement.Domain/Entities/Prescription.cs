@@ -6,6 +6,7 @@ namespace ClinicManagement.Domain.Entities;
 public class Prescription
 {
     public long Id { get; set; }
+    public string? ShortCode { get; set; }
     public long? AppointmentId { get; set; }
     public long? PatientVisitId { get; set; }
     public long PatientId { get; set; }

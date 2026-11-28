@@ -8,6 +8,8 @@ public class PatientVisit
 {
     public long Id { get; set; }
     public string VisitCode { get; set; } = string.Empty;
+    public string? ShortCode { get; set; }
+    public string DisplayCode => ShortCode ?? VisitCode;
     public long PatientId { get; set; }
     public long? AppointmentId { get; set; }
     public long? HealthPackageRegistrationId { get; set; }

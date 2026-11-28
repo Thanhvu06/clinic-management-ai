@@ -905,7 +905,7 @@ public sealed partial class RoleConfirmedActionToolHandler : IAiToolHandler
         var appointmentId = GetLong(args, "appointmentId")!.Value;
         var departmentId = GetLong(args, "departmentId")!.Value;
         var appointment = await _db.Appointments.AsNoTracking().Where(x => x.Id == appointmentId)
-            .Select(x => new { x.Id, x.AppointmentCode, x.PatientId, x.FacilityId, x.Status, x.DoctorId })
+            .Select(x => new { x.Id, AppointmentCode = (x.ShortCode ?? x.AppointmentCode), x.PatientId, x.FacilityId, x.Status, x.DoctorId })
             .FirstOrDefaultAsync(ct);
         var department = await PreviewDepartmentAsync(departmentId, action.FacilityId, ct);
         if (appointment == null || appointment.FacilityId != action.FacilityId || department == null || string.IsNullOrWhiteSpace(appointment.AppointmentCode))
@@ -1075,7 +1075,7 @@ public sealed partial class RoleConfirmedActionToolHandler : IAiToolHandler
     {
         var orderId = GetLong(args, "orderId")!.Value;
         var order = await _db.DiagnosticOrders.AsNoTracking().Where(x => x.Id == orderId)
-            .Select(x => new { x.Id, x.OrderCode, x.PatientId, x.FacilityId, x.PatientVisitId, x.PerformingDepartmentId, x.Status })
+            .Select(x => new { x.Id, OrderCode = (x.ShortCode ?? x.OrderCode), x.PatientId, x.FacilityId, x.PatientVisitId, x.PerformingDepartmentId, x.Status })
             .FirstOrDefaultAsync(ct);
         if (order == null || order.FacilityId != action.FacilityId || string.IsNullOrWhiteSpace(order.OrderCode))
             return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Không đủ dữ liệu phiếu chỉ định, khoa hoặc cơ sở để hiển thị preview.");
@@ -1118,7 +1118,7 @@ public sealed partial class RoleConfirmedActionToolHandler : IAiToolHandler
         var orderId = GetLong(args, "orderId")!.Value;
         var itemId = GetLong(args, "itemId")!.Value;
         var item = await _db.DiagnosticOrderItems.AsNoTracking().Where(x => x.Id == itemId && x.DiagnosticOrderId == orderId)
-            .Select(x => new { x.Id, x.Status, x.DiagnosticOrderId, x.DiagnosticServiceId, OrderCode = x.DiagnosticOrder.OrderCode, PatientId = x.DiagnosticOrder.PatientId, FacilityId = x.DiagnosticOrder.FacilityId, PatientVisitId = x.DiagnosticOrder.PatientVisitId, DepartmentId = x.DiagnosticOrder.PerformingDepartmentId })
+            .Select(x => new { x.Id, x.Status, x.DiagnosticOrderId, x.DiagnosticServiceId, OrderCode = (x.DiagnosticOrder.ShortCode ?? x.DiagnosticOrder.OrderCode), PatientId = x.DiagnosticOrder.PatientId, FacilityId = x.DiagnosticOrder.FacilityId, PatientVisitId = x.DiagnosticOrder.PatientVisitId, DepartmentId = x.DiagnosticOrder.PerformingDepartmentId })
             .FirstOrDefaultAsync(ct);
         if (item == null || item.FacilityId != action.FacilityId || string.IsNullOrWhiteSpace(item.OrderCode))
             return PreviewBuildResult.Invalid("PREVIEW_DATA_UNAVAILABLE", "Không đủ dữ liệu item kỹ thuật, phiếu, khoa hoặc cơ sở để hiển thị preview.");
@@ -1155,7 +1155,7 @@ public sealed partial class RoleConfirmedActionToolHandler : IAiToolHandler
         if (GetLong(args, "visitId") is long visitId)
         {
             return await _db.PatientVisits.AsNoTracking().Where(x => x.Id == visitId && x.FacilityId == facilityId)
-                .Select(x => new ClinicalPreviewTarget("visit", x.Id.ToString(), $"Lượt khám {x.VisitCode}", $"PatientVisit #{x.Id}", x.PatientId, x.DepartmentId, x.Status.ToString()))
+                .Select(x => new ClinicalPreviewTarget("visit", x.Id.ToString(), $"Lượt khám {(x.ShortCode ?? x.VisitCode)}", $"PatientVisit #{x.Id}", x.PatientId, x.DepartmentId, x.Status.ToString()))
                 .FirstOrDefaultAsync(ct);
         }
         if (GetLong(args, "appointmentId") is long appointmentId)
@@ -1163,7 +1163,7 @@ public sealed partial class RoleConfirmedActionToolHandler : IAiToolHandler
             var departmentId = GetLong(args, "departmentId");
             if (!departmentId.HasValue) return null;
             return await _db.Appointments.AsNoTracking().Where(x => x.Id == appointmentId && x.FacilityId == facilityId)
-                .Select(x => new ClinicalPreviewTarget("appointment", x.Id.ToString(), $"Lịch hẹn {x.AppointmentCode}", $"Appointment #{x.Id}", x.PatientId, departmentId.Value, x.Status.ToString()))
+                .Select(x => new ClinicalPreviewTarget("appointment", x.Id.ToString(), $"Lịch hẹn {(x.ShortCode ?? x.AppointmentCode)}", $"Appointment #{x.Id}", x.PatientId, departmentId.Value, x.Status.ToString()))
                 .FirstOrDefaultAsync(ct);
         }
         return null;

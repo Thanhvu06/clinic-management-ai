@@ -119,13 +119,18 @@ public class PharmacyService : IPharmacyService
         {
             var s = search.Trim().ToLower();
             var searchClean = s.StartsWith("#") ? s.Substring(1) : s;
+            var code = DisplayCodeSearch.Canonical(s);
+            var prefix = DisplayCodeSearch.Compact(s);
             var isNumeric = long.TryParse(searchClean, out var searchId);
-
+            var legacyPrescriptionId = DisplayCodeSearch.LegacyPrescriptionId(prefix);
             query = query.Where(x => x.PatientName.ToLower().Contains(s)
+                                  || x.Prescription.ShortCode == code
+                                  || (x.Prescription.ShortCode != null && x.Prescription.ShortCode.StartsWith(prefix))
+                                  || x.Prescription.Id == legacyPrescriptionId
                                   || x.PatientPhone.Contains(s)
-                                  || (x.Appointment != null && x.Appointment.AppointmentCode.ToLower().Contains(s))
-                                  || (x.PatientVisit != null && x.PatientVisit.VisitCode.ToLower().Contains(s))
-                                  || (x.Patient.MedicalRecordNumber != null && x.Patient.MedicalRecordNumber.ToLower().Contains(s))
+                                  || (x.Appointment != null && (x.Appointment.AppointmentCode.ToUpper().Contains(prefix) || x.Appointment.ShortCode == code || (x.Appointment.ShortCode != null && x.Appointment.ShortCode.StartsWith(prefix))))
+                                  || (x.PatientVisit != null && (x.PatientVisit.VisitCode.ToUpper().Contains(prefix) || x.PatientVisit.ShortCode == code || (x.PatientVisit.ShortCode != null && x.PatientVisit.ShortCode.StartsWith(prefix))))
+                                  || (x.Patient.MedicalRecordNumber != null && (x.Patient.MedicalRecordNumber.ToUpper().Contains(prefix) || x.Patient.ShortCode == code || (x.Patient.ShortCode != null && x.Patient.ShortCode.StartsWith(prefix))))
                                   || (isNumeric && x.Prescription.Id == searchId));
         }
 
@@ -139,10 +144,11 @@ public class PharmacyService : IPharmacyService
             {
                 Id = x.Prescription.Id,
                 AppointmentId = x.Prescription.AppointmentId,
-                AppointmentCode = x.Appointment != null ? x.Appointment.AppointmentCode : (x.PatientVisit != null ? x.PatientVisit.VisitCode : string.Empty),
+                PrescriptionCode = x.Prescription.ShortCode,
+                AppointmentCode = x.Appointment != null ? (x.Appointment.ShortCode ?? x.Appointment.AppointmentCode) : (x.PatientVisit != null ? (x.PatientVisit.ShortCode ?? x.PatientVisit.VisitCode) : string.Empty),
                 AppointmentDate = x.Appointment != null ? x.Appointment.AppointmentDate : (x.PatientVisit != null ? x.PatientVisit.VisitDate : DateOnly.FromDateTime(x.Prescription.CreatedAt)),
                 PatientVisitId = x.Prescription.PatientVisitId,
-                VisitCode = x.PatientVisit != null ? x.PatientVisit.VisitCode : null,
+                VisitCode = x.PatientVisit != null ? (x.PatientVisit.ShortCode ?? x.PatientVisit.VisitCode) : null,
                 PatientName = x.PatientName,
                 PatientPhone = x.PatientPhone,
                 DoctorName = x.DoctorName,
@@ -196,9 +202,10 @@ public class PharmacyService : IPharmacyService
         {
             Id = prescription.Id,
             AppointmentId = prescription.AppointmentId,
-            AppointmentCode = prescription.Appointment?.AppointmentCode ?? (prescription.PatientVisit != null ? prescription.PatientVisit.VisitCode : (prescription.AppointmentId.HasValue ? $"APT-{prescription.AppointmentId}" : string.Empty)),
+            PrescriptionCode = BusinessDisplay.PrescriptionCode(prescription, _dateTimeProvider),
+            AppointmentCode = prescription.Appointment?.DisplayCode ?? (prescription.PatientVisit != null ? prescription.PatientVisit.DisplayCode : (prescription.AppointmentId.HasValue ? $"APT-{prescription.AppointmentId}" : string.Empty)),
             PatientVisitId = prescription.PatientVisitId,
-            VisitCode = prescription.PatientVisit?.VisitCode,
+            VisitCode = prescription.PatientVisit?.DisplayCode,
             PatientId = prescription.PatientId,
             PatientName = patientUser?.FullName ?? prescription.Patient?.FullName ?? "Bệnh nhân",
             PatientPhone = patientUser?.PhoneNumber ?? prescription.Patient?.PhoneNumber ?? "",
@@ -443,7 +450,7 @@ public class PharmacyService : IPharmacyService
 
                 if (patientUserId.HasValue && patientUserId.Value != Guid.Empty)
                 {
-                    var appointmentCode = prescription.Appointment?.AppointmentCode ?? visit?.VisitCode ?? $"#{prescription.AppointmentId}";
+                    var appointmentCode = prescription.Appointment?.DisplayCode ?? visit?.DisplayCode ?? $"#{prescription.AppointmentId}";
                     _dbContext.Notifications.Add(new Notification
                     {
                         UserId = patientUserId.Value,
@@ -539,6 +546,7 @@ public class PharmacyService : IPharmacyService
                 BalanceAfter = x.Transaction.BalanceAfter,
                 PrescriptionId = x.Transaction.PrescriptionId,
                 PrescriptionCreatedAt = x.Transaction.Prescription != null ? x.Transaction.Prescription.CreatedAt : null,
+                PrescriptionCode = x.Transaction.Prescription == null ? null : x.Transaction.Prescription.ShortCode,
                 Reason = x.Transaction.Reason,
                 ActorName = x.ActorName,
                 CreatedAt = x.Transaction.CreatedAt

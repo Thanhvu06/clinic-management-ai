@@ -96,7 +96,7 @@ export const MpiPatientSearchModal: React.FC<MpiPatientSearchModalProps> = ({
                     ]} />
                 <Input type="text" className={styles.searchInput}
                     placeholder={
-                        searchType === 'mrn' ? 'Nhập mã BN (vd: BN-2026-000001)...' :
+                        searchType === 'mrn' ? 'Nhập mã BN (vd: BN0001)...' :
                         searchType === 'phone' ? 'Nhập số điện thoại (vd: 0912345678)...' :
                         searchType === 'nationalId' ? 'Nhập số CCCD 12 số...' :
                         searchType === 'bhyt' ? 'Nhập mã BHYT 15 ký tự...' :

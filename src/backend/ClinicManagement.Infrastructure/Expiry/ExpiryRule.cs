@@ -81,11 +81,11 @@ public abstract class ExpiryRule(AppDbContext db, IDateTimeProvider clock, IOpti
         var slot = await db.AppointmentSlots.FindAsync([appointment.AppointmentSlotId], ct);
         if (slot != null && !await db.Appointments.AnyAsync(a => a.Id != appointment.Id && a.AppointmentSlotId == slot.Id &&
                 AppointmentStatusExtensions.HoldingSlotStatuses.Contains(a.Status), ct)) slot.IsBooked = false;
-        Audit(nameof(Appointment), appointment.Id, appointment.AppointmentCode, reason);
+        Audit(nameof(Appointment), appointment.Id, appointment.DisplayCode, reason);
         var patient = await db.Patients.FindAsync([appointment.PatientId], ct);
         var doctor = await db.Doctors.FindAsync([appointment.DoctorId], ct);
-        Notify(patient?.UserId, NotificationType.Appointment, nameof(Appointment), appointment.Id, appointment.AppointmentCode, reason, "/patient/appointments");
-        Notify(doctor?.UserId, NotificationType.Appointment, nameof(Appointment), appointment.Id, appointment.AppointmentCode, reason, "/doctor/appointments");
-        await NotifyReceptionAsync(appointment.FacilityId, nameof(Appointment), appointment.Id, appointment.AppointmentCode, reason, ct);
+        Notify(patient?.UserId, NotificationType.Appointment, nameof(Appointment), appointment.Id, appointment.DisplayCode, reason, "/patient/appointments");
+        Notify(doctor?.UserId, NotificationType.Appointment, nameof(Appointment), appointment.Id, appointment.DisplayCode, reason, "/doctor/appointments");
+        await NotifyReceptionAsync(appointment.FacilityId, nameof(Appointment), appointment.Id, appointment.DisplayCode, reason, ct);
     }
 }

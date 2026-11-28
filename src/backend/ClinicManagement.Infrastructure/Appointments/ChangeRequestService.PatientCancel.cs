@@ -67,7 +67,7 @@ public partial class ChangeRequestService
 
                 await _dbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
-                return new PatientCancellationResultDto { AppointmentId = appointment.Id, AppointmentCode = appointment.AppointmentCode };
+                return new PatientCancellationResultDto { AppointmentId = appointment.Id, AppointmentCode = appointment.DisplayCode };
             }
             catch
             {

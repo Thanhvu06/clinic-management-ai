@@ -1,3 +1,4 @@
+using ClinicManagement.Infrastructure.Common;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -45,8 +46,10 @@ public class MpiPatientService : IMpiPatientService
 
         if (!string.IsNullOrWhiteSpace(query.MedicalRecordNumber))
         {
-            var mrn = query.MedicalRecordNumber.Trim();
-            dbQuery = dbQuery.Where(p => p.MedicalRecordNumber.Contains(mrn));
+            var mrn = DisplayCodeSearch.Compact(query.MedicalRecordNumber);
+            var code = DisplayCodeSearch.Canonical(mrn);
+            dbQuery = dbQuery.Where(p => p.MedicalRecordNumber.ToUpper().Contains(mrn) ||
+                p.ShortCode == code || (p.ShortCode != null && p.ShortCode.StartsWith(mrn)));
         }
 
         var normalizedNid = NormalizeNationalId(query.NationalId);
@@ -75,9 +78,12 @@ public class MpiPatientService : IMpiPatientService
         if (!string.IsNullOrWhiteSpace(query.SearchTerm))
         {
             var term = query.SearchTerm.Trim().ToLower();
+            var code = DisplayCodeSearch.Canonical(term);
+            var prefix = DisplayCodeSearch.Compact(term);
             dbQuery = dbQuery.Where(p =>
                 p.FullName.ToLower().Contains(term) ||
-                p.MedicalRecordNumber.ToLower().Contains(term) ||
+                p.MedicalRecordNumber.ToUpper().Contains(prefix) || p.ShortCode == code ||
+                (p.ShortCode != null && p.ShortCode.StartsWith(prefix)) ||
                 (p.PhoneNumber != null && p.PhoneNumber.Contains(term)) ||
                 (p.NationalId != null && p.NationalId.Contains(term)) ||
                 (p.BhytNumber != null && p.BhytNumber.Contains(term)));
@@ -114,13 +120,13 @@ public class MpiPatientService : IMpiPatientService
 
     public async Task<MpiPatientDto> GetPatientByMrnAsync(string mrn, CancellationToken cancellationToken = default)
     {
-        var cleanMrn = mrn.Trim();
+        var cleanMrn = DisplayCodeSearch.Canonical(mrn);
         var patient = await (await VisiblePatientsAsync(cancellationToken))
             .AsNoTracking()
             .Include(p => p.PrimaryFacility)
             .Include(p => p.Allergies)
             .Include(p => p.EmergencyContacts)
-            .FirstOrDefaultAsync(p => p.MedicalRecordNumber == cleanMrn, cancellationToken);
+            .FirstOrDefaultAsync(p => p.MedicalRecordNumber.ToUpper() == cleanMrn || p.ShortCode == cleanMrn, cancellationToken);
 
         if (patient == null)
             throw new NotFoundException($"Không tìm thấy hồ sơ bệnh nhân với mã MRN: {cleanMrn}");
@@ -150,7 +156,7 @@ public class MpiPatientService : IMpiPatientService
             var existingByNid = await _dbContext.Patients
                 .FirstOrDefaultAsync(p => p.NationalId == cleanNid, cancellationToken);
             if (existingByNid != null)
-                throw new ConflictException($"Bệnh nhân với số CCCD/Định danh '{cleanNid}' đã tồn tại trong hệ thống (Mã MRN: {existingByNid.MedicalRecordNumber}).");
+                throw new ConflictException($"Bệnh nhân với số CCCD/Định danh '{cleanNid}' đã tồn tại trong hệ thống (Mã MRN: {existingByNid.DisplayCode}).");
         }
 
         // 2. Generate new MRN and persist Patient inside transaction
@@ -359,7 +365,7 @@ public class MpiPatientService : IMpiPatientService
         {
             Id = p.Id,
             UserId = p.UserId,
-            MedicalRecordNumber = p.MedicalRecordNumber,
+            MedicalRecordNumber = p.DisplayCode,
             FullName = p.FullName,
             PhoneNumber = p.PhoneNumber,
             Email = p.Email,

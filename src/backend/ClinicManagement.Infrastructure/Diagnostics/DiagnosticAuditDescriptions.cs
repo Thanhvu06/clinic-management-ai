@@ -19,8 +19,8 @@ internal static class DiagnosticAuditDescriptions
     private static readonly Regex ResultsVerifiedPattern = new(@"^Duyệt kết quả phiếu #\S+ \((?<label>[^)]+)\)\.", RegexOptions.CultureInvariant);
 
     internal static string Verification(DiagnosticOrder order, string action, string role, string? note) => action == ResultsVerifiedAction
-        ? $"Duyệt kết quả phiếu #{order.OrderCode} ({RoleLabels[role]}).{NoteSuffix(note)}"
-        : $"{RoleLabels[role]}: Phiếu #{order.OrderCode}.{NoteSuffix(note)}";
+        ? $"Duyệt kết quả phiếu #{order.DisplayCode} ({RoleLabels[role]}).{NoteSuffix(note)}"
+        : $"{RoleLabels[role]}: Phiếu #{order.DisplayCode}.{NoteSuffix(note)}";
 
     internal static string? VerificationRole(string? description)
     {
@@ -36,7 +36,7 @@ internal static class DiagnosticAuditDescriptions
     {
         var verb = action switch { "SpecimenCollected" => "Lấy", "SpecimenReceived" => "Nhận", _ => "Từ chối" };
         var recollection = item.RecollectCount > 0 ? $" (lần lấy lại {item.RecollectCount})" : string.Empty;
-        return $"{verb} mẫu {item.SpecimenBarcode} của phiếu #{order.OrderCode}{recollection}.{NoteSuffix(note)}";
+        return $"{verb} mẫu {item.SpecimenBarcode} của phiếu #{order.DisplayCode}{recollection}.{NoteSuffix(note)}";
     }
 
     private static string NoteSuffix(string? note) => string.IsNullOrWhiteSpace(note) ? string.Empty : $" {note.Trim()}";

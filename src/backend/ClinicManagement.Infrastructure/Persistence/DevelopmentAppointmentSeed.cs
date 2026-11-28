@@ -33,7 +33,7 @@ internal static class DevelopmentAppointmentSeed
 
     internal static async Task NormalizeLegacyCodesAsync(AppDbContext db, IDateTimeProvider clock, Guid actor)
     {
-        var legacy = await db.Appointments.Where(a => a.AppointmentCode.StartsWith("DEMO-")).ToListAsync();
+        var legacy = await db.Appointments.Where(a => a.ShortCode == null && a.AppointmentCode.StartsWith("DEMO-")).ToListAsync();
         if (legacy.Count == 0) return;
         await using var transaction = await db.Database.BeginTransactionAsync();
         foreach (var appointment in legacy)

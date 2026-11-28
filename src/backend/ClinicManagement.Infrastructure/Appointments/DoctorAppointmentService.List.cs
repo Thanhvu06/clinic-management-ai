@@ -1,3 +1,4 @@
+using ClinicManagement.Infrastructure.Common;
 using ClinicManagement.Application.Appointments.DTOs.Doctor;
 using ClinicManagement.Application.Common.Models;
 using ClinicManagement.Domain.Enums;
@@ -38,9 +39,14 @@ public partial class DoctorAppointmentService
             query = query.Where(x => x.Appointment.Status == parsedStatus);
         }
 
-        if (!string.IsNullOrEmpty(search))
+        if (!string.IsNullOrWhiteSpace(search))
         {
-            query = query.Where(x => x.Appointment.AppointmentCode.Contains(search)
+            var code = DisplayCodeSearch.Canonical(search);
+            var prefix = DisplayCodeSearch.Compact(search);
+            query = query.Where(x => x.Appointment.AppointmentCode.ToUpper().Contains(prefix)
+                                  || x.Appointment.ShortCode == code || (x.Appointment.ShortCode != null && x.Appointment.ShortCode.StartsWith(prefix))
+                                  || _dbContext.PatientVisits.Any(v => v.AppointmentId == x.Appointment.Id &&
+                                      (v.VisitCode.ToUpper().Contains(prefix) || v.ShortCode == code || (v.ShortCode != null && v.ShortCode.StartsWith(prefix))))
                                   || x.PatientName.Contains(search)
                                   || x.PatientPhone.Contains(search));
         }

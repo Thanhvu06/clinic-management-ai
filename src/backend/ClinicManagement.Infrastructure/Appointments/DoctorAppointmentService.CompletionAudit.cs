@@ -15,8 +15,8 @@ public partial class DoctorAppointmentService
     private async Task RecordCompletionAuditAsync(Guid actor, long? appointmentId, long? visitId, HashSet<long> issuedBefore)
     {
         var code = visitId.HasValue
-            ? await _dbContext.PatientVisits.Where(v => v.Id == visitId).Select(v => v.VisitCode).SingleAsync()
-            : await _dbContext.Appointments.Where(a => a.Id == appointmentId).Select(a => a.AppointmentCode).SingleAsync();
+            ? await _dbContext.PatientVisits.Where(v => v.Id == visitId).Select(v => (v.ShortCode ?? v.VisitCode)).SingleAsync()
+            : await _dbContext.Appointments.Where(a => a.Id == appointmentId).Select(a => (a.ShortCode ?? a.AppointmentCode)).SingleAsync();
         _dbContext.SystemAuditLogs.Add(new SystemAuditLog
         {
             UserId = actor, Action = "COMPLETE_CONSULTATION",

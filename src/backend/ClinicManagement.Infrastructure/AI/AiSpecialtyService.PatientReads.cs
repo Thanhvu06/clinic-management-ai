@@ -97,8 +97,8 @@ public partial class AiSpecialtyService
                 if (apt != null)
                 {
                     verifiedAppointmentId = apt.Id;
-                    verifiedAppointmentCode = apt.AppointmentCode;
-                    response.Message = $"Lịch khám gần nhất của bạn là mã **{apt.AppointmentCode}** vào ngày **{apt.AppointmentDate:dd/MM/yyyy}** ({apt.StartTime:HH\\:mm}). Bạn có thể mở chi tiết hoặc vào danh sách lịch hẹn để quản lý:";
+                    verifiedAppointmentCode = apt.DisplayCode;
+                    response.Message = $"Lịch khám gần nhất của bạn là mã **{apt.DisplayCode}** vào ngày **{apt.AppointmentDate:dd/MM/yyyy}** ({apt.StartTime:HH\\:mm}). Bạn có thể mở chi tiết hoặc vào danh sách lịch hẹn để quản lý:";
                 }
             }
         }

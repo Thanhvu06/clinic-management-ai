@@ -124,7 +124,7 @@ public class DoctorLeaveService : IDoctorLeaveService
                     select new
                     {
                         a.Id,
-                        a.AppointmentCode,
+                        AppointmentCode = a.ShortCode ?? a.AppointmentCode,
                         a.AppointmentDate,
                         a.StartTime,
                         a.EndTime,

@@ -74,7 +74,7 @@ public partial class DoctorAppointmentService
             currentAppointment = new DoctorAppointmentDto
             {
                 Id = 0,
-                AppointmentCode = visit.VisitCode,
+                AppointmentCode = visit.DisplayCode,
                 PatientId = visit.PatientId,
                 DoctorId = doctor.Id,
                 SpecialtyId = visit.Department?.SpecialtyId ?? 0,
@@ -146,7 +146,7 @@ public partial class DoctorAppointmentService
             pastVisitDtos.Add(new PastVisitSummaryDto
             {
                 AppointmentId = a.Id,
-                AppointmentCode = a.AppointmentCode,
+                AppointmentCode = (a.ShortCode ?? a.AppointmentCode),
                 Date = a.AppointmentDate,
                 DoctorName = docName ?? "Bác sĩ",
                 SpecialtyName = a.Specialty?.Name ?? string.Empty,
@@ -164,7 +164,7 @@ public partial class DoctorAppointmentService
             {
                 AppointmentId = 0,
                 PatientVisitId = v.Id,
-                AppointmentCode = v.VisitCode,
+                AppointmentCode = (v.ShortCode ?? v.VisitCode),
                 Date = v.VisitDate,
                 DoctorName = docName ?? "Bác sĩ",
                 SpecialtyName = v.Department?.Specialty?.Name ?? v.Department?.Name ?? string.Empty,
@@ -220,7 +220,7 @@ public partial class DoctorAppointmentService
             {
                 AppointmentId = vs.AppointmentId ?? 0,
                 PatientVisitId = vs.PatientVisitId,
-                AppointmentCode = vs.Appointment?.AppointmentCode ?? vs.PatientVisit?.VisitCode ?? "VISIT",
+                AppointmentCode = vs.Appointment?.DisplayCode ?? vs.PatientVisit?.DisplayCode ?? "VISIT",
                 AppointmentDate = vs.Appointment?.AppointmentDate ?? (vs.PatientVisit != null ? vs.PatientVisit.VisitDate : DateOnly.FromDateTime(vs.RecordedAtUtc)),
                 RecordedAtUtc = vs.RecordedAtUtc,
                 Height = vs.Height,
@@ -241,7 +241,7 @@ public partial class DoctorAppointmentService
             {
                 AppointmentId = currentVitals?.AppointmentId ?? 0,
                 PatientVisitId = currentVitals?.PatientVisitId ?? visit.Id,
-                AppointmentCode = visit.Appointment != null ? visit.Appointment.AppointmentCode : visit.VisitCode,
+                AppointmentCode = visit.Appointment != null ? visit.Appointment.DisplayCode : visit.DisplayCode,
                 AppointmentDate = visit.VisitDate,
                 RecordedAtUtc = currentVitals?.RecordedAtUtc ?? DateTime.UtcNow,
                 Height = currentVitals?.Height,
@@ -320,7 +320,7 @@ public partial class DoctorAppointmentService
         var diagnosticOrderDtos = diagnosticOrders.Select(o => new DiagnosticOrderDto
         {
             Id = o.Id,
-            OrderCode = o.OrderCode,
+            OrderCode = (o.ShortCode ?? o.OrderCode),
             AppointmentId = o.AppointmentId,
             PatientVisitId = o.PatientVisitId,
             OrderingDoctorId = o.OrderingDoctorId,
@@ -385,9 +385,9 @@ public partial class DoctorAppointmentService
             VitalHistory = vitalHistoryDtos,
             AnthropometricComparison = anthropometricComparison,
             PatientVisitId = visit.Id,
-            VisitCode = visit.VisitCode,
+            VisitCode = visit.DisplayCode,
             QueueNumber = visit.QueueNumber,
-            Mrn = patient?.MedicalRecordNumber,
+            Mrn = patient?.DisplayCode,
             VisitStatus = visit.Status.ToString(),
             DiagnosticOrders = diagnosticOrderDtos
         };

@@ -1,3 +1,4 @@
+using ClinicManagement.Infrastructure.Common;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using ClinicManagement.Application.AI;
@@ -218,10 +219,10 @@ public sealed class AiDeterministicPlanner : IAiDeterministicPlanner
 
         if (Regex.IsMatch(text, @"\b(?:tra cuu|tim|kiem tra)\b.*\b(?:ma )?(?:lich hen|cuoc hen|lh)\b", RegexOptions.CultureInvariant))
         {
-            var code = Regex.Match(text, @"\b[a-z]{2,}-?\d{3,}\b", RegexOptions.CultureInvariant).Value;
+            var code = Regex.Match(text, DisplayCodeSearch.AppointmentPattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Value;
             if (string.IsNullOrWhiteSpace(code))
                 return Clarify("Vui lòng cung cấp mã lịch hẹn cần tra cứu.", "MissingAppointmentCode", AiChatIntentTypes.ViewAppointments);
-            return Tool(AiChatIntentTypes.ViewAppointments, "LookupAppointment", "reception.lookup_appointment", new { appointmentCode = code.ToUpperInvariant() }, "/reception/appointments");
+            return Tool(AiChatIntentTypes.ViewAppointments, "LookupAppointment", "reception.lookup_appointment", new { appointmentCode = DisplayCodeSearch.Canonical(code) }, "/reception/appointments");
         }
 
         if (Regex.IsMatch(text, @"\b(?:lich hen|cuoc hen|lh)\b.*\b(?:hom nay|trong ngay|sang nay)\b|\b(?:hom nay|trong ngay|sang nay)\b.*\b(?:lich hen|cuoc hen|lh)\b|\b(?:danh sach|so luong)\b.*\b(?:nguoi|cuoc hen|lich)\b.*\b(?:dat|hen)\b", RegexOptions.CultureInvariant))

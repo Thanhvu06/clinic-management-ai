@@ -20,6 +20,8 @@ public partial class AiSpecialtyService
             return await ResolveCancellationAsync(request, message, version, ct);
 
         var text = AiTextNormalizer.NormalizeForComparison(message);
+        if (await ResolvePatientAppointmentCodeAsync(request, version, ct) is { } appointment)
+            return appointment;
         var read = ClassifyFilteredRead(text);
         if (read is null)
             return await TryResolveLocalPatientReadAsync(request, message, version, ct);
@@ -256,7 +258,7 @@ public partial class AiSpecialtyService
         var eligible = PatientCopilotToolHandler.FutureAppointments(own, _dateTimeProvider)
             .Where(a => a.Status == AppointmentStatus.Pending || a.Status == AppointmentStatus.Confirmed);
         var appointments = await eligible.OrderBy(a => a.AppointmentDate).ThenBy(a => a.StartTime).ThenBy(a => a.Id)
-            .Select(a => new { a.Id, a.AppointmentCode, a.AppointmentDate, a.StartTime, a.DoctorId, a.SpecialtyId, a.AppointmentSlotId })
+            .Select(a => new { a.Id, AppointmentCode = (a.ShortCode ?? a.AppointmentCode), a.AppointmentDate, a.StartTime, a.DoctorId, a.SpecialtyId, a.AppointmentSlotId })
             .ToListAsync(ct);
 
         var cancel = operation == "cancel";

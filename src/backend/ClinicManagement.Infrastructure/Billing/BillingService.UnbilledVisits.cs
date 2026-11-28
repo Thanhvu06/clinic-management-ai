@@ -74,7 +74,7 @@ public partial class BillingService
             .Where(i => i.PatientVisitId.HasValue && visitIds.Contains(i.PatientVisitId.Value) && i.Status == InvoiceStatus.Unpaid)
             .OrderByDescending(i => i.CreatedAtUtc)
             .ThenByDescending(i => i.Id)
-            .Select(i => new { VisitId = i.PatientVisitId!.Value, i.Id, i.InvoiceCode, i.TotalAmount })
+            .Select(i => new { VisitId = i.PatientVisitId!.Value, i.Id, InvoiceCode = (i.ShortCode ?? i.InvoiceCode), i.TotalAmount })
             .ToListAsync(cancellationToken);
 
         var unpaidMap = unpaidInvoices
@@ -178,10 +178,10 @@ public partial class BillingService
                 PendingInvoiceId = unpaidInfo?.PendingInvoiceId,
                 PendingInvoiceCode = unpaidInfo?.PendingInvoiceCode,
                 VisitId = v.Id,
-                VisitCode = v.VisitCode,
+                VisitCode = (v.ShortCode ?? v.VisitCode),
                 PatientId = v.PatientId,
                 PatientName = patName,
-                MedicalRecordNumber = v.Patient.MedicalRecordNumber,
+                MedicalRecordNumber = (v.Patient.ShortCode ?? v.Patient.MedicalRecordNumber),
                 PhoneNumber = v.Patient.PhoneNumber,
                 DepartmentName = v.Department?.Name ?? "Phòng khám",
                 DoctorName = docName,

@@ -20,8 +20,10 @@ export interface DoctorQueueItemDto {
     isCompletionOverdue?: boolean;
     appointmentId?: number | null;
     appointmentCode: string;
+    legacyAppointmentCode?: string | null;
     patientVisitId?: number | null;
     visitCode?: string | null;
+    legacyVisitCode?: string | null;
     queueNumber?: number | null;
     patientId: number;
     patientName: string;

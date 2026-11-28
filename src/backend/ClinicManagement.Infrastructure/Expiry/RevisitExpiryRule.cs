@@ -20,7 +20,7 @@ public sealed class RevisitExpiryRule(AppDbContext db, IDateTimeProvider clock, 
         foreach (var r in items)
         {
             r.Status = RevisitRequestStatus.Expired;
-            var code = $"TK{r.Id} / {r.OriginalAppointment.AppointmentCode}";
+            var code = $"TK{r.Id} / {r.OriginalAppointment.DisplayCode}";
             Audit(nameof(RevisitRequest), r.Id, code, "Hết hạn");
             Notify(r.Patient.UserId, NotificationType.Appointment, nameof(RevisitRequest), r.Id, code, "Đề xuất tái khám hết hạn", "/patient/revisit");
             Notify(r.Doctor.UserId, NotificationType.Appointment, nameof(RevisitRequest), r.Id, code, "Đề xuất tái khám hết hạn", "/doctor/appointments");

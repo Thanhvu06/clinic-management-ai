@@ -58,7 +58,7 @@ public sealed partial class RoleCopilotToolHandler
         var count = await query.CountAsync(ct);
         var items = await query.OrderBy(o => o.OrderedAtUtc).ThenBy(o => o.Id).Take(100).Select(o => new
         {
-            o.Id, o.OrderCode, patientName = o.Patient.FullName, status = o.Status.ToString(), o.OrderedAtUtc, o.PerformingDepartmentId,
+            o.Id, OrderCode = (o.ShortCode ?? o.OrderCode), patientName = o.Patient.FullName, status = o.Status.ToString(), o.OrderedAtUtc, o.PerformingDepartmentId,
             items = o.Items.OrderBy(i => i.Id).Select(i => new { service = i.DiagnosticService.Name, status = i.Status.ToString() }).ToList()
         }).ToListAsync(ct);
         return Completed(items, "technician_worklist", $"Có {count} chỉ định đang chờ xử lý." + LimitNotice(count, items.Count));

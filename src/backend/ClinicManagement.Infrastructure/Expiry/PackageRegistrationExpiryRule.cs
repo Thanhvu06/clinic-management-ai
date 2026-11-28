@@ -22,8 +22,8 @@ public sealed class PackageRegistrationExpiryRule(AppDbContext db, IDateTimeProv
             r.Status = HealthPackageRegistrationStatus.Cancelled;
             r.CancellationReason = "Quá hạn xác nhận";
             r.UpdatedAt = Clock.UtcNow;
-            Audit(nameof(HealthPackageRegistration), r.Id, r.RegistrationCode, "Quá hạn xác nhận");
-            Notify(r.Patient.UserId, NotificationType.HealthPackage, nameof(HealthPackageRegistration), r.Id, r.RegistrationCode, "Quá hạn xác nhận", "/patient/health-package-registrations");
+            Audit(nameof(HealthPackageRegistration), r.Id, r.DisplayCode, "Quá hạn xác nhận");
+            Notify(r.Patient.UserId, NotificationType.HealthPackage, nameof(HealthPackageRegistration), r.Id, r.DisplayCode, "Quá hạn xác nhận", "/patient/health-package-registrations");
         }
         return items.Count;
     }

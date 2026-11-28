@@ -24,10 +24,10 @@ public sealed class WaitingVisitExpiryRule(AppDbContext db, IDateTimeProvider cl
             v.Status = VisitStatus.NoShow;
             v.CancellationReason = "Bỏ về";
             v.UpdatedAtUtc = Clock.UtcNow;
-            Audit(nameof(PatientVisit), v.Id, v.VisitCode, "Vắng mặt / Bỏ về");
-            Notify(v.Patient.UserId, NotificationType.Appointment, nameof(PatientVisit), v.Id, v.VisitCode, "Bỏ về", "/patient/appointments");
-            Notify(v.AssignedDoctor?.UserId, NotificationType.Appointment, nameof(PatientVisit), v.Id, v.VisitCode, "Bỏ về", "/doctor/queue");
-            await NotifyReceptionAsync(v.FacilityId, nameof(PatientVisit), v.Id, v.VisitCode, "Bỏ về", ct);
+            Audit(nameof(PatientVisit), v.Id, v.DisplayCode, "Vắng mặt / Bỏ về");
+            Notify(v.Patient.UserId, NotificationType.Appointment, nameof(PatientVisit), v.Id, v.DisplayCode, "Bỏ về", "/patient/appointments");
+            Notify(v.AssignedDoctor?.UserId, NotificationType.Appointment, nameof(PatientVisit), v.Id, v.DisplayCode, "Bỏ về", "/doctor/queue");
+            await NotifyReceptionAsync(v.FacilityId, nameof(PatientVisit), v.Id, v.DisplayCode, "Bỏ về", ct);
             if (v.Appointment is { } a && (a.Status == AppointmentStatus.CheckedIn || a.Status == AppointmentStatus.Confirmed || a.Status == AppointmentStatus.Pending))
                 await ChangeAppointmentAsync(a, AppointmentStatus.NoShow, "Bỏ về", ct);
         }

@@ -765,7 +765,7 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
         var appointments = await _db.Appointments.AsNoTracking()
             .Where(a => a.AppointmentDate == today && a.FacilityId.HasValue && facilities.Contains(a.FacilityId.Value))
             .OrderBy(a => a.StartTime).Take(100)
-            .Select(a => new { a.Id, a.AppointmentCode, a.AppointmentDate, a.StartTime, a.EndTime, status = a.Status.ToString(), patientName = a.Patient.FullName, doctorName = _db.Users.Where(u => u.Id == a.Doctor.UserId).Select(u => u.FullName).FirstOrDefault() ?? "Bác sĩ", specialtyId = a.SpecialtyId })
+            .Select(a => new { a.Id, AppointmentCode = (a.ShortCode ?? a.AppointmentCode), a.AppointmentDate, a.StartTime, a.EndTime, status = a.Status.ToString(), patientName = a.Patient.FullName, doctorName = _db.Users.Where(u => u.Id == a.Doctor.UserId).Select(u => u.FullName).FirstOrDefault() ?? "Bác sĩ", specialtyId = a.SpecialtyId })
             .ToListAsync(cancellationToken);
         return Completed(appointments, "reception_appointments", $"Có {appointments.Count} lịch hẹn trong ngày hôm nay.");
     }
@@ -783,7 +783,7 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
             .Where(a => a.AppointmentDate >= from && a.AppointmentDate <= until && statuses.Contains(a.Status) &&
                         a.FacilityId.HasValue && facilities.Contains(a.FacilityId.Value))
             .OrderBy(a => a.AppointmentDate).ThenBy(a => a.StartTime).ThenBy(a => a.Id).Take(100)
-            .Select(a => new { a.Id, a.AppointmentCode, a.AppointmentDate, a.StartTime, a.EndTime, status = a.Status.ToString(), patientName = a.Patient.FullName, doctorName = _db.Users.Where(u => u.Id == a.Doctor.UserId).Select(u => u.FullName).FirstOrDefault() ?? "Bác sĩ", specialtyId = a.SpecialtyId })
+            .Select(a => new { a.Id, AppointmentCode = (a.ShortCode ?? a.AppointmentCode), a.AppointmentDate, a.StartTime, a.EndTime, status = a.Status.ToString(), patientName = a.Patient.FullName, doctorName = _db.Users.Where(u => u.Id == a.Doctor.UserId).Select(u => u.FullName).FirstOrDefault() ?? "Bác sĩ", specialtyId = a.SpecialtyId })
             .ToListAsync(cancellationToken);
         return Completed(appointments, "reception_appointments", $"Có {appointments.Count} lịch hẹn từ ngày mai đến hết 7 ngày tới.");
     }
@@ -795,24 +795,10 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
         var queue = await _db.PatientVisits.AsNoTracking()
             .Where(v => facilities.Contains(v.FacilityId) && v.VisitDate == _clock.VietnamToday && v.Status != VisitStatus.Cancelled && v.Status != VisitStatus.Completed)
             .OrderBy(v => v.QueueNumber).Take(100)
-            .Select(v => new { v.Id, v.VisitCode, v.QueueNumber, status = v.Status.ToString(), patientName = v.Patient.FullName, v.AssignedDoctorId, v.DepartmentId })
+            .Select(v => new { v.Id, VisitCode = (v.ShortCode ?? v.VisitCode), v.QueueNumber, status = v.Status.ToString(), patientName = v.Patient.FullName, v.AssignedDoctorId, v.DepartmentId })
             .ToListAsync(cancellationToken);
         return Completed(queue, "reception_queue", $"Hàng đợi hiện có {queue.Count} lượt.");
     }
-
-    private async Task<AiToolExecutionResult> LookupAppointmentAsync(AiToolExecutionContext context, string json, CancellationToken cancellationToken)
-    {
-        var facilities = await ResolveFacilityScopeAsync(context, nameof(AiActorRole.Receptionist), cancellationToken);
-        if (facilities.Count == 0) return ScopeDenied();
-        using var document = JsonDocument.Parse(json);
-        var code = document.RootElement.GetProperty("appointmentCode").GetString()!.Trim();
-        var appointment = await _db.Appointments.AsNoTracking()
-            .Where(a => a.AppointmentCode == code && a.FacilityId.HasValue && facilities.Contains(a.FacilityId.Value))
-            .Select(a => new { a.Id, a.AppointmentCode, a.AppointmentDate, a.StartTime, a.EndTime, status = a.Status.ToString(), patientName = a.Patient.FullName })
-            .SingleOrDefaultAsync(cancellationToken);
-        return appointment is null ? AiToolExecutionResult.Failed("NOT_FOUND", "Không tìm thấy lịch hẹn trong phạm vi cơ sở được phân quyền.") : Completed(appointment, "appointment_lookup", "Đã tra cứu lịch hẹn từ hệ thống.");
-    }
-
 
     private async Task<AiToolExecutionResult> GetDoctorPatientSummaryAsync(AiToolExecutionContext context, string json, CancellationToken cancellationToken)
     {
@@ -827,7 +813,7 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
                 .Select(v => new
                 {
                     caseType = v.AppointmentId.HasValue ? "scheduled_visit" : "walk_in_visit",
-                    v.Id, v.VisitCode, v.AppointmentId, v.VisitDate, arrivalType = v.ArrivalType.ToString(), status = v.Status.ToString(),
+                    v.Id, VisitCode = (v.ShortCode ?? v.VisitCode), v.AppointmentId, v.VisitDate, arrivalType = v.ArrivalType.ToString(), status = v.Status.ToString(),
                     patientName = v.Patient.FullName, v.ChiefComplaint,
                     summary = v.VisitSummary == null ? null : new { v.VisitSummary.Summary, v.VisitSummary.ClinicalFindings, v.VisitSummary.Diagnosis, v.VisitSummary.TreatmentPlan, v.VisitSummary.FollowUpInstruction, v.VisitSummary.CompletedAtUtc },
                     vitals = v.VitalSigns == null ? null : new { v.VitalSigns.Temperature, v.VitalSigns.BloodPressureSystolic, v.VitalSigns.BloodPressureDiastolic, v.VitalSigns.HeartRate, v.VitalSigns.RespiratoryRate, v.VitalSigns.SpO2, v.VitalSigns.Weight, v.VitalSigns.Height, v.VitalSigns.Bmi, v.VitalSigns.RecordedAtUtc }
@@ -840,7 +826,7 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
             .Select(a => new
             {
                 caseType = "appointment",
-                a.Id, a.AppointmentCode, a.AppointmentDate, a.Status, patientName = a.Patient.FullName,
+                a.Id, AppointmentCode = (a.ShortCode ?? a.AppointmentCode), a.AppointmentDate, a.Status, patientName = a.Patient.FullName,
                 a.Reason, a.SpecialtyId, patientVisitId = a.PatientVisit == null ? (long?)null : a.PatientVisit.Id,
                 patientVisitAssignedDoctorUserId = a.PatientVisit == null || a.PatientVisit.AssignedDoctor == null ? (Guid?)null : a.PatientVisit.AssignedDoctor.UserId,
                 summary = a.VisitSummary == null ? (a.PatientVisit == null || a.PatientVisit.VisitSummary == null ? null : new { a.PatientVisit.VisitSummary.Summary, a.PatientVisit.VisitSummary.ClinicalFindings, a.PatientVisit.VisitSummary.Diagnosis, a.PatientVisit.VisitSummary.TreatmentPlan, a.PatientVisit.VisitSummary.FollowUpInstruction, a.PatientVisit.VisitSummary.CompletedAtUtc }) : new { a.VisitSummary.Summary, a.VisitSummary.ClinicalFindings, a.VisitSummary.Diagnosis, a.VisitSummary.TreatmentPlan, a.VisitSummary.FollowUpInstruction, a.VisitSummary.CompletedAtUtc },
@@ -889,7 +875,7 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
         var items = await query.OrderByDescending(o => o.OrderedAtUtc).Take(100)
             .Select(o => new
             {
-                o.Id, o.OrderCode, status = o.Status.ToString(), o.ClinicalIndication, o.OrderedAtUtc,
+                o.Id, OrderCode = (o.ShortCode ?? o.OrderCode), status = o.Status.ToString(), o.ClinicalIndication, o.OrderedAtUtc,
                 items = o.Items.OrderBy(i => i.Id).Select(i => new
                 {
                     service = i.DiagnosticService.Name,
@@ -983,7 +969,7 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
         var items = await _db.Invoices.AsNoTracking()
             .Where(i => i.Status == InvoiceStatus.Unpaid && i.PatientVisit != null && facilities.Contains(i.PatientVisit.FacilityId))
             .OrderBy(i => i.CreatedAtUtc).ThenBy(i => i.Id).Take(50)
-            .Select(i => new { i.InvoiceCode, patientName = i.Patient.FullName, i.TotalAmount, status = i.Status.ToString(), i.CreatedAtUtc })
+            .Select(i => new { InvoiceCode = (i.ShortCode ?? i.InvoiceCode), patientName = i.Patient.FullName, i.TotalAmount, status = i.Status.ToString(), i.CreatedAtUtc })
             .ToListAsync(cancellationToken);
         return Completed(items, "reception_pending_payments", $"Có {items.Count} hóa đơn chưa thanh toán trong phạm vi cơ sở.");
     }
@@ -998,7 +984,7 @@ public sealed partial class RoleCopilotToolHandler : IAiToolHandler
             .Where(a => a.DoctorId == doctorId.Value && a.FacilityId.HasValue && facilities.Contains(a.FacilityId.Value) &&
                         a.AppointmentDate == _clock.VietnamToday && a.Status != AppointmentStatus.Cancelled && a.Status != AppointmentStatus.Completed)
             .OrderBy(a => a.StartTime).ThenBy(a => a.Id).Take(100)
-            .Select(a => new { a.AppointmentCode, a.StartTime, a.EndTime, status = a.Status.ToString(), patientName = a.Patient.FullName, a.Reason })
+            .Select(a => new { AppointmentCode = (a.ShortCode ?? a.AppointmentCode), a.StartTime, a.EndTime, status = a.Status.ToString(), patientName = a.Patient.FullName, a.Reason })
             .ToListAsync(cancellationToken);
         return Completed(items, "doctor_appointments_today", $"Có {items.Count} lịch hẹn hôm nay của bạn chưa hủy hoặc hoàn tất.");
     }

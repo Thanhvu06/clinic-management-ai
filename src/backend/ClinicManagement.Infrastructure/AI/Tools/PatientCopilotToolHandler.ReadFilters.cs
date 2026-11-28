@@ -30,7 +30,7 @@ public sealed partial class PatientCopilotToolHandler
             .Skip(filters.Offset(page, pageSize)).Take(filters.Limit(pageSize))
             .Select(v => new
             {
-                v.Id, v.VisitCode, v.VisitDate, arrivalType = v.ArrivalType.ToString(), status = v.Status.ToString(),
+                v.Id, VisitCode = (v.ShortCode ?? v.VisitCode), v.VisitDate, arrivalType = v.ArrivalType.ToString(), status = v.Status.ToString(),
                 v.ChiefComplaint, v.AppointmentId,
                 summary = v.VisitSummary == null ? null : new
                 {
@@ -109,13 +109,13 @@ public sealed partial class PatientCopilotToolHandler
             .Skip(filters.Offset(page, pageSize)).Take(filters.Limit(pageSize))
             .Select(p => new
             {
-                p.Id, status = p.Status.ToString(), p.CreatedAt, p.DispensedAt, p.Notes,
+                p.Id, p.ShortCode, status = p.Status.ToString(), p.CreatedAt, p.DispensedAt, p.Notes,
                 items = p.Items.Select(i => new { medicine = i.Medicine!.Name, i.Dosage, i.Frequency, i.DurationDays, i.Instructions }).ToList()
             }).ToListAsync(cancellationToken);
         var items = rows.Select(p => new
         {
             p.Id, p.status, p.CreatedAt, p.DispensedAt, p.Notes, p.items,
-            prescriptionCode = BusinessDisplay.PrescriptionCode(p.Id, p.CreatedAt, _dateTimeProvider),
+            prescriptionCode = p.ShortCode ?? BusinessDisplay.LegacyPrescriptionCode(p.Id, p.CreatedAt, _dateTimeProvider),
             prescribedDate = DateOnly.FromDateTime(_dateTimeProvider.ConvertUtcToVietnam(p.CreatedAt))
         }).ToList();
         if (filters.Active) return Completed(items, "patient_prescriptions", filters.Summary(filters.Latest ? items.Count : total, "đơn thuốc"));
@@ -139,7 +139,7 @@ public sealed partial class PatientCopilotToolHandler
             .Skip(filters.Offset(page, pageSize)).Take(filters.Limit(pageSize))
             .Select(i => new
             {
-                i.Id, i.InvoiceCode, status = i.Status.ToString(), i.Subtotal, i.TotalAmount,
+                i.Id, InvoiceCode = (i.ShortCode ?? i.InvoiceCode), status = i.Status.ToString(), i.Subtotal, i.TotalAmount,
                 i.CreatedAtUtc, i.PaidAtUtc,
                 items = i.Items.Where(x => !x.IsCancelled).Select(x => new { x.Description, x.Quantity, x.LineTotal }).ToList()
             }).ToListAsync(cancellationToken);
@@ -229,7 +229,7 @@ public sealed partial class PatientCopilotToolHandler
             .Skip((page - 1) * pageSize).Take(pageSize)
             .Select(a => new
             {
-                a.Id, a.AppointmentCode, a.AppointmentDate, a.StartTime, a.EndTime,
+                a.Id, AppointmentCode = (a.ShortCode ?? a.AppointmentCode), a.AppointmentDate, a.StartTime, a.EndTime,
                 status = a.Status.ToString(), doctorName = _db.Users.Where(u => u.Id == a.Doctor.UserId).Select(u => u.FullName).FirstOrDefault(),
                 specialtyName = a.Specialty.Name, facilityName = a.Facility == null ? null : a.Facility.Name, a.Reason
             }).ToListAsync(ct);

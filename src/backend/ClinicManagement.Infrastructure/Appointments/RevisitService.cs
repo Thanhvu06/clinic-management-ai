@@ -262,7 +262,7 @@ public class RevisitService : IRevisitService
                 UserId = userId,
                 Type = NotificationType.Appointment,
                 Title = "Đặt lịch tái khám thành công",
-                Message = $"Lịch tái khám #{newAppointment.AppointmentCode} ngày {newAppointment.AppointmentDate:dd/MM/yyyy} lúc {newAppointment.StartTime:HH\\:mm} đã được tiếp nhận.",
+                Message = $"Lịch tái khám #{newAppointment.DisplayCode} ngày {newAppointment.AppointmentDate:dd/MM/yyyy} lúc {newAppointment.StartTime:HH\\:mm} đã được tiếp nhận.",
                 Route = "/patient/appointments",
                 RelatedEntityType = "Appointment",
                 RelatedEntityId = newAppointment.Id.ToString(),
@@ -295,7 +295,7 @@ public class RevisitService : IRevisitService
                         UserId = receptionistId,
                         Type = NotificationType.Appointment,
                         Title = "Lịch tái khám mới chờ xử lý",
-                        Message = $"Bệnh nhân đã đặt lịch tái khám #{newAppointment.AppointmentCode} ngày {newAppointment.AppointmentDate:dd/MM/yyyy}.",
+                        Message = $"Bệnh nhân đã đặt lịch tái khám #{newAppointment.DisplayCode} ngày {newAppointment.AppointmentDate:dd/MM/yyyy}.",
                         Route = "/reception/appointments",
                         RelatedEntityType = "Appointment",
                         RelatedEntityId = newAppointment.Id.ToString(),
@@ -312,7 +312,7 @@ public class RevisitService : IRevisitService
             return new AppointmentDto
             {
                 Id = newAppointment.Id,
-                AppointmentCode = newAppointment.AppointmentCode,
+                AppointmentCode = newAppointment.DisplayCode,
                 PatientId = newAppointment.PatientId,
                 DoctorId = newAppointment.DoctorId,
                 DoctorName = string.IsNullOrWhiteSpace(doctor.AcademicTitle)
@@ -356,7 +356,7 @@ public class RevisitService : IRevisitService
         if (doctorUserId.HasValue)
         {
             var appointmentCode = await _dbContext.Appointments.Where(a => a.Id == revisitReq.AppointmentId)
-                .Select(a => a.AppointmentCode).FirstAsync();
+                .Select(a => (a.ShortCode ?? a.AppointmentCode)).FirstAsync();
             var reason = string.IsNullOrWhiteSpace(request.Reason) ? "Không nêu lý do" : request.Reason.Trim();
             var message = $"Bệnh nhân từ chối đề xuất tái khám từ lịch hẹn #{appointmentCode}. Lý do: {reason}";
             _dbContext.Notifications.Add(new Notification

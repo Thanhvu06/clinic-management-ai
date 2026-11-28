@@ -8,6 +8,8 @@ public class Appointment
 {
     public long Id { get; set; }
     public string AppointmentCode { get; set; } = string.Empty;
+    public string? ShortCode { get; set; }
+    public string DisplayCode => ShortCode ?? AppointmentCode;
     public long PatientId { get; set; }
     public long DoctorId { get; set; }
     public long SpecialtyId { get; set; }

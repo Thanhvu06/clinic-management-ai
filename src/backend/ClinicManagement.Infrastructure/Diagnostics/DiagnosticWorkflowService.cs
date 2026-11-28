@@ -472,7 +472,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
             Action = "DiagnosticOrderReviewed",
             EntityName = "DiagnosticOrder",
             EntityId = order.Id.ToString(),
-            Description = $"Bác sĩ xác nhận đã xem kết quả phiếu chỉ định #{order.OrderCode}.",
+            Description = $"Bác sĩ xác nhận đã xem kết quả phiếu chỉ định #{order.DisplayCode}.",
             CreatedAt = DateTime.UtcNow
         });
 
@@ -487,7 +487,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
                 UserId = patientUser.Id,
                 Type = NotificationType.Diagnostic,
                 Title = "Kết quả cận lâm sàng đã được bác sĩ xem",
-                Message = $"Phiếu chỉ định #{order.OrderCode} đã được bác sĩ xác nhận. Bạn có thể xem kết quả trực tuyến.",
+                Message = $"Phiếu chỉ định #{order.DisplayCode} đã được bác sĩ xác nhận. Bạn có thể xem kết quả trực tuyến.",
                 Route = "/patient/diagnostic-results",
                 RelatedEntityType = "DiagnosticOrder",
                 RelatedEntityId = order.Id.ToString(),
@@ -552,7 +552,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
             Action = "DiagnosticOrderCancelled",
             EntityName = "DiagnosticOrder",
             EntityId = order.Id.ToString(),
-            Description = $"Bác sĩ hủy phiếu chỉ định #{order.OrderCode}.",
+            Description = $"Bác sĩ hủy phiếu chỉ định #{order.DisplayCode}.",
             CreatedAt = DateTime.UtcNow
         });
 
@@ -610,17 +610,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
                                      (o.PatientVisit != null && o.PatientVisit.VisitDate == date.Value));
         }
 
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var clean = search.Trim().ToLower();
-            query = query.Where(o => o.OrderCode.ToLower().Contains(clean) ||
-                                     (o.Appointment != null && o.Appointment.AppointmentCode.ToLower().Contains(clean)) ||
-                                     (o.PatientVisit != null && o.PatientVisit.VisitCode.ToLower().Contains(clean)) ||
-                                     (o.Patient.FullName != null && o.Patient.FullName.ToLower().Contains(clean)) ||
-                                     (o.Patient.PhoneNumber != null && o.Patient.PhoneNumber.Contains(clean)) ||
-                                     (o.Patient.MedicalRecordNumber != null && o.Patient.MedicalRecordNumber.ToLower().Contains(clean)) ||
-                                     _dbContext.Users.Any(u => o.Patient.UserId != null && u.Id == o.Patient.UserId && (u.FullName.ToLower().Contains(clean) || (u.PhoneNumber != null && u.PhoneNumber.Contains(clean)))));
-        }
+        query = FilterOrdersBySearch(query, search);
 
         var totalItems = await query.CountAsync();
         var orderedQuery = status is DiagnosticOrderStatus.Ordered or DiagnosticOrderStatus.InProgress
@@ -750,7 +740,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
             Action = "DiagnosticOrderStarted",
             EntityName = "DiagnosticOrder",
             EntityId = order.Id.ToString(),
-            Description = $"Kỹ thuật viên tiếp nhận thực hiện phiếu chỉ định #{order.OrderCode}.",
+            Description = $"Kỹ thuật viên tiếp nhận thực hiện phiếu chỉ định #{order.DisplayCode}.",
             CreatedAt = DateTime.UtcNow
         });
 
@@ -980,7 +970,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
                                     where d.Id == order.OrderingDoctorId select u).FirstOrDefaultAsync();
             if (doctorUser != null)
             {
-                var message = $"Phiếu #{order.OrderCode}: " + string.Join(", ", values.Where(v => IsCritical(v.Flag))
+                var message = $"Phiếu #{order.DisplayCode}: " + string.Join(", ", values.Where(v => IsCritical(v.Flag))
                     .Select(v => $"{v.ParameterName} ({v.ParameterCode}): {v.NumericValue.ToString("0.####", CultureInfo.InvariantCulture)} {v.Unit}"));
                 _dbContext.Notifications.Add(new Notification
                 {
@@ -994,7 +984,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
                 _dbContext.SystemAuditLogs.Add(new SystemAuditLog
                 {
                     UserId = userId, Action = "DiagnosticCriticalValueNotified", EntityName = "DiagnosticOrderItem",
-                    EntityId = item.Id.ToString(), Description = $"Đã báo bác sĩ chỉ định về giá trị nguy hiểm của phiếu #{order.OrderCode}.", CreatedAt = now
+                    EntityId = item.Id.ToString(), Description = $"Đã báo bác sĩ chỉ định về giá trị nguy hiểm của phiếu #{order.DisplayCode}.", CreatedAt = now
                 });
             }
         }
@@ -1008,7 +998,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
             Action = "DiagnosticResultRecorded",
             EntityName = "DiagnosticOrderItem",
             EntityId = item.Id.ToString(),
-            Description = $"Kỹ thuật viên nhập kết quả cho dịch vụ #{item.DiagnosticServiceId} thuộc phiếu #{order.OrderCode}.",
+            Description = $"Kỹ thuật viên nhập kết quả cho dịch vụ #{item.DiagnosticServiceId} thuộc phiếu #{order.DisplayCode}.",
             CreatedAt = DateTime.UtcNow
         });
 
@@ -1069,7 +1059,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
                                 where d.Id == order.OrderingDoctorId select u).FirstOrDefaultAsync();
         if (doctorUser != null)
         {
-            var message = $"Phiếu #{order.OrderCode}, dịch vụ {item.DiagnosticService.Name}: {reason}.";
+            var message = $"Phiếu #{order.DisplayCode}, dịch vụ {item.DiagnosticService.Name}: {reason}.";
             _dbContext.Notifications.Add(new Notification
             {
                 UserId = doctorUser.Id, Type = NotificationType.Diagnostic,
@@ -1144,7 +1134,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
                 v.DiagnosticResult.DiagnosticOrderItem.Status != DiagnosticItemStatus.Cancelled &&
                 codes.Contains(v.ParameterCode) && v.DiagnosticResult.ResultedAtUtc >= since)
             .Select(v => new DeltaHistoryRow(v.ParameterCode, v.Unit, v.NumericValue, v.DiagnosticResult.ResultedAtUtc,
-                v.DiagnosticResult.DiagnosticOrderItem.DiagnosticOrder.OrderCode))
+                v.DiagnosticResult.DiagnosticOrderItem.DiagnosticOrder.ShortCode ?? v.DiagnosticResult.DiagnosticOrderItem.DiagnosticOrder.OrderCode))
             .ToListAsync();
     }
 
@@ -1292,7 +1282,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
         _dbContext.Notifications.Add(new Notification
         {
             UserId = order.SubmittedForVerificationByUserId!.Value, Type = NotificationType.Diagnostic,
-            Title = "Kết quả bị trả lại — cần chỉnh sửa", Message = $"Phiếu #{order.OrderCode}: {order.ReturnReason}",
+            Title = "Kết quả bị trả lại — cần chỉnh sửa", Message = $"Phiếu #{order.DisplayCode}: {order.ReturnReason}",
             Route = $"/diagnostics/orders/{order.Id}", RelatedEntityType = "DiagnosticOrder", RelatedEntityId = order.Id.ToString(),
             DedupeKey = $"diag_returned_{order.Id}_{order.ReturnCount}", CreatedAtUtc = DateTime.UtcNow
         });
@@ -1393,7 +1383,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
             _dbContext.Notifications.Add(new Notification
             {
                 UserId = userId, Type = NotificationType.Diagnostic, Title = "Có phiếu kết quả chờ duyệt",
-                Message = $"Phiếu #{order.OrderCode} đang chờ duyệt kết quả.", Route = $"/lab/orders/{order.Id}",
+                Message = $"Phiếu #{order.DisplayCode} đang chờ duyệt kết quả.", Route = $"/lab/orders/{order.Id}",
                 RelatedEntityType = "DiagnosticOrder", RelatedEntityId = order.Id.ToString(),
                 DedupeKey = $"diag_pending_{order.Id}_{userId}_{order.ReturnCount}", CreatedAtUtc = DateTime.UtcNow
             });
@@ -1457,7 +1447,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
             Action = "DiagnosticOrderCompleted",
             EntityName = "DiagnosticOrder",
             EntityId = order.Id.ToString(),
-            Description = $"Phiếu chỉ định #{order.OrderCode} đã hoàn tất.",
+            Description = $"Phiếu chỉ định #{order.DisplayCode} đã hoàn tất.",
             CreatedAt = DateTime.UtcNow
         });
 
@@ -1474,7 +1464,7 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
                 UserId = doctorUser.Id,
                 Type = NotificationType.Diagnostic,
                 Title = "Có kết quả cận lâm sàng",
-                Message = $"Phiếu chỉ định #{order.OrderCode} cho bệnh nhân đã có đầy đủ kết quả.",
+                Message = $"Phiếu chỉ định #{order.DisplayCode} cho bệnh nhân đã có đầy đủ kết quả.",
                 Route = order.AppointmentId.HasValue
                     ? $"/doctor/appointments/{order.AppointmentId}/examination"
                     : $"/doctor/visits/{order.PatientVisitId}/examination",
@@ -1725,11 +1715,11 @@ public partial class DiagnosticWorkflowService : IDiagnosticWorkflowService
         {
             Id = order.Id,
             FacilityName = order.Facility?.Name,
-            OrderCode = order.OrderCode,
+            OrderCode = order.DisplayCode,
             AppointmentId = order.AppointmentId,
-            AppointmentCode = order.Appointment?.AppointmentCode ?? (order.PatientVisit != null ? order.PatientVisit.VisitCode : string.Empty),
+            AppointmentCode = order.Appointment?.DisplayCode ?? (order.PatientVisit != null ? order.PatientVisit.DisplayCode : string.Empty),
             PatientVisitId = order.PatientVisitId,
-            VisitCode = order.PatientVisit?.VisitCode,
+            VisitCode = order.PatientVisit?.DisplayCode,
             AppointmentDate = order.Appointment?.AppointmentDate ?? (order.PatientVisit != null ? order.PatientVisit.VisitDate : DateOnly.FromDateTime(order.OrderedAtUtc)),
             PatientId = order.PatientId,
             PatientName = patientUserName ?? order.Patient.FullName ?? "Bệnh nhân",

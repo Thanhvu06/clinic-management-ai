@@ -99,7 +99,7 @@ public partial class BillingService : IBillingService
                     Action = "CREATE_INVOICE",
                     EntityName = "Invoice",
                     EntityId = invoice.Id.ToString(),
-                    Description = $"Lập hóa đơn #{invoice.InvoiceCode} cho lịch hẹn #{appointment.AppointmentCode} ({ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(invoice.TotalAmount)})",
+                    Description = $"Lập hóa đơn #{invoice.DisplayCode} cho lịch hẹn #{appointment.DisplayCode} ({ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(invoice.TotalAmount)})",
                     CreatedAt = _dateTimeProvider.UtcNow
                 });
 
@@ -110,7 +110,7 @@ public partial class BillingService : IBillingService
                         UserId = appointment.Patient.UserId.Value,
                         Type = NotificationType.Invoice,
                         Title = "Hóa đơn mới được tạo",
-                        Message = $"Hóa đơn #{invoice.InvoiceCode} cho lịch khám #{appointment.AppointmentCode} đã được tạo với số tiền {ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(invoice.TotalAmount)}.",
+                        Message = $"Hóa đơn #{invoice.DisplayCode} cho lịch khám #{appointment.DisplayCode} đã được tạo với số tiền {ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(invoice.TotalAmount)}.",
                         Route = "/patient/invoices",
                         RelatedEntityType = "Invoice",
                         RelatedEntityId = invoice.Id.ToString(),
@@ -339,7 +339,7 @@ public partial class BillingService : IBillingService
                     Action = "CREATE_INVOICE",
                     EntityName = "Invoice",
                     EntityId = invoice.Id.ToString(),
-                    Description = $"Lập hóa đơn tổng hợp #{invoice.InvoiceCode} cho lượt khám #{visit.VisitCode} ({ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(invoice.TotalAmount)})",
+                    Description = $"Lập hóa đơn tổng hợp #{invoice.DisplayCode} cho lượt khám #{visit.DisplayCode} ({ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(invoice.TotalAmount)})",
                     CreatedAt = _dateTimeProvider.UtcNow
                 });
 
@@ -350,7 +350,7 @@ public partial class BillingService : IBillingService
                         UserId = visit.Patient.UserId.Value,
                         Type = NotificationType.Invoice,
                         Title = "Hóa đơn viện phí mới",
-                        Message = $"Hóa đơn #{invoice.InvoiceCode} cho lượt khám #{visit.VisitCode} đã được lập với số tiền {ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(invoice.TotalAmount)}.",
+                        Message = $"Hóa đơn #{invoice.DisplayCode} cho lượt khám #{visit.DisplayCode} đã được lập với số tiền {ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(invoice.TotalAmount)}.",
                         Route = "/patient/invoices",
                         RelatedEntityType = "Invoice",
                         RelatedEntityId = invoice.Id.ToString(),
@@ -445,7 +445,7 @@ public partial class BillingService : IBillingService
                     Action = "CREATE_INVOICE",
                     EntityName = "Invoice",
                     EntityId = invoice.Id.ToString(),
-                    Description = $"Lập hóa đơn #{invoice.InvoiceCode} cho đăng ký gói #{registration.RegistrationCode} ({ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(invoice.TotalAmount)})",
+                    Description = $"Lập hóa đơn #{invoice.DisplayCode} cho đăng ký gói #{registration.DisplayCode} ({ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(invoice.TotalAmount)})",
                     CreatedAt = _dateTimeProvider.UtcNow
                 });
 
@@ -456,7 +456,7 @@ public partial class BillingService : IBillingService
                         UserId = registration.Patient.UserId.Value,
                         Type = NotificationType.Invoice,
                         Title = "Hóa đơn mới được tạo",
-                        Message = $"Hóa đơn #{invoice.InvoiceCode} cho gói khám #{registration.RegistrationCode} đã được tạo với số tiền {ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(invoice.TotalAmount)}.",
+                        Message = $"Hóa đơn #{invoice.DisplayCode} cho gói khám #{registration.DisplayCode} đã được tạo với số tiền {ClinicManagement.Infrastructure.Common.BusinessDisplay.Money(invoice.TotalAmount)}.",
                         Route = "/patient/invoices",
                         RelatedEntityType = "Invoice",
                         RelatedEntityId = invoice.Id.ToString(),
@@ -524,7 +524,7 @@ public partial class BillingService : IBillingService
         foreach (var reservation in reservations)
         {
             await allocator.Return(medicines[reservation.MedicineId], reservation.PrescriptionId,
-                $"Trả thuốc giữ chỗ do hủy hóa đơn #{invoice.InvoiceCode}", actorUserId, cancellationToken);
+                $"Trả thuốc giữ chỗ do hủy hóa đơn #{invoice.DisplayCode}", actorUserId, cancellationToken);
         }
         foreach (var prescription in releasable) prescription.Status = PrescriptionStatus.Issued;
     }
@@ -563,15 +563,17 @@ public partial class BillingService : IBillingService
         if (!string.IsNullOrWhiteSpace(filters.Search))
         {
             var search = filters.Search.Trim();
+            var code = DisplayCodeSearch.Canonical(search);
+            var prefix = DisplayCodeSearch.Compact(search);
             query = query.Where(i =>
-                i.InvoiceCode.Contains(search) ||
-                (i.Appointment != null && i.Appointment.AppointmentCode.Contains(search)) ||
-                (i.PatientVisit != null && i.PatientVisit.VisitCode.Contains(search)) ||
-                (i.HealthPackageRegistration != null && i.HealthPackageRegistration.RegistrationCode.Contains(search)) ||
+                (i.InvoiceCode.ToUpper().Contains(prefix) || i.ShortCode == code || (i.ShortCode != null && i.ShortCode.StartsWith(prefix))) ||
+                (i.Appointment != null && (i.Appointment.AppointmentCode.ToUpper().Contains(prefix) || i.Appointment.ShortCode == code || (i.Appointment.ShortCode != null && i.Appointment.ShortCode.StartsWith(prefix)))) ||
+                (i.PatientVisit != null && (i.PatientVisit.VisitCode.ToUpper().Contains(prefix) || i.PatientVisit.ShortCode == code || (i.PatientVisit.ShortCode != null && i.PatientVisit.ShortCode.StartsWith(prefix)))) ||
+                (i.HealthPackageRegistration != null && (i.HealthPackageRegistration.RegistrationCode.ToUpper().Contains(prefix) || i.HealthPackageRegistration.ShortCode == code || (i.HealthPackageRegistration.ShortCode != null && i.HealthPackageRegistration.ShortCode.StartsWith(prefix)))) ||
                 (i.HealthPackageRegistration != null && i.HealthPackageRegistration.ContactPhone.Contains(search)) ||
                 (i.Patient.FullName != null && i.Patient.FullName.Contains(search)) ||
                 (i.Patient.PhoneNumber != null && i.Patient.PhoneNumber.Contains(search)) ||
-                (i.Patient.MedicalRecordNumber != null && i.Patient.MedicalRecordNumber.Contains(search)) ||
+                (i.Patient.MedicalRecordNumber != null && (i.Patient.MedicalRecordNumber.ToUpper().Contains(prefix) || i.Patient.ShortCode == code || (i.Patient.ShortCode != null && i.Patient.ShortCode.StartsWith(prefix)))) ||
                 _dbContext.Users.Any(u => i.Patient.UserId != null && u.Id == i.Patient.UserId &&
                     ((u.FullName != null && u.FullName.Contains(search)) ||
                      (u.PhoneNumber != null && u.PhoneNumber.Contains(search)))));

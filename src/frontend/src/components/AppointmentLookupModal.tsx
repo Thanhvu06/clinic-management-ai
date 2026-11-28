@@ -75,7 +75,7 @@ export const AppointmentLookupModal: React.FC<AppointmentLookupModalProps> = ({ 
                             Tra cứu lịch hẹn khám bệnh
                         </h3>
                         <p className={styles.paragraph1}>
-                            Nhập mã lịch hẹn (APT-...) và số điện thoại đã đăng ký
+                            Nhập mã lịch hẹn (ví dụ LH0001) và số điện thoại đã đăng ký
                         </p>
                     </div>
                     <button
@@ -96,7 +96,7 @@ export const AppointmentLookupModal: React.FC<AppointmentLookupModalProps> = ({ 
                                 type="text"
                                 required
                                 aria-label="Mã lịch hẹn"
-                                placeholder="Ví dụ: APT-260829-0001"
+                                placeholder="Ví dụ: LH0001"
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
                                 className={styles.control1}

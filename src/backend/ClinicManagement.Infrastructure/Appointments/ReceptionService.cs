@@ -82,13 +82,16 @@ public class ReceptionService : IReceptionService
                         Appointment = a,
                         PatientName = pu != null ? pu.FullName : (p.FullName ?? string.Empty),
                         PatientPhone = pu != null ? pu.PhoneNumber : (p.PhoneNumber ?? string.Empty),
-                        MedicalRecordNumber = p.MedicalRecordNumber ?? string.Empty,
+                        MedicalRecordNumber = p.ShortCode ?? p.MedicalRecordNumber,
                         NationalId = p.NationalId ?? string.Empty,
                         DoctorId = d.Id,
                         DoctorUserId = d.UserId,
                         DoctorName = du != null ? du.FullName : "Bác sĩ",
                         SpecialtyName = s.Name,
                         PatientVisitId = pv != null ? (long?)pv.Id : null,
+                        LegacyMedicalRecordNumber = p.MedicalRecordNumber,
+                        VisitShortCode = pv == null ? null : pv.ShortCode,
+                        LegacyVisitCode = pv == null ? null : pv.VisitCode,
                         VisitFacilityId = pv != null ? (long?)pv.FacilityId : null,
                         FacilityId = a.FacilityId ?? (pv != null ? (long?)pv.FacilityId : null),
                         FacilityName = f != null ? f.Name : (pv != null ? pv.Facility.Name : null)
@@ -138,10 +141,16 @@ public class ReceptionService : IReceptionService
         if (!string.IsNullOrWhiteSpace(search))
         {
             var clean = search.Trim().ToLower();
-            query = query.Where(x => x.Appointment.AppointmentCode.ToLower().Contains(clean) 
+            var code = DisplayCodeSearch.Canonical(search);
+            var prefix = DisplayCodeSearch.Compact(search);
+            query = query.Where(x => x.Appointment.AppointmentCode.ToUpper().Contains(prefix)
+                                  || x.Appointment.ShortCode == code || (x.Appointment.ShortCode != null && x.Appointment.ShortCode.StartsWith(prefix))
+                                  || x.VisitShortCode == code || (x.VisitShortCode != null && x.VisitShortCode.StartsWith(prefix))
+                                  || (x.LegacyVisitCode != null && x.LegacyVisitCode.ToUpper().Contains(prefix))
                                   || x.PatientName.ToLower().Contains(clean) 
                                   || x.PatientPhone.Contains(clean)
-                                  || x.MedicalRecordNumber.ToLower().Contains(clean)
+                                  || x.LegacyMedicalRecordNumber.ToUpper().Contains(prefix)
+                                  || x.MedicalRecordNumber == code || x.MedicalRecordNumber.StartsWith(prefix)
                                   || x.NationalId.ToLower().Contains(clean));
         }
 
@@ -190,7 +199,7 @@ public class ReceptionService : IReceptionService
                         Appointment = a,
                         PatientName = pu != null ? pu.FullName : (p.FullName ?? string.Empty),
                         PatientPhone = pu != null ? pu.PhoneNumber : (p.PhoneNumber ?? string.Empty),
-                        MedicalRecordNumber = p.MedicalRecordNumber ?? string.Empty,
+                        MedicalRecordNumber = p.ShortCode ?? p.MedicalRecordNumber,
                         NationalId = p.NationalId ?? string.Empty,
                         DoctorName = du != null ? du.FullName : "Bác sĩ",
                         SpecialtyName = s.Name,
@@ -274,7 +283,7 @@ public class ReceptionService : IReceptionService
                 UserId = patientUserId.Value,
                 Type = NotificationType.Appointment,
                 Title = "Lịch khám đã được xác nhận",
-                Message = $"Lịch khám #{appointment.AppointmentCode} ngày {appointment.AppointmentDate:dd/MM/yyyy} lúc {appointment.StartTime:HH\\:mm} đã được xác nhận.",
+                Message = $"Lịch khám #{appointment.DisplayCode} ngày {appointment.AppointmentDate:dd/MM/yyyy} lúc {appointment.StartTime:HH\\:mm} đã được xác nhận.",
                 Route = "/patient/appointments",
                 RelatedEntityType = "Appointment",
                 RelatedEntityId = appointment.Id.ToString(),
@@ -297,7 +306,7 @@ public class ReceptionService : IReceptionService
                 UserId = doctorUserId,
                 Type = NotificationType.Appointment,
                 Title = "Lịch khám đã được xác nhận",
-                Message = $"Lịch khám #{appointment.AppointmentCode} ngày {appointment.AppointmentDate:dd/MM/yyyy} đã được xác nhận.",
+                Message = $"Lịch khám #{appointment.DisplayCode} ngày {appointment.AppointmentDate:dd/MM/yyyy} đã được xác nhận.",
                 Route = $"/doctor/appointments/{appointment.Id}",
                 RelatedEntityType = "Appointment",
                 RelatedEntityId = appointment.Id.ToString(),
@@ -356,7 +365,7 @@ public class ReceptionService : IReceptionService
                 UserId = doctorUserId,
                 Type = NotificationType.Appointment,
                 Title = "Bệnh nhân đã đến phòng khám",
-                Message = $"Bệnh nhân cho lịch khám #{appointment.AppointmentCode} đã có mặt tại phòng chờ.",
+                Message = $"Bệnh nhân cho lịch khám #{appointment.DisplayCode} đã có mặt tại phòng chờ.",
                 Route = $"/doctor/appointments/{appointment.Id}",
                 RelatedEntityType = "Appointment",
                 RelatedEntityId = appointment.Id.ToString(),
@@ -462,7 +471,7 @@ public class ReceptionService : IReceptionService
         string? facilityName = null) => new()
     {
         Id = a.Id,
-        AppointmentCode = a.AppointmentCode,
+        AppointmentCode = a.DisplayCode,
         PatientId = a.PatientId,
         DoctorId = a.DoctorId,
         SpecialtyId = a.SpecialtyId,

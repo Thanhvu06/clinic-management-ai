@@ -51,7 +51,8 @@ public partial class DoctorAppointmentService
                     select new DoctorQueueItemDto
                     {
                         AppointmentId = a.Id,
-                        AppointmentCode = a.AppointmentCode,
+                        AppointmentCode = (a.ShortCode ?? a.AppointmentCode),
+                        LegacyAppointmentCode = a.AppointmentCode,
                         AppointmentDate = a.AppointmentDate,
                         StartTime = a.StartTime,
                         EndTime = a.EndTime,
@@ -79,7 +80,8 @@ public partial class DoctorAppointmentService
             if (item.AppointmentId.HasValue && visitMap.TryGetValue(item.AppointmentId.Value, out var pv))
             {
                 item.PatientVisitId = pv.Id;
-                item.VisitCode = pv.VisitCode;
+                item.VisitCode = pv.DisplayCode;
+                item.LegacyVisitCode = pv.VisitCode;
                 item.QueueNumber = pv.QueueNumber;
                 if (pv.Status == VisitStatus.WaitingDoctor && item.Status == nameof(AppointmentStatus.Confirmed))
                 {
@@ -114,9 +116,10 @@ public partial class DoctorAppointmentService
         var walkInItems = walkInVisits.Select(v => new DoctorQueueItemDto
         {
             AppointmentId = null,
-            AppointmentCode = v.VisitCode,
+            AppointmentCode = v.DisplayCode,
             PatientVisitId = v.Id,
-            VisitCode = v.VisitCode,
+            VisitCode = v.DisplayCode,
+            LegacyVisitCode = v.VisitCode,
             QueueNumber = v.QueueNumber,
             AppointmentDate = v.VisitDate,
             IsCompletionOverdue = ConsultationCompletionExpiryRule.IsOverdue(v.Status.ToString(), v.VisitDate, _dateTimeProvider),
@@ -250,7 +253,7 @@ public partial class DoctorAppointmentService
                             select new DoctorQueueItemDto
                             {
                                 AppointmentId = a.Id,
-                                AppointmentCode = a.AppointmentCode,
+                                AppointmentCode = (a.ShortCode ?? a.AppointmentCode),
                                 AppointmentDate = a.AppointmentDate,
                                 StartTime = a.StartTime,
                                 EndTime = a.EndTime,

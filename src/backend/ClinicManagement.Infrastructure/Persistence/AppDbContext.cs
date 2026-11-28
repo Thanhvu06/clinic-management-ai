@@ -134,6 +134,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
         });
             
         builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+        DisplayCodeConfiguration.Configure(builder, Database.IsSqlServer());
 
         // SQL datetime values do not retain Kind. Mark UTC columns on materialization
         // without shifting their stored ticks or changing local date/time properties.
