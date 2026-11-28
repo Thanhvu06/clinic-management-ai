@@ -5,7 +5,7 @@ using ClinicManagement.Application.AI.Tools;
 
 namespace ClinicManagement.Infrastructure.AI;
 
-public sealed partial class AiSafetyGuard : IAiSafetyGuard
+public sealed partial class AiSafetyGuard(PatientEmergencySemanticGate? semantic = null) : IAiSafetyGuard
 {
     private static readonly string[] EmergencyPhrases =
     {
@@ -67,7 +67,9 @@ public sealed partial class AiSafetyGuard : IAiSafetyGuard
         AiSafetyGuardResult Emergency(string category) =>
             new() { IsEmergency = true, IsSelfHarm = selfHarm, MatchedCategory = category };
 
-        if (HasHazardousExposure(normalized, tokens)) return Emergency("phơi nhiễm chất độc hoặc dị vật nguy hiểm");
+        if (HasDangerSign(normalized, tokens)) return Emergency("dấu hiệu nguy hiểm");
+        if (HasHazardousExposure(normalized, tokens) || HasChildForeignBody(normalized, tokens) || HasAbnormalIngestion(normalized, tokens))
+            return Emergency("phơi nhiễm chất độc hoặc dị vật nguy hiểm");
         var chestPainMatches = FindChestPainMatches(normalized, tokens);
         var medicationMatches = FindMedicationMisuseMatches(normalized, tokens);
         foreach (var phrase in EmergencyPhrases)
@@ -77,12 +79,14 @@ public sealed partial class AiSafetyGuard : IAiSafetyGuard
                 if (phrase == "ngộ độc" && IsMildFoodPoisoningMention(normalized, tokens, match))
                     continue;
                 var fullMatch = chestPainMatches.Concat(medicationMatches).FirstOrDefault(span => span.StartTokenIndex <= match.StartTokenIndex && span.EndTokenIndex >= match.EndTokenIndex);
-                if (!IsNegated(normalized, tokens, fullMatch?.StartTokenIndex ?? match.StartTokenIndex))
+                var start = fullMatch?.StartTokenIndex ?? match.StartTokenIndex;
+                if (!IsNegated(normalized, tokens, start) && !IsHistoricalMention(normalized, tokens, start))
                     return Emergency(phrase);
             }
         }
 
-        if (chestPainMatches.Any(match => !IsNegated(normalized, tokens, match.StartTokenIndex)))
+        if (chestPainMatches.Any(match => !IsNegated(normalized, tokens, match.StartTokenIndex) &&
+                !IsHistoricalMention(normalized, tokens, match.StartTokenIndex)))
             return Emergency("đau ngực");
         if (medicationMatches.Any(match => !IsNegated(normalized, tokens, match.StartTokenIndex)))
             return Emergency("uống nhiều thuốc một lúc");
@@ -101,6 +105,17 @@ public sealed partial class AiSafetyGuard : IAiSafetyGuard
             return new AiSafetyGuardResult { IsPromptInjection = true, MatchedCategory = "prompt_injection" };
 
         return new AiSafetyGuardResult();
+    }
+
+    public async Task<AiSafetyGuardResult> InspectPatientAsync(string? message, CancellationToken ct = default)
+    {
+        var deterministic = Inspect(message);
+        if (deterministic.IsEmergency || deterministic.IsSelfHarm || semantic is null)
+            return deterministic;
+
+        return await semantic.IsEmergencyAsync(message, ct)
+            ? new AiSafetyGuardResult { IsEmergency = true, MatchedCategory = "dấu hiệu nguy hiểm theo ngữ nghĩa" }
+            : deterministic;
     }
 
     private static bool IsMildFoodPoisoningMention(string text, IReadOnlyList<TextToken> tokens, PhraseMatch poisoning) =>

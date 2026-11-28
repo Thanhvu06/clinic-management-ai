@@ -23,6 +23,7 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
     private readonly IHttpContextAccessor _http;
     private readonly ICurrentUserService _currentUser;
     private readonly IAiConversationPipeline _pipeline;
+    private readonly IAiSafetyGuard? _safetyGuard;
     private readonly IAiDeterministicPlanner _deterministicPlanner;
     private readonly IAiStructuredPlanner _structuredPlanner;
     private readonly IAiCopilotContextResolver _contextResolver;
@@ -43,11 +44,13 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
         IAiGroundedResponseComposer composer,
         IAiToolExecutor executor,
         IAiAuditService audit,
-        ILogger<RoleAwareCopilotOrchestrator>? logger = null)
+        ILogger<RoleAwareCopilotOrchestrator>? logger = null,
+        IAiSafetyGuard? safetyGuard = null)
     {
         _http = http;
         _currentUser = currentUser;
         _pipeline = pipeline;
+        _safetyGuard = safetyGuard;
         _deterministicPlanner = deterministicPlanner;
         _structuredPlanner = structuredPlanner;
         _contextResolver = contextResolver;
@@ -80,14 +83,19 @@ public sealed class RoleAwareCopilotOrchestrator : IAiRoleCopilotService
         var conversationId = NormalizeId(request.ConversationId ?? request.SessionId, "conv");
         var sessionId = NormalizeId(request.SessionId ?? request.ConversationId, "sess");
         var turnId = NormalizeId(request.ClientTurnId, "turn");
-        var typedSafety = request.IsTypedInput && role == AiActorRole.Patient && !string.IsNullOrWhiteSpace(request.SuggestionCode)
-            ? _pipeline.Analyze(request.Message).Safety
-            : null;
+        var suggestionRequested = !string.IsNullOrWhiteSpace(request.SuggestionCode);
+        AiSafetyGuardResult? typedSafety = null;
+        if (role == AiActorRole.Patient)
+        {
+            if (_safetyGuard is not null && (request.IsTypedInput || !suggestionRequested))
+                typedSafety = await _safetyGuard.InspectPatientAsync(request.Message, cancellationToken);
+            else if (request.IsTypedInput && suggestionRequested)
+                typedSafety = _pipeline.Analyze(request.Message).Safety;
+        }
         var suggestion = AiSuggestionCatalog.Find(request.SuggestionCode, role);
         // A suggestion code owns routing even when the composer supplied the original text for emergency screening.
         if (suggestion is not null) request.Message = suggestion.Label;
         var analysis = _pipeline.Analyze(request.Message);
-        var suggestionRequested = !string.IsNullOrWhiteSpace(request.SuggestionCode);
         var auditSource = suggestionRequested ? SuggestionAuditSource : FreeTextAuditSource;
 
         var emergency = typedSafety?.IsEmergency == true || analysis.Safety.IsEmergency;

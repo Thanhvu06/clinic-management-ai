@@ -20,6 +20,12 @@ public static class KnowledgeRegistration
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { UseProxy = false, ConnectTimeout = TimeSpan.FromSeconds(2) });
         services.AddSingleton(sp => new OllamaKnowledgeClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient("ClinicKnowledge"),
             sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<OllamaOptions>>()));
+        services.AddSingleton(sp => new PatientEmergencySemanticGate(
+            new OllamaKnowledgeClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient("ClinicKnowledge"),
+                sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<OllamaOptions>>()),
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<OllamaOptions>>(),
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<PatientEmergencySemanticGate>>()));
+        services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<PatientEmergencySemanticGate>());
         services.AddSingleton<ClinicKnowledgeRetriever>();
         services.AddSingleton<IClinicKnowledgeRetriever>(sp => sp.GetRequiredService<ClinicKnowledgeRetriever>());
         services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<ClinicKnowledgeRetriever>());

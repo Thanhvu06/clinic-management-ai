@@ -51,12 +51,16 @@ public partial class AiSpecialtyService
         {
             DoctorId = doctor.DoctorId, FromDate = requested.Date ?? today, ToDate = requested.Date ?? today.AddDays(13)
         }, ct);
-        var earliest = slots.Where(slot => (!requested.Date.HasValue || slot.SlotDate == requested.Date) &&
+        var ordered = slots.Where(slot => (!requested.Date.HasValue || slot.SlotDate == requested.Date) &&
                 AiBookingWizardPreference.Matches(requested.Part, slot.StartTime))
-            .OrderBy(slot => slot.SlotDate).ThenBy(slot => slot.StartTime)
-            .DistinctBy(slot => (slot.SlotDate, slot.StartTime, slot.EndTime)).Take(3)
-            .Select(slot => $"- {slot.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture)}–{slot.EndTime.ToString("HH:mm", CultureInfo.InvariantCulture)} ngày {slot.SlotDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)}")
-            .ToList();
+            .OrderBy(slot => slot.SlotDate).ThenBy(slot => slot.StartTime).ThenBy(slot => slot.EndTime);
+        var groupByPart = requested.Date.HasValue && requested.Part == BookingDayPart.None;
+        var selected = groupByPart
+            ? ordered.GroupBy(slot => PatientChatDoctorSchedule.PartOf(slot.StartTime)).OrderBy(group => group.Key).Select(group => group.First())
+            : ordered.DistinctBy(slot => (slot.SlotDate, slot.StartTime, slot.EndTime)).Take(3);
+        var earliest = selected.Select(slot =>
+            $"- {slot.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture)}–{slot.EndTime.ToString("HH:mm", CultureInfo.InvariantCulture)} ngày {slot.SlotDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)}" +
+            (groupByPart ? $" ({AiBookingWizardPreference.Label(PatientChatDoctorSchedule.PartOf(slot.StartTime))})" : "")).ToList();
         var dayPart = requested.Part == BookingDayPart.None ? "" : $" {AiBookingWizardPreference.Label(requested.Part)}";
         var schedule = requested.Invalid ? "Ngày hỏi lịch không hợp lệ. Bạn có thể nhập ngày theo định dạng dd/MM/yyyy."
             : requested.Date is { } date

@@ -36,9 +36,9 @@ public sealed class OllamaKnowledgeClient
         catch (Exception ex) when (IsRecoverable(ex)) { RecordFailure(ex, "Health"); return false; }
     }
 
-    public Task<OllamaResult<float[][]>> EmbedAsync(string[] publicText, CancellationToken ct) =>
+    public Task<OllamaResult<float[][]>> EmbedAsync(string[] publicText, CancellationToken ct, TimeSpan? requestBudget = null) =>
         PostAsync("api/embed", new { model = _options.EmbeddingModel, input = publicText, keep_alive = "30m" },
-            root => root.GetProperty("embeddings").Deserialize<float[][]>(), ct);
+            root => root.GetProperty("embeddings").Deserialize<float[][]>(), ct, requestBudget);
 
     public Task<OllamaResult<string>> ChatAsync(string publicQuestion, string publicDocuments, CancellationToken ct) =>
         PostAsync("api/chat", new
@@ -56,11 +56,12 @@ public sealed class OllamaKnowledgeClient
         PostAsync("api/chat", new { model = _options.ChatModel, stream = false, keep_alive = "30m", messages = Array.Empty<object>() },
             root => root.TryGetProperty("done", out var done) && done.ValueKind == JsonValueKind.True ? "Ready" : null, ct);
 
-    private async Task<OllamaResult<T>> PostAsync<T>(string path, object body, Func<JsonElement, T?> read, CancellationToken ct)
+    private async Task<OllamaResult<T>> PostAsync<T>(string path, object body, Func<JsonElement, T?> read,
+        CancellationToken ct, TimeSpan? requestBudget = null)
     {
         if (!_options.IsEnabled || !_health.CanAttempt()) return new(default, false);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(_options.TimeoutSeconds, 1, 120)));
+        timeout.CancelAfter(requestBudget ?? TimeSpan.FromSeconds(Math.Clamp(_options.TimeoutSeconds, 1, 120)));
         try
         {
             using var response = await _http.PostAsJsonAsync(_options.LocalEndpoint(path), body, timeout.Token);
