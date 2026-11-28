@@ -81,6 +81,19 @@ it.each([
 });
 
 it.each([
+    'tra cứu lịch hẹn mã LH0056',
+    'lịch lh 56 của tôi ngày mấy, bác sĩ nào',
+    'tra cứu lịch hẹn mã APT-261128-ABCD1234',
+])('keeps the full appointment code question on the scoped chat path for %s', async message => {
+    const copy = 'Lịch hẹn LH0056 của bạn.';
+    post.mockResolvedValueOnce(response({ message: copy }));
+    openChat();
+    send(message);
+    expect(await screen.findByText(copy, { selector: ':not([data-chat-announcement])' })).toBeVisible();
+    expect(post).toHaveBeenCalledExactlyOnceWith('/ai/chat', expect.objectContaining({ message }), expect.anything());
+});
+
+it.each([
     [poisonCases[3], 'EMERGENCY', emergencyReply],
     [selfHarmCases[1], 'SELF_HARM_RISK', selfHarmReply]
 ])('keeps an open wizard and shows safety for %s', async (message, errorCode, copy) => {

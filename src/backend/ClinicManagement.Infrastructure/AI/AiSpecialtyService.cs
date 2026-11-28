@@ -283,7 +283,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
             : localClassification.Intent;
 
         var passiveDraftVersion = ResolveDraftVersion(request.DraftVersion, hasSubstantiveChanges: false);
-        if (await ResolveDoctorInformationAsync(cleanMessage, passiveDraftVersion, cancellationToken) is { } doctorInformation) return doctorInformation;
+        if (await ResolveAppointmentOrDoctorInformationAsync(request, cleanMessage, passiveDraftVersion, cancellationToken) is { } information) return information;
         if (await ResolveSymptomLocationAsync(request, cleanMessage, passiveDraftVersion, cancellationToken) is { } symptomLocation) return symptomLocation;
         if (await ResolveKnowledgeAsync(request, cleanMessage, resolvedIntent, localClassification, passiveDraftVersion, cancellationToken, early: true) is { } earlyKnowledgeResponse) return earlyKnowledgeResponse;
         if (await ResolvePatientChatReadAsync(request, cleanMessage, passiveDraftVersion, cancellationToken) is { } localResponse) return localResponse;

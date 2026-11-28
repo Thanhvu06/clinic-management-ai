@@ -790,8 +790,8 @@ public class AppointmentService : IAppointmentService
         {
             AppointmentCode = x.AppointmentCode,
             AppointmentDate = x.AppointmentDate,
-            StartTime = x.StartTime,
-            EndTime = x.EndTime,
+            StartTime = x.StartTime.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture),
+            EndTime = x.EndTime.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture),
             SpecialtyName = x.SpecialtyName,
             DoctorName = x.DoctorName,
             Status = x.Status,

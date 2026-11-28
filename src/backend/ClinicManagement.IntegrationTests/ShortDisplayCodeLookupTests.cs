@@ -100,6 +100,70 @@ public sealed class ShortDisplayCodeLookupTests(CustomWebApplicationFactory fact
     }
 
     [Fact]
+    public async Task Chat_returns_one_owned_appointment_for_lookup_and_natural_questions()
+    {
+        var appointment = await AddAppointmentAsync("LH0056", Patient1EntityId);
+        var other = await AddAppointmentAsync("LH0057", Patient1EntityId);
+        var foreign = await AddAppointmentAsync("LH0058", Patient2EntityId);
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var facility = await db.Facilities.FirstAsync();
+        (await db.Appointments.FindAsync(appointment.Id))!.FacilityId = facility.Id;
+        await db.SaveChangesAsync();
+        using var patient = await CreateAuthenticatedClientAsync("pat1@test.com");
+
+        async Task<AiChatResponseDto> Chat(string message)
+        {
+            using var response = await patient.PostAsJsonAsync("/api/v1/ai/chat", new { message });
+            response.EnsureSuccessStatusCode();
+            return (await response.Content.ReadFromJsonAsync<ApiResponse<AiChatResponseDto>>())!.Data!;
+        }
+
+        var questions = new[] { "lh 56", "LH56", "LH0056", "lh0056", appointment.AppointmentCode }
+            .Select(code => $"tra cứu lịch hẹn mã {code}")
+            .Concat(["Lịch LH0056 của tôi ngày mấy, bác sĩ nào?", "Tôi đến cơ sở nào cho lịch lh 56 và lúc mấy giờ?",
+                "Lịch LH56 hiện ở trạng thái gì?"]);
+        foreach (var question in questions)
+        {
+            var reply = await Chat(question);
+            var tool = Assert.Single(reply.ToolResults);
+            Assert.Equal("appointment_detail", tool.ResultType);
+            var data = Assert.IsType<JsonElement>(tool.Data);
+            Assert.Equal(appointment.Id, data.GetProperty("id").GetInt64());
+            Assert.Equal("LH0056", data.GetProperty("appointmentCode").GetString());
+            Assert.Contains(appointment.AppointmentDate.ToString("dd/MM/yyyy"), reply.Message);
+            Assert.Contains("Giờ khám: 09:00 – 09:30", reply.Message);
+            Assert.Contains($"Bác sĩ: {data.GetProperty("doctorName").GetString()}", reply.Message);
+            Assert.Contains($"Chuyên khoa: {data.GetProperty("specialtyName").GetString()}", reply.Message);
+            Assert.Contains($"Cơ sở: {facility.Name}", reply.Message);
+            Assert.Contains("Trạng thái: Chờ xác nhận", reply.Message);
+            Assert.DoesNotContain(other.ShortCode!, reply.Message);
+        }
+
+        foreach (var code in new[] { "LH9999", "LH0058", foreign.AppointmentCode })
+        {
+            var reply = await Chat($"tra cứu lịch hẹn mã {code}");
+            Assert.Equal($"Không tìm thấy lịch hẹn mã {code} trong tài khoản của bạn.", reply.Message);
+            Assert.Empty(reply.ToolResults);
+        }
+    }
+
+    [Fact]
+    public async Task Public_lookup_formats_slot_wall_clock_time_without_a_timezone_shift()
+    {
+        await AddAppointmentAsync("LH0060", Patient1EntityId, new TimeOnly(0, 0));
+        await AddAppointmentAsync("LH0061", Patient1EntityId, new TimeOnly(14, 15));
+        using var client = Factory.CreateClient();
+        foreach (var (code, start, end) in new[] { ("lh%2060", "00:00", "00:30"), ("LH0061", "14:15", "14:45") })
+        {
+            var result = await client.GetFromJsonAsync<ApiResponse<List<AppointmentLookupDto>>>(
+                $"/api/v1/appointments/lookup?query={code}&phone=0123456784");
+            var row = Assert.Single(result!.Data!);
+            Assert.Equal((start, end), (row.StartTime, row.EndTime));
+        }
+    }
+
+    [Fact]
     public async Task Audit_finds_old_and_new_events_by_either_code()
     {
         var appointment = await AddAppointmentAsync("LH1040", Patient1EntityId);
@@ -119,14 +183,36 @@ public sealed class ShortDisplayCodeLookupTests(CustomWebApplicationFactory fact
             var body = await response.Content.ReadFromJsonAsync<ApiResponse<PagedResult<SystemAuditLogDto>>>();
             Assert.Equal(2, body!.Data!.TotalItems);
             Assert.All(body.Data.Items, log => Assert.Equal("LH1040", log.ReferenceCode));
-            Assert.Contains(body.Data.Items, log => log.Description == $"Đặt lịch {appointment.AppointmentCode}");
+            Assert.Contains(body.Data.Items, log => log.Description == "Đặt lịch LH1040");
         }
     }
 
-    private async Task<Appointment> AddAppointmentAsync(string code, long patientId)
+    [Fact]
+    public async Task Audit_replaces_multiple_resolved_codes_only_in_the_api_description()
+    {
+        var appointment = await AddAppointmentAsync("LH0070", Patient1EntityId);
+        using var scope = Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var patient = (await db.Patients.FindAsync(Patient1EntityId))!;
+        patient.ShortCode = "BN0070";
+        var original = $"Đặt lịch {appointment.AppointmentCode.ToLowerInvariant()} cho {patient.MedicalRecordNumber} (đối chiếu VIS-UNKNOWN).";
+        db.SystemAuditLogs.Add(new SystemAuditLog { EntityName = "Appointment", EntityId = appointment.Id.ToString(),
+            Action = "CreateAppointment", Description = original, CreatedAt = DateTime.UtcNow, UserId = Patient1Id });
+        await db.SaveChangesAsync();
+
+        using var admin = await CreateAuthenticatedClientAsync("admin@test.com");
+        var result = await admin.GetFromJsonAsync<ApiResponse<PagedResult<SystemAuditLogDto>>>(
+            $"/api/v1/admin/audit-logs?code={appointment.AppointmentCode}");
+        Assert.Equal("Đặt lịch LH0070 cho BN0070 (đối chiếu VIS-UNKNOWN).", Assert.Single(result!.Data!.Items).Description);
+        Assert.Equal(original, await db.SystemAuditLogs.Where(row => row.EntityId == appointment.Id.ToString() &&
+            row.Action == "CreateAppointment").Select(row => row.Description).SingleAsync());
+    }
+
+    private async Task<Appointment> AddAppointmentAsync(string code, long patientId, TimeOnly? start = null)
     {
         var date = GetFutureWorkingDate(20 + int.Parse(code[^2..]));
-        var slot = await CreateAvailableSlotAsync(DoctorEntityId, date, new TimeOnly(9, 0), new TimeOnly(9, 30));
+        var startTime = start ?? new TimeOnly(9, 0);
+        var slot = await CreateAvailableSlotAsync(DoctorEntityId, date, startTime, startTime.AddMinutes(30));
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var appointment = new Appointment

@@ -89,6 +89,7 @@ export function extractBookingHint(text: string): string | null {
 export function isFilteredPatientRead(text: string): boolean {
     const normalized = normalizeTypedText(text);
     const intent = classifyPatientTypedIntent(text);
+    if (intent !== 'booking' && /\b(?:APT(?:-[A-Z0-9]+)+|LH\s*[0-9]+)\b/i.test(text)) return true;
     if ((intent === 'appointments' || !intent && /^lich sap toi(?: cua (?:toi|minh))?$/.test(normalized)) &&
         /\b(?:lich hen|lich kham|lich) sap toi\b/.test(normalized)) return true;
     return !!intent && intent !== 'booking' && intent !== 'appointments' && (

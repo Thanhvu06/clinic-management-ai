@@ -20,8 +20,6 @@ public partial class AiSpecialtyService
             return await ResolveCancellationAsync(request, message, version, ct);
 
         var text = AiTextNormalizer.NormalizeForComparison(message);
-        if (await ResolvePatientAppointmentCodeAsync(request, version, ct) is { } appointment)
-            return appointment;
         var read = ClassifyFilteredRead(text);
         if (read is null)
             return await TryResolveLocalPatientReadAsync(request, message, version, ct);

@@ -72,5 +72,6 @@ public static class AuditBusinessReferences
             log.ReferenceCode = long.TryParse(log.EntityId, out var id)
                 ? references.GetValueOrDefault((log.EntityName, id), "")
                 : Guid.TryParse(log.EntityId, out _) ? "" : log.EntityId;
+        await AuditDescriptionCodes.ApplyAsync(db, clock, logs);
     }
 }
