@@ -6,7 +6,7 @@ namespace ClinicManagement.Infrastructure.AI;
 internal static class PatientChatDoctorName
 {
     private static readonly Regex DoctorMention = new(
-        @"\b(?:bác sĩ|bac si|bác sỹ|bac sy|bs\.?)\s+(?<name>[\p{L}\p{M}\p{N}]+(?:[ \t]+[\p{L}\p{M}\p{N}]+)*)",
+        @"\b(?:bác sĩ|bac si|bác sỹ|bac sy|bsi|bs\.?)\s+(?<name>[\p{L}\p{M}\p{N}]+(?:[ \t]+[\p{L}\p{M}\p{N}]+)*)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private static readonly Regex InformalMention = new(
@@ -14,7 +14,7 @@ internal static class PatientChatDoctorName
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private static readonly Regex NameSuffix = new(
-        @"\s+(?:vào|vao|từ|lúc|ngày|ngay|khoa|chuyên khoa|chuyen khoa|sáng|chiều|tối|ở|của|trong|có|co|khám|kham|lịch|lich|làm việc|lam viec|trực|truc|học hàm|hoc ham|học vị|hoc vi|bằng cấp|bang cap|giúp|giup|ơi|nhé|với)\b",
+        @"\s+(?:vào|vao|từ|lúc|ngày|ngay|khoa|chuyên khoa|chuyen khoa|sáng|chiều|tối|buổi|buoi|thứ|thu (?=[2-7]|hai|ba|tu|nam|sau|bay)|chủ nhật|chu nhat|ở|của|trong|có|co|khám|kham|lịch|lich|làm việc|lam viec|trực|truc|học hàm|hoc ham|học vị|hoc vi|bằng cấp|bang cap|giúp|giup|ơi|nhé|với)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private static readonly Regex CommonPhrase = new(
@@ -36,9 +36,17 @@ internal static class PatientChatDoctorName
     internal static string? InformationName(string message)
     {
         var normalized = AiTextNormalizer.NormalizeForComparison(message);
-        if (!InformationCue.IsMatch(normalized) || BookingOrFeeCue.IsMatch(normalized)) return null;
+        if (BookingOrFeeCue.IsMatch(normalized)) return null;
         var candidate = ExtractCandidate(message);
-        return IsCandidate(candidate) ? candidate : null;
+        return IsCandidate(candidate) && (InformationCue.IsMatch(normalized) ||
+            PatientChatDoctorSchedule.IsDatedQuestion(ScheduleText(message, candidate!))) ? candidate : null;
+    }
+
+    internal static string ScheduleText(string message, string name)
+    {
+        var match = DoctorMention.Match(message);
+        if (!match.Success) match = InformalMention.Match(message);
+        return match.Success ? message[(match.Groups["name"].Index + name.Length)..] : "";
     }
 
     internal static string? ExtractCandidate(string message)

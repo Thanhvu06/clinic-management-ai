@@ -142,6 +142,19 @@ internal static class PatientChatPricing
     private const string SpecialtyNames =
         "noi tong quat|san phu khoa|san khoa|phu khoa|da lieu|tai mui hong|tim mach|co xuong khop|than kinh|noi tiet|nhan khoa|tieu hoa";
     private static readonly Regex AccentedPediatrics = new(@"(?<![\p{L}])nhi(?![\p{L}\p{M}])", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex PriceOutsideClinic = new(
+        @"\b(?:bang gia|chi phi|gia (?:bao nhieu|bao nhiu|sao|the nao|ra sao|ban)|(?:bao nhieu|bao nhiu|nhieu|nhiu|bn) (?:tien|dong|nghin|ngan)|(?:mat|het|ton) (?:bao nhieu|bao nhiu|nhieu|nhiu|bn))\b",
+        RegexOptions.CultureInvariant);
+
+    internal static bool HasOutsidePriceEvidence(string message)
+    {
+        var lower = message.ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormC);
+        var plain = Regex.Replace(KnowledgeText.Normalize(lower), @"\b(?:danh gia|khoa cua)\b", " ");
+        if (ClinicServiceWord.IsMatch(plain) || AccentedPediatrics.IsMatch(lower) || MentionsHealthPackage(plain) ||
+            Regex.IsMatch(plain, @"\b(?:sieu am|noi soi|xet nghiem|chup x quang|vien phi|hoa don|thuoc|duoc pham)\b"))
+            return false;
+        return PriceOutsideClinic.IsMatch(plain) || Regex.IsMatch(lower, @"(?<!đánh )\bgiá\b");
+    }
 
     internal static bool IsColloquialPriceQuestion(string lower, string normalized) =>
         ColloquialPriceCue.IsMatch(normalized) && !MedicinePriceQuestion.HasMedicineContext(lower) &&
@@ -191,17 +204,16 @@ internal static class PatientChatPricing
         AppDbContext dbContext, string message, long? pendingSpecialtyId, CancellationToken cancellationToken)
     {
         var specialtiesWithFee = await dbContext.Specialties.AsNoTracking()
-            .Where(s => s.IsActive && s.AiEnabled && s.ConsultationFee > 0)
+            .Where(s => s.IsActive && s.ConsultationFee > 0)
             .OrderBy(s => s.Id)
             .ToListAsync(cancellationToken);
 
-        var lower = message.ToLowerInvariant();
-        var targetSpec = specialtiesWithFee.FirstOrDefault(s => lower.Contains(s.Name.ToLowerInvariant())
-            || (!string.IsNullOrWhiteSpace(s.SpecialtyCode) && lower.Contains(s.SpecialtyCode.ToLowerInvariant()))
-            || (!string.IsNullOrWhiteSpace(s.Name.ToLowerInvariant().Replace("khoa", "").Trim()) &&
-                Regex.IsMatch(lower, $@"\b{Regex.Escape(s.Name.ToLowerInvariant().Replace("khoa", "").Trim())}\b")));
+        var lower = message.ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormC);
+        var plain = KnowledgeText.Normalize(message);
+        var targetSpec = specialtiesWithFee.FirstOrDefault(s => MatchesSpecialtyName(s.Name, s.SpecialtyCode, lower, plain));
 
-        if (targetSpec == null && pendingSpecialtyId.HasValue)
+        if (targetSpec == null && pendingSpecialtyId.HasValue &&
+            !Regex.IsMatch(plain, @"\b(?:bang gia|tat ca|tung khoa|cac khoa|cac chuyen khoa|kham chung)\b"))
             targetSpec = specialtiesWithFee.FirstOrDefault(s => s.Id == pendingSpecialtyId.Value);
 
         if (targetSpec != null)
@@ -209,11 +221,31 @@ internal static class PatientChatPricing
 
         var result = new StringBuilder();
         result.AppendLine("Bảng giá chi phí khám tham khảo tại Phòng khám ClinicCare theo từng chuyên khoa:");
-        foreach (var s in specialtiesWithFee.Take(6))
+        foreach (var s in specialtiesWithFee)
         {
             result.AppendLine($"- **Khoa {s.Name}**: {BusinessDisplay.Money(s.ConsultationFee)} / lượt khám");
         }
         result.AppendLine("\n*Lưu ý: Chi phí trên là phí khám ban đầu, chưa bao gồm các chỉ định cận lâm sàng phát sinh nếu có.*");
         return result.ToString();
+    }
+
+    private static bool MatchesSpecialtyName(string name, string? code, string lower, string plain)
+    {
+        if (!string.IsNullOrWhiteSpace(code) && Regex.IsMatch(plain, $@"\b{Regex.Escape(KnowledgeText.Normalize(code))}\b"))
+            return true;
+        var normalized = KnowledgeText.Normalize(name);
+        if (normalized == "nhi") return AccentedPediatrics.IsMatch(lower);
+        var core = Regex.Replace(normalized, @"\bkhoa\b", "").Trim();
+        return normalized.Length > 0 && Regex.IsMatch(plain, $@"\b{Regex.Escape(normalized)}\b") ||
+            core.Length > 0 && Regex.IsMatch(plain, $@"\b{Regex.Escape(core)}\b");
+    }
+
+    internal static async Task<bool> NamesPricedSpecialtyAsync(AppDbContext db, string message, CancellationToken ct)
+    {
+        var lower = message.ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormC);
+        var plain = KnowledgeText.Normalize(message);
+        var names = await db.Specialties.AsNoTracking().Where(s => s.IsActive && s.ConsultationFee > 0)
+            .Select(s => new { s.Name, s.SpecialtyCode }).ToListAsync(ct);
+        return names.Any(s => MatchesSpecialtyName(s.Name, s.SpecialtyCode, lower, plain));
     }
 }

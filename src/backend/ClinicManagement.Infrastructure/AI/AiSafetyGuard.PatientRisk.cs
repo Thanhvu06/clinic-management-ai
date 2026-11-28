@@ -4,7 +4,7 @@ public sealed partial class AiSafetyGuard
 {
     private static readonly string[] SelfHarmPhrases =
     [
-        "không muốn sống", "không còn muốn sống", "chẳng muốn sống", "muốn chết", "muốn kết thúc cuộc đời",
+        "không muốn sống", "không còn muốn sống", "chẳng muốn sống", "muốn kết thúc cuộc đời",
         "muốn kết liễu", "tự tử", "tự sát", "tự vẫn", "tự làm hại", "tự hại bản thân",
         "làm hại chính mình", "làm hại bản thân"
     ];
@@ -15,14 +15,9 @@ public sealed partial class AiSafetyGuard
         "có ý định tự làm hại bản thân", "đang tự làm hại", "vừa tự làm hại", "sắp tự làm hại", "đã tự làm hại"
     ];
 
-    private static readonly string[] ExposureVerbs = ["uống", "nuốt", "hít", "hít thở", "ăn"];
-    private static readonly string[] Hazards =
-    [
-        "hóa chất", "nước tẩy", "thuốc tẩy", "chất tẩy", "nước javel", "nước rửa bồn cầu", "chất thông cống",
-        "nước thông cống", "chất ăn mòn", "axit", "a xít", "xút", "thuốc trừ sâu", "thuốc sâu", "thuốc diệt cỏ",
-        "thuốc diệt chuột", "thuốc chuột", "bả chuột", "xăng", "dầu hỏa", "dầu diesel", "dầu máy",
-        "pin", "nam châm", "vật sắc nhọn", "dị vật sắc nhọn", "kim tiêm", "đinh", "lưỡi dao", "mảnh kính", "mảnh thủy tinh"
-    ];
+    private static readonly string[] DistressSymptoms = ["đau", "mệt", "ngứa", "nhức", "sợ", "rát", "buồn nôn", "chóng mặt", "khó chịu"];
+    private static readonly string[] DistressIdioms = ["muốn chết", "chết mất", "chết đi được"];
+    private static readonly string[] ExplicitDeathIntent = ["muốn chết cho xong", "muốn chết thật", "muốn chết để", "thật sự muốn chết"];
 
     internal static string PatientSelfHarmMessage(bool immediate) =>
         "Mình rất tiếc vì bạn đang trải qua chuyện khó khăn như vậy. Hãy liên hệ ngay với người thân hoặc người bạn tin cậy và nhờ họ ở bên bạn. " +
@@ -34,18 +29,27 @@ public sealed partial class AiSafetyGuard
             !IsNegated(text, tokens, match.StartTokenIndex) &&
             !HasClauseBoundaryBetween(text, tokens[match.StartTokenIndex].EndIndex, tokens[match.EndTokenIndex].StartIndex));
 
-    private static bool HasHazardousExposure(string text, TextToken[] tokens)
-    {
-        var verbs = ExposureVerbs.SelectMany(verb => FindPhraseMatches(tokens, verb))
-            .Where(match => !IsNegated(text, tokens, match.StartTokenIndex)).ToArray();
-        if (verbs.Length == 0) return false;
+    private static bool HasSelfHarmIntent(string text, TextToken[] tokens) =>
+        MatchesSafetyPhrase(text, tokens, SelfHarmPhrases) ||
+        MatchesSafetyPhrase(text, tokens, ExplicitDeathIntent) ||
+        FindPhraseMatches(tokens, "muốn chết").Any(match =>
+            !IsNegated(text, tokens, match.StartTokenIndex) &&
+            !HasClauseBoundaryBetween(text, tokens[match.StartTokenIndex].EndIndex, tokens[match.EndTokenIndex].StartIndex) &&
+            !IsDistressIdiom(text, tokens, match));
 
-        var dewormingMedicine = new[] { "thuốc tẩy giun", "thuốc tẩy sán" }
-            .SelectMany(phrase => FindPhraseMatches(tokens, phrase)).Select(match => match.StartTokenIndex).ToHashSet();
-        return Hazards.SelectMany(hazard => FindPhraseMatches(tokens, hazard)).Any(hazard =>
-            !dewormingMedicine.Contains(hazard.StartTokenIndex) &&
-            verbs.Any(verb => hazard.StartTokenIndex > verb.EndTokenIndex &&
-                hazard.StartTokenIndex - verb.EndTokenIndex <= 7 &&
-                !HasClauseBoundaryBetween(text, tokens[verb.EndTokenIndex].EndIndex, tokens[hazard.EndTokenIndex].StartIndex)));
+    internal static bool HasDistressIdiom(string text)
+    {
+        var normalized = NormalizePreservingDiacritics(text);
+        var tokens = Tokenize(normalized);
+        return DistressIdioms.SelectMany(phrase => FindPhraseMatches(tokens, phrase))
+            .Any(match => IsDistressIdiom(normalized, tokens, match));
     }
+
+    private static bool IsDistressIdiom(string text, TextToken[] tokens, PhraseMatch idiom) =>
+        DistressSymptoms.SelectMany(symptom => FindPhraseMatches(tokens, symptom)).Any(symptom =>
+            idiom.StartTokenIndex > symptom.EndTokenIndex && idiom.StartTokenIndex - symptom.EndTokenIndex <= 6 &&
+            !IsNegated(text, tokens, symptom.StartTokenIndex) &&
+            !HasClauseBoundaryBetween(text, tokens[symptom.StartTokenIndex].EndIndex, tokens[idiom.EndTokenIndex].StartIndex) &&
+            !tokens[(symptom.EndTokenIndex + 1)..idiom.StartTokenIndex].Any(token =>
+                token.Comparison is "toi" or "minh" or "em" or "chau" or "nhung" or "nen" or "va" or "that" or "thuc" or "su"));
 }

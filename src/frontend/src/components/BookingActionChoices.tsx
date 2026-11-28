@@ -3,8 +3,8 @@ import type { AiAction } from '../types/ai';
 import styles from './MedicalChatWidget.module.css';
 
 /** Presentation only: all action callbacks and stale checks belong to the caller. */
-export const BookingActionChoices = ({ actions, renderAction, latest = true, isStale }: {
-    actions: AiAction[]; renderAction: (action: AiAction) => ReactNode; latest?: boolean; isStale?: (action: AiAction) => boolean;
+export const BookingActionChoices = ({ actions, renderAction, latest = true, isStale, children }: {
+    actions: AiAction[]; renderAction: (action: AiAction) => ReactNode; latest?: boolean; isStale?: (action: AiAction) => boolean; children?: ReactNode;
 }) => {
     const [expanded, setExpanded] = useState(false);
     const slots = actions.filter(action => action.type === 'SelectSlot');
@@ -18,5 +18,6 @@ export const BookingActionChoices = ({ actions, renderAction, latest = true, isS
         </>}
         {!latest && (slots.length > 0 || doctors.length > 0 || actions.some(action => isStale?.(action))) && <p className={styles.completedStep}>Lựa chọn ở bước trước ✓</p>}
         {other.map(renderAction)}
+        {children}
     </div>;
 };

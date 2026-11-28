@@ -396,7 +396,7 @@ public sealed class AiBookingWizardService(
         return response;
     }
 
-    private static DateOnly? ParseDay(string text, DateOnly today)
+    internal static DateOnly? ParseDay(string text, DateOnly today, bool includeTodayForWeekday = false)
     {
         var numeric = Regex.Match(text, @"(?<![\d/\-])(\d{1,2})([/\-])(\d{1,2})(?:\2(\d{4}))?(?![\d/\-])");
         if (numeric.Success)
@@ -424,7 +424,7 @@ public sealed class AiBookingWizardService(
                 return monday.AddDays((target + 6) % 7);
             }
             var days = (target - (int)today.DayOfWeek + 7) % 7;
-            return today.AddDays(days == 0 ? 7 : days);
+            return today.AddDays(days == 0 && !includeTodayForWeekday ? 7 : days);
         }
         var dayOnly = Regex.Match(text, @"\bngay\s+(\d{1,2})\b(?![/\d-])");
         if (!dayOnly.Success) return null;

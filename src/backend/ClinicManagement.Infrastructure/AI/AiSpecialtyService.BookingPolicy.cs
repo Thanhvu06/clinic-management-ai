@@ -23,6 +23,7 @@ public partial class AiSpecialtyService
         if (CancellationPolicyAnswer.IsQuestion(message))
             return await BookingPolicyResponseAsync(request, CancellationPolicyAnswer.Compose(message), CancellationPolicyAnswer.Sources, version, ct);
         if (await ResolveMedicinePriceAsync(request, message, version, ct) is { } medicinePrice) return medicinePrice;
+        if (await ResolveOutsidePriceAsync(request, message, version, ct) is { } outsidePrice) return outsidePrice;
         if (_knowledgeAnswerer is null || !NoShowPolicyAnswer.IsBookingPolicyQuestion(message)) return null;
         var answer = await _knowledgeAnswerer.AnswerAsync(message, ct);
         if (answer is null || AiProviderOutputGuard.Inspect(AiActorRole.Patient, answer.Text) is not null) return null;

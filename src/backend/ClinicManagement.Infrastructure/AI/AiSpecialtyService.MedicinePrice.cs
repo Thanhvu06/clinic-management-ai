@@ -15,8 +15,9 @@ public partial class AiSpecialtyService
     private async Task<AiChatResponseDto?> ResolveMedicinePriceAsync(AiChatRequestDto request, string message, int version, CancellationToken ct)
     {
         if (!MedicinePriceQuestion.IsPriceQuestion(message)) return null;
-        var explicitMedicine = MedicinePriceQuestion.HasMedicineContext(message);
-        if (!explicitMedicine && !MedicinePriceQuestion.MayNameMedicine(message)) return null;
+        var explicitMedicine = MedicinePriceQuestion.NamesMedicineAsSuch(message);
+        if (!explicitMedicine && !MedicinePriceQuestion.HasMedicineContext(message) && !MedicinePriceQuestion.MayNameMedicine(message))
+            return null;
         var terms = MedicinePriceQuestion.Terms(message);
         if (!explicitMedicine && terms.Count == 0) return null;
 
@@ -53,12 +54,14 @@ public partial class AiSpecialtyService
             ProviderStatus = "NotCalled", ProviderState = "NotCalled", PromptVersion = GeminiAiProvider.CurrentPromptVersion,
             ExecutionMode = AiProviderStatusContract.ExecutionDeterministicFallback, FallbackActive = true
         };
-        response.Actions.Add(new AiActionDto
-        {
-            Id = "act-open-medicine-prices", Type = AiActionTypes.ViewSpecialty, Label = "Mở Bảng giá thuốc", Style = "secondary",
-            RequiresAuthentication = false, RequiresConfirmation = false, Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Medicines }
-        });
+        response.Actions.Add(OpenMedicinePrices());
         await PreserveExistingDraftAsync(request, response, ct);
         return WithDraftVersionSync(response, version);
     }
+
+    private static AiActionDto OpenMedicinePrices() => new()
+    {
+        Id = "act-open-medicine-prices", Type = AiActionTypes.ViewSpecialty, Label = "Mở Bảng giá thuốc", Style = "secondary",
+        Payload = new AiActionPayloadDto { TargetUrl = SafeRoutes.Medicines }
+    };
 }

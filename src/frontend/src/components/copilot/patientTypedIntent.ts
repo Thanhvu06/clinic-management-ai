@@ -15,6 +15,8 @@ export function classifyPatientTypedIntent(text: string): PatientTypedIntent | n
     if (['dau nguc', 'kho tho', 'ngat', 'bat tinh', 'co giat', 'chay mau', 'dot quy', 'liet', '115',
         'dau', 'sot', 'ho', 'met', 'chong mat', 'buon non', 'non', 'ngua', 'sung', 'tieu chay', 'tuc nguc', 'nhuc dau']
         .some(phrase => has(phrase, false))) return null;
+    if (/\b(?:muon chet|muon song|muon ket lieu|muon ket thuc cuoc doi|tu tu|tu sat|tu lam hai|lam hai ban than|tu hai|qua lieu|uong|nuot|hit|ngui|tiem|dinh vao|ban vao)\b/
+        .test(normalizeTypedText(text))) return null;
 
     if (['huy', 'hoan', 'khong den'].some(phrase => has(phrase, false)) ||
         (has('doi', false) && ['lich', 'gio', 'ngay', 'sang'].some(phrase => has(phrase, false)))) return null;
@@ -24,7 +26,8 @@ export function classifyPatientTypedIntent(text: string): PatientTypedIntent | n
 
     // Explicit booking wins over the doctor/specialty schedule-question guard.
     if (any(['dat lich', 'dat kham', 'dang ky kham', 'muon kham', 'hen kham', 'book lich'])) return 'booking';
-    if ((has('bac si', false) || has('khoa', false)) && (has('lich', false) || has('kham', false))) return null;
+    if (['bac si', 'bac sy', 'bs', 'bsi', 'khoa'].some(phrase => has(phrase, false)) &&
+        ['lich', 'kham', 'truc', 'lam viec'].some(phrase => has(phrase, false))) return null;
     if (any(['lich hen', 'lich kham', 'lich cua toi'])) return 'appointments';
     if (any(['luot kham', 'lich su kham'])) return 'visits';
     if (any(['don thuoc', 'toa thuoc'])) return 'prescriptions';

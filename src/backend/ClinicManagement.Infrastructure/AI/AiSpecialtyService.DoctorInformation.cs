@@ -46,14 +46,24 @@ public partial class AiSpecialtyService
         var specialtyNames = string.Join(", ", memberships.Select(item => item.Name));
         var title = string.IsNullOrWhiteSpace(doctor.AcademicTitle) ? "Chưa cập nhật" : doctor.AcademicTitle;
         var today = _dateTimeProvider.VietnamToday;
-        var slots = await _availabilityPolicy.GetAvailableSlotsAsync(new BatchSlotAvailabilityRequest
+        var requested = PatientChatDoctorSchedule.Parse(PatientChatDoctorName.ScheduleText(message, name), today);
+        var slots = requested.Invalid ? [] : await _availabilityPolicy.GetAvailableSlotsAsync(new BatchSlotAvailabilityRequest
         {
-            DoctorId = doctor.DoctorId, FromDate = today, ToDate = today.AddDays(13)
+            DoctorId = doctor.DoctorId, FromDate = requested.Date ?? today, ToDate = requested.Date ?? today.AddDays(13)
         }, ct);
-        var earliest = slots.OrderBy(slot => slot.SlotDate).ThenBy(slot => slot.StartTime).Take(3)
+        var earliest = slots.Where(slot => (!requested.Date.HasValue || slot.SlotDate == requested.Date) &&
+                AiBookingWizardPreference.Matches(requested.Part, slot.StartTime))
+            .OrderBy(slot => slot.SlotDate).ThenBy(slot => slot.StartTime)
+            .DistinctBy(slot => (slot.SlotDate, slot.StartTime, slot.EndTime)).Take(3)
             .Select(slot => $"- {slot.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture)}–{slot.EndTime.ToString("HH:mm", CultureInfo.InvariantCulture)} ngày {slot.SlotDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)}")
             .ToList();
-        var schedule = earliest.Count == 0 ? "Chưa có lịch trống trong 14 ngày tới." : $"Khung giờ trống gần nhất:\n{string.Join('\n', earliest)}";
+        var dayPart = requested.Part == BookingDayPart.None ? "" : $" {AiBookingWizardPreference.Label(requested.Part)}";
+        var schedule = requested.Invalid ? "Ngày hỏi lịch không hợp lệ. Bạn có thể nhập ngày theo định dạng dd/MM/yyyy."
+            : requested.Date is { } date
+                ? earliest.Count == 0
+                    ? $"Không có lịch trống{dayPart} ngày {date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)}."
+                    : $"Có lịch trống{dayPart} ngày {date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)}:\n{string.Join('\n', earliest)}"
+                : earliest.Count == 0 ? "Chưa có lịch trống trong 14 ngày tới." : $"Khung giờ trống gần nhất:\n{string.Join('\n', earliest)}";
         response.Message = $"**Bác sĩ {doctor.FullName}**\nHọc hàm/học vị: {title}\nChuyên khoa: {(specialtyNames.Length > 0 ? specialtyNames : "Chưa cập nhật")}\n\n{schedule}";
         foreach (var membership in memberships.Where(item => item.AiEnabled))
         {
