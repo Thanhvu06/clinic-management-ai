@@ -15,6 +15,11 @@ export function wizardTextFields(step: AiBookingWizardRequest["step"], text?: st
     return { typedMessage: text };
 }
 
+export function wizardDoctorFields(step: AiBookingWizardRequest["step"], selection?: Pick<AiBookingWizardRequest, "doctorId" | "specialtyId">) {
+    if (step !== "start" || !selection) return {};
+    return { doctorId: selection.doctorId, specialtyId: selection.specialtyId };
+}
+
 export function patientCopilotTurn(response: AiCopilotResponse): ChatMessage {
     if (response.intent === "EmergencyEscalation" && response.providerState === "SafetyBlocked") {
         return { role: "model", content: response.message, urgency: "EMERGENCY", providerState: response.providerState };
