@@ -3,7 +3,7 @@ using ClinicManagement.Application.AI.Conversation;
 
 namespace ClinicManagement.Infrastructure.AI;
 
-public enum BookingDayPart : byte { None, Morning, Afternoon, Evening }
+public enum BookingDayPart : byte { None, Morning, Afternoon, Evening, Night }
 
 /// <summary>Day and part-of-day a patient typed when starting the wizard ("chiều mai").</summary>
 public static class AiBookingWizardPreference
@@ -45,6 +45,7 @@ public static class AiBookingWizardPreference
         BookingDayPart.Morning => start >= MorningStart && start < AfternoonStart,
         BookingDayPart.Afternoon => start >= AfternoonStart && start < EveningStart,
         BookingDayPart.Evening => start >= EveningStart && start < EveningEnd,
+        BookingDayPart.Night => start >= EveningEnd || start < MorningStart,
         _ => true
     };
 
@@ -53,6 +54,7 @@ public static class AiBookingWizardPreference
         BookingDayPart.Morning => "buổi sáng",
         BookingDayPart.Afternoon => "buổi chiều",
         BookingDayPart.Evening => "buổi tối",
+        BookingDayPart.Night => "ban đêm",
         _ => ""
     };
 }

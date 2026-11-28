@@ -162,7 +162,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
         var rawMessage = request.Message ?? string.Empty;
         var lowerMsg = rawMessage.ToLowerInvariant();
 
-        var safety = _safetyGuard.Inspect(rawMessage);
+        var safety = await _safetyGuard.InspectPatientAsync(rawMessage, cancellationToken);
         if (safety.IsEmergency || safety.IsSelfHarm)
             return await RespondToPatientSafetyAsync(request, safety, cancellationToken);
         if (safety.IsPromptInjection)
@@ -244,7 +244,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
             };
         }
 
-        var cleanMessage = SanitizeInput(rawMessage);
+        var cleanMessage = SanitizeInput(AiSafetyGuard.RemoveDistressIdioms(rawMessage));
         if (string.IsNullOrWhiteSpace(cleanMessage))
         {
             return new AiChatResponseDto
@@ -284,8 +284,7 @@ public partial class AiSpecialtyService : IAiSpecialtyService
 
         var passiveDraftVersion = ResolveDraftVersion(request.DraftVersion, hasSubstantiveChanges: false);
         if (await ResolveDoctorInformationAsync(cleanMessage, passiveDraftVersion, cancellationToken) is { } doctorInformation) return doctorInformation;
-        if (IsClinicParkingQuestion(cleanMessage))
-            return await HandleFacilityInquiryAsync(request, cleanMessage, passiveDraftVersion, cancellationToken);
+        if (await ResolveSymptomLocationAsync(request, cleanMessage, passiveDraftVersion, cancellationToken) is { } symptomLocation) return symptomLocation;
         if (await ResolveKnowledgeAsync(request, cleanMessage, resolvedIntent, localClassification, passiveDraftVersion, cancellationToken, early: true) is { } earlyKnowledgeResponse) return earlyKnowledgeResponse;
         if (await ResolvePatientChatReadAsync(request, cleanMessage, passiveDraftVersion, cancellationToken) is { } localResponse) return localResponse;
 

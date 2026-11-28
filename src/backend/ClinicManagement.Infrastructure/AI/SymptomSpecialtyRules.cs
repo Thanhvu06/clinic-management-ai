@@ -69,6 +69,15 @@ public static class SymptomSpecialtyRules
         }).ToArray();
     }
 
+    internal static bool HasSymptom(string message)
+    {
+        var clauses = Clauses(message);
+        return Rules.SelectMany(rule => MatchedKeywords(rule, clauses)).Any(keyword =>
+            keyword is not ("bé" or "con tôi" or "con em" or "con bé" or "em bé" or "cháu bé" or "bé nhà tôi" or
+                "trẻ em" or "trẻ nhỏ" or "trẻ sơ sinh" or "sơ sinh" or "khám tổng quát" or "khám sức khỏe" or
+                "sức khỏe tổng quát" or "khám sức khỏe ... tổng quát"));
+    }
+
     public static bool RequiresClarification(bool unclear, string message)
     {
         var clauses = Clauses(message);

@@ -14,7 +14,7 @@ internal static class PatientChatDoctorName
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private static readonly Regex NameSuffix = new(
-        @"\s+(?:vào|vao|từ|lúc|ngày|ngay|khoa|chuyên khoa|chuyen khoa|sáng|chiều|tối|buổi|buoi|thứ|thu (?=[2-7]|hai|ba|tu|nam|sau|bay)|chủ nhật|chu nhat|ở|của|trong|có|co|khám|kham|lịch|lich|làm việc|lam viec|trực|truc|học hàm|hoc ham|học vị|hoc vi|bằng cấp|bang cap|giúp|giup|ơi|nhé|với)\b",
+        @"\s+(?:vào|vao|từ|lúc|ngày|ngay|khoa|chuyên khoa|chuyen khoa|sáng|chiều|tối|đêm|(?:sang|chieu|toi|dem)(?=\s+(?:mai|nay|thu|chu nhat|ngay|co|con lich|kham)\b|$)|buổi|buoi|ban đêm|ban dem|thứ|thu (?=[2-7]|hai|ba|tu|nam|sau|bay)|chủ nhật|chu nhat|ở|của|trong|có|co|khám|kham|lịch|lich|làm việc|lam viec|trực|truc|học hàm|hoc ham|học vị|hoc vi|bằng cấp|bang cap|giúp|giup|ơi|nhé|với)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private static readonly Regex CommonPhrase = new(
@@ -46,7 +46,7 @@ internal static class PatientChatDoctorName
     {
         var match = DoctorMention.Match(message);
         if (!match.Success) match = InformalMention.Match(message);
-        return match.Success ? message[(match.Groups["name"].Index + name.Length)..] : "";
+        return match.Success ? message[..match.Index] + " " + message[(match.Groups["name"].Index + name.Length)..] : "";
     }
 
     internal static string? ExtractCandidate(string message)

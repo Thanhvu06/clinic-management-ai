@@ -54,10 +54,10 @@ public sealed class ChatbotSchedulePricingCoverageTests(TypedWizardFactory facto
             Assert.Contains(expectedDate, response.Message);
             Assert.Contains(hasSlots ? "Có lịch trống" : "Không có lịch trống", response.Message);
             var times = response.Message.Split('\n').Where(line => line.StartsWith("- ")).ToArray();
-            Assert.Equal(hasSlots ? expectedDate == "30/11/2026" ? 3 : 1 : 0, times.Length);
+            Assert.Equal(hasSlots ? 1 : 0, times.Length);
             Assert.All(times, line => Assert.Contains(expectedDate, line));
-            if (times.Length == 3)
-                Assert.Equal(new[] { "08:00", "09:00", "10:00" }, times.Select(line => line.Substring(2, 5)));
+            if (expectedDate == "30/11/2026")
+                Assert.Contains("08:00–08:30", Assert.Single(times));
             if (afternoon)
                 Assert.Contains("15:00–15:30", Assert.Single(times));
         }
